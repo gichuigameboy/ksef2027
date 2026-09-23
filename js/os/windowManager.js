@@ -82,6 +82,18 @@ class WindowManager {
       bodyEl.innerHTML = content;
     } else if (content instanceof HTMLElement) {
       bodyEl.appendChild(content);
+    } else if (typeof content === 'function') {
+      try {
+        const res = content();
+        if (res instanceof HTMLElement) {
+          bodyEl.appendChild(res);
+        } else if (typeof res === 'string') {
+          bodyEl.innerHTML = res;
+        }
+      } catch (err) {
+        console.error(`Failed to launch app ${id}:`, err);
+        bodyEl.innerHTML = `<div class="p-6 text-rose-400 font-sans">Error launching application: ${err.message}</div>`;
+      }
     }
 
     this.desktopEl.appendChild(winEl);

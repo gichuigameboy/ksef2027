@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
           id: 'browser',
           title: 'School Web Browser (Safe Network)',
           icon: '<i class="fab fa-chrome text-blue-400"></i>',
-          content: createBrowserApp(),
+          content: () => createBrowserApp(),
           width: 1100,
           height: 680
         });
@@ -54,7 +54,7 @@ document.addEventListener('DOMContentLoaded', () => {
           id: 'docs',
           title: 'Homework Notes & Rich Text Docs',
           icon: '<i class="fas fa-file-alt text-blue-300"></i>',
-          content: createDocsApp(),
+          content: () => createDocsApp(),
           width: 840,
           height: 560
         });
@@ -71,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
           id: 'classroom',
           title: 'Classroom Assignment Dashboard',
           icon: '<i class="fas fa-graduation-cap text-emerald-400"></i>',
-          content: createClassroomApp(),
+          content: () => createClassroomApp(),
           width: 820,
           height: 560
         });
@@ -88,7 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
           id: 'calculator',
           title: 'Scientific Calculator',
           icon: '<i class="fas fa-calculator text-amber-400"></i>',
-          content: createCalculatorApp(),
+          content: () => createCalculatorApp(),
           width: 680,
           height: 480
         });
@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
           id: 'focusTimer',
           title: 'Focus Study Timer & Ambient Audio',
           icon: '<i class="fas fa-stopwatch text-purple-400"></i>',
-          content: createFocusTimerApp(),
+          content: () => createFocusTimerApp(),
           width: 540,
           height: 540
         });
@@ -122,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
           id: 'adminPanel',
           title: 'Teacher & Parent Restriction Controls',
           icon: '<i class="fas fa-user-shield text-amber-300"></i>',
-          content: createAdminPanelApp(),
+          content: () => createAdminPanelApp(),
           width: 740,
           height: 540
         });

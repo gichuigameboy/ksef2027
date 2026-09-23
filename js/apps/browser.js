@@ -1,12 +1,9 @@
 /**
  * ChromeOS Student Edition - Chrome-like School Web Browser
- * Uses Electron <webview> for real multi-tab native browsing.
- * Falls back to <iframe> gracefully for web-only mode.
+ * Multi-tab browser with real live navigation, bookmarks, omnibox, and active domain restrictions.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
-
-const IS_ELECTRON = !!(window.electronAPI && window.electronAPI.isElectron);
 
 const DEFAULT_HOME = 'https://en.m.wikipedia.org/wiki/Main_Page';
 
@@ -36,31 +33,38 @@ function createTab(url = DEFAULT_HOME) {
    MAIN APP FACTORY
 ───────────────────────────────────────── */
 export function createBrowserApp() {
-  // Reset tab state for new window instance
-  tabs = [];
-  activeTabId = null;
-  tabCounter = 0;
+  try {
+    // Reset tabs state for new window instance
+    tabs = [];
+    activeTabId = null;
+    tabCounter = 0;
 
-  const container = document.createElement('div');
-  container.className = 'flex flex-col h-full bg-[#202124] text-slate-100 font-sans overflow-hidden';
+    const container = document.createElement('div');
+    container.className = 'flex flex-col h-full bg-[#202124] text-slate-100 font-sans overflow-hidden';
 
-  // Start with one tab
-  const firstTabId = createTab(DEFAULT_HOME);
-  activeTabId = firstTabId;
+    // Start with default home tab
+    const firstTabId = createTab(DEFAULT_HOME);
+    activeTabId = firstTabId;
 
-  container.innerHTML = buildShell();
-  mountWebviews(container);
+    container.innerHTML = buildShell();
+    mountViews(container);
 
-  // Wire interactive events
-  wireToolbar(container);
-  wireBookmarks(container);
-  wireTabs(container);
+    // Wire interactive events
+    wireToolbar(container);
+    wireBookmarks(container);
 
-  // Initial render
-  renderTabs(container);
-  setActiveTab(container, activeTabId);
+    // Initial render
+    renderTabs(container);
+    setActiveTab(container, activeTabId);
 
-  return container;
+    return container;
+  } catch (err) {
+    console.error('Error in createBrowserApp:', err);
+    const fallback = document.createElement('div');
+    fallback.className = 'p-6 bg-slate-900 text-rose-400 font-sans h-full flex items-center justify-center';
+    fallback.innerHTML = `<div class="text-center"><i class="fas fa-exclamation-triangle text-3xl mb-2"></i><h3 class="font-bold text-base">Unable to load School Browser</h3><p class="text-xs text-slate-400 mt-1">${err.message}</p></div>`;
+    return fallback;
+  }
 }
 
 /* ─────────────────────────────────────────
@@ -78,8 +82,8 @@ function buildShell() {
 
       <!-- Nav Buttons -->
       <div class="flex items-center gap-0.5 text-slate-400">
-        <button id="btn-back"    class="nav-btn disabled:opacity-30" title="Back"    disabled><i class="fas fa-arrow-left  text-sm"></i></button>
-        <button id="btn-forward" class="nav-btn disabled:opacity-30" title="Forward" disabled><i class="fas fa-arrow-right text-sm"></i></button>
+        <button id="btn-back"    class="nav-btn" title="Back"><i class="fas fa-arrow-left text-sm"></i></button>
+        <button id="btn-forward" class="nav-btn" title="Forward"><i class="fas fa-arrow-right text-sm"></i></button>
         <button id="btn-reload"  class="nav-btn" title="Reload"><i id="reload-icon" class="fas fa-redo text-sm"></i></button>
       </div>
 
@@ -98,11 +102,9 @@ function buildShell() {
         </span>
       </div>
 
-      <!-- New Tab + Menu -->
+      <!-- New Tab -->
       <div class="flex items-center gap-1 text-slate-400">
         <button id="btn-new-tab" class="nav-btn" title="New Tab"><i class="fas fa-plus text-sm"></i></button>
-        <button id="btn-zoom-in"  class="nav-btn hidden-webonly" title="Zoom In"><i class="fas fa-search-plus text-sm"></i></button>
-        <button id="btn-zoom-out" class="nav-btn hidden-webonly" title="Zoom Out"><i class="fas fa-search-minus text-sm"></i></button>
       </div>
     </div>
 
@@ -123,15 +125,15 @@ function buildShell() {
          class="h-[3px] bg-blue-500 w-0 transition-all duration-300 shrink-0 opacity-0">
     </div>
 
-    <!-- ══ Webview / Iframe Canvas ══ -->
+    <!-- ══ Web Canvas ══ -->
     <div id="browser-canvas" class="flex-1 relative overflow-hidden bg-white">
     </div>
 
     <!-- ══ Status Bar ══ -->
     <div id="status-bar"
          class="bg-[#292a2d] border-t border-[#5f6368]/20 px-3 py-0.5 text-[10px] text-slate-400 flex justify-between shrink-0">
-      <span id="status-text"></span>
-      <span id="zoom-display" class="text-[10px] text-slate-500"></span>
+      <span id="status-text">Lincoln High Safe Network Connection Active</span>
+      <span id="zoom-display" class="text-[10px] text-slate-500">100%</span>
     </div>
 
     <style>
@@ -172,9 +174,9 @@ function buildShell() {
 }
 
 /* ─────────────────────────────────────────
-   WEBVIEW / IFRAME CANVAS
+   WEB CANVAS MOUNTING
 ───────────────────────────────────────── */
-function mountWebviews(container) {
+function mountViews(container) {
   tabs.forEach(tab => appendView(container, tab.id, tab.url));
 }
 
@@ -186,94 +188,21 @@ function appendView(container, tabId, url) {
   wrapper.id = `view-wrapper-${tabId}`;
   wrapper.className = 'absolute inset-0 hidden';
 
-  if (IS_ELECTRON) {
-    // Electron: full native <webview> – real separate browser process
-    const wv = document.createElement('webview');
-    wv.id = `webview-${tabId}`;
-    wv.setAttribute('src', url);
-    wv.setAttribute('allowpopups', '');
-    wv.style.width  = '100%';
-    wv.style.height = '100%';
-    wv.style.border = 'none';
+  const iframe = document.createElement('iframe');
+  iframe.id = `webview-${tabId}`;
+  iframe.src = url;
+  iframe.style.width  = '100%';
+  iframe.style.height = '100%';
+  iframe.style.border = 'none';
+  iframe.allow = 'fullscreen';
+  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
 
-    wireWebviewEvents(container, tabId, wv);
-    wrapper.appendChild(wv);
-  } else {
-    // Web fallback: <iframe>
-    const iframe = document.createElement('iframe');
-    iframe.id = `webview-${tabId}`;
-    iframe.src = url;
-    iframe.style.width  = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.allow = 'fullscreen';
-    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
-    iframe.addEventListener('load', () => {
-      setLoading(container, tabId, false);
-    });
-    wrapper.appendChild(iframe);
-  }
-
-  canvas.appendChild(wrapper);
-}
-
-function wireWebviewEvents(container, tabId, wv) {
-  wv.addEventListener('dom-ready', () => {
-    if (tabId === activeTabId) {
-      syncNavButtons(container, tabId);
-    }
-  });
-
-  wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
-  wv.addEventListener('did-stop-loading',  () => {
+  iframe.addEventListener('load', () => {
     setLoading(container, tabId, false);
-    if (tabId === activeTabId) syncNavButtons(container, tabId);
-  });
-  wv.addEventListener('did-fail-load', () => setLoading(container, tabId, false));
-
-  wv.addEventListener('page-title-updated', (e) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (tab) { tab.title = e.title; renderTabs(container); }
   });
 
-  wv.addEventListener('page-favicon-updated', (e) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (tab && e.favicons[0]) { tab.favicon = e.favicons[0]; renderTabs(container); }
-  });
-
-  wv.addEventListener('did-navigate', (e) => {
-    const tab = tabs.find(t => t.id === tabId);
-    if (tab) { tab.url = e.url; }
-    if (tabId === activeTabId) {
-      const addrBar = container.querySelector('#address-bar');
-      if (addrBar) addrBar.value = e.url;
-      syncNavButtons(container, tabId);
-    }
-  });
-
-  wv.addEventListener('did-navigate-in-page', (e) => {
-    if (tabId === activeTabId) {
-      const addrBar = container.querySelector('#address-bar');
-      if (addrBar) addrBar.value = e.url;
-      syncNavButtons(container, tabId);
-    }
-  });
-
-  wv.addEventListener('update-target-url', (e) => {
-    if (tabId === activeTabId) {
-      const statusText = container.querySelector('#status-text');
-      if (statusText) statusText.textContent = e.url || '';
-    }
-  });
-
-  // Intercept new windows / link clicks to enforce restrictions
-  wv.addEventListener('will-navigate', (e) => {
-    const access = restrictionManager.checkUrlAccess(e.url);
-    if (!access.allowed) {
-      if (typeof wv.stop === 'function') wv.stop();
-      showBlockPage(container, tabId, e.url, access.reason);
-    }
-  });
+  wrapper.appendChild(iframe);
+  canvas.appendChild(wrapper);
 }
 
 /* ─────────────────────────────────────────
@@ -317,20 +246,6 @@ function getView(container, tabId) {
   return container.querySelector(`#webview-${tabId}`);
 }
 
-function syncNavButtons(container, tabId) {
-  const view = getView(container, tabId);
-  const backBtn    = container.querySelector('#btn-back');
-  const forwardBtn = container.querySelector('#btn-forward');
-  if (!view || !backBtn || !forwardBtn) return;
-
-  if (IS_ELECTRON && view.tagName === 'WEBVIEW') {
-    backBtn.disabled    = typeof view.canGoBack === 'function' ? !view.canGoBack() : true;
-    forwardBtn.disabled = typeof view.canGoForward === 'function' ? !view.canGoForward() : true;
-  } else {
-    backBtn.disabled = forwardBtn.disabled = false;
-  }
-}
-
 function setLoading(container, tabId, isLoading) {
   const tab = tabs.find(t => t.id === tabId);
   if (tab) tab.loading = isLoading;
@@ -355,7 +270,7 @@ function showBlockPage(container, tabId, blockedUrl, reason) {
   if (!wrapper) return;
 
   // Remove old view
-  const oldView = wrapper.querySelector('webview, iframe');
+  const oldView = wrapper.querySelector('iframe');
   if (oldView) oldView.remove();
 
   wrapper.innerHTML = `
@@ -405,26 +320,16 @@ function appendNewView(container, tabId, url) {
   if (!wrapper) return;
   wrapper.innerHTML = '';
 
-  if (IS_ELECTRON) {
-    const wv = document.createElement('webview');
-    wv.id = `webview-${tabId}`;
-    wv.setAttribute('src', url);
-    wv.setAttribute('allowpopups', '');
-    wv.style.width = '100%'; wv.style.height = '100%'; wv.style.border = 'none';
-    wireWebviewEvents(container, tabId, wv);
-    wrapper.appendChild(wv);
-  } else {
-    const iframe = document.createElement('iframe');
-    iframe.id = `webview-${tabId}`;
-    iframe.src = url;
-    iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
-    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
-    wrapper.appendChild(iframe);
-  }
+  const iframe = document.createElement('iframe');
+  iframe.id = `webview-${tabId}`;
+  iframe.src = url;
+  iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
+  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
+  wrapper.appendChild(iframe);
 }
 
 /* ─────────────────────────────────────────
-   TAB RENDERING
+   TAB RENDERING & INTERACTION
 ───────────────────────────────────────── */
 function renderTabs(container) {
   const bar = container.querySelector('#tab-bar');
@@ -432,9 +337,7 @@ function renderTabs(container) {
 
   bar.innerHTML = tabs.map(tab => `
     <div class="tab-item ${tab.id === activeTabId ? 'active' : ''}" data-tab-id="${tab.id}" title="${tab.title || tab.url}">
-      ${tab.favicon
-        ? `<img src="${tab.favicon}" class="w-3.5 h-3.5 rounded-sm shrink-0" onerror="this.replaceWith(document.createElement('i'))">`
-        : `<i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[11px] shrink-0"></i>`}
+      <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[11px] shrink-0"></i>
       <span class="truncate flex-1 text-[12px]">${tab.title || tab.url || 'New Tab'}</span>
       <button class="tab-close" data-close-tab="${tab.id}" title="Close Tab">✕</button>
     </div>
@@ -461,7 +364,7 @@ function renderTabs(container) {
     });
   });
 
-  // Inline new tab
+  // Inline new tab button
   bar.querySelector('#new-tab-btn-inline')?.addEventListener('click', () => openNewTab(container));
 }
 
@@ -478,7 +381,6 @@ function setActiveTab(container, tabId) {
   const addrBar = container.querySelector('#address-bar');
   if (addrBar && tab) addrBar.value = tab.url || '';
 
-  syncNavButtons(container, tabId);
   renderTabs(container);
 }
 
@@ -486,7 +388,7 @@ function openNewTab(container) {
   const id = createTab(DEFAULT_HOME);
   appendView(container, id, DEFAULT_HOME);
   setActiveTab(container, id);
-  // Focus address bar
+
   const bar = container.querySelector('#address-bar');
   if (bar) { bar.value = ''; bar.focus(); bar.select(); }
 }
@@ -497,7 +399,6 @@ function closeTab(container, tabId) {
   const idx = tabs.findIndex(t => t.id === tabId);
   tabs = tabs.filter(t => t.id !== tabId);
 
-  // Remove DOM
   container.querySelector(`#view-wrapper-${tabId}`)?.remove();
 
   if (activeTabId === tabId) {
@@ -525,16 +426,16 @@ function wireToolbar(container) {
   // Back
   container.querySelector('#btn-back')?.addEventListener('click', () => {
     const view = getView(container, activeTabId);
-    if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.goBack === 'function') {
-      view.goBack();
+    if (view && view.contentWindow) {
+      try { view.contentWindow.history.back(); } catch (e) {}
     }
   });
 
   // Forward
   container.querySelector('#btn-forward')?.addEventListener('click', () => {
     const view = getView(container, activeTabId);
-    if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.goForward === 'function') {
-      view.goForward();
+    if (view && view.contentWindow) {
+      try { view.contentWindow.history.forward(); } catch (e) {}
     }
   });
 
@@ -543,42 +444,15 @@ function wireToolbar(container) {
     const tab = tabs.find(t => t.id === activeTabId);
     const view = getView(container, activeTabId);
     if (tab?.loading) {
-      if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.stop === 'function') {
-        view.stop();
-      }
       setLoading(container, activeTabId, false);
     } else {
-      if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.reload === 'function') {
-        view.reload();
-      } else if (view) {
-        view.src = view.src;
-      }
+      if (view) view.src = view.src;
       setLoading(container, activeTabId, true);
     }
   });
 
   // New Tab button
   container.querySelector('#btn-new-tab')?.addEventListener('click', () => openNewTab(container));
-
-  // Zoom (Electron only)
-  container.querySelector('#btn-zoom-in')?.addEventListener('click', () => {
-    const view = getView(container, activeTabId);
-    if (view && typeof view.getZoomFactor === 'function' && typeof view.setZoomFactor === 'function') {
-      view.setZoomFactor(view.getZoomFactor() + 0.1);
-    }
-  });
-
-  container.querySelector('#btn-zoom-out')?.addEventListener('click', () => {
-    const view = getView(container, activeTabId);
-    if (view && typeof view.getZoomFactor === 'function' && typeof view.setZoomFactor === 'function') {
-      view.setZoomFactor(Math.max(0.5, view.getZoomFactor() - 0.1));
-    }
-  });
-
-  if (IS_ELECTRON) {
-    container.querySelector('#btn-zoom-in')?.classList.remove('hidden-webonly');
-    container.querySelector('#btn-zoom-out')?.classList.remove('hidden-webonly');
-  }
 }
 
 /* ─────────────────────────────────────────
@@ -590,8 +464,4 @@ function wireBookmarks(container) {
     if (!btn) return;
     navigate(container, activeTabId, btn.dataset.url);
   });
-}
-
-function wireTabs(container) {
-  // (tab bar wired in renderTabs – re-wired on each render)
 }
