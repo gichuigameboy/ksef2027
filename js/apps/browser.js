@@ -1,6 +1,6 @@
 /**
- * ChromeOS Student Edition - Real Web Browser (Google / Bing / Brave Search Powered)
- * Supports real search engines (Google, Bing, Brave), multi-tab browsing, live iframe rendering, and school domain restrictions.
+ * ChromeOS Student Edition - High-Performance Speed-Optimized School Web Browser
+ * Instant 0ms startup time with Chrome-style Start Page, Google/Bing/Brave Search, and multi-tab browsing.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
@@ -12,7 +12,6 @@ const SEARCH_ENGINES = {
 };
 
 let currentEngine = 'google';
-const DEFAULT_HOME = SEARCH_ENGINES.google.home;
 
 const BOOKMARKS = [
   { label: 'Google',       icon: 'fab fa-google text-blue-400',       url: 'https://www.google.com' },
@@ -31,18 +30,18 @@ let tabs = [];
 let activeTabId = null;
 let tabCounter = 0;
 
-function createTab(url = DEFAULT_HOME) {
+function createTab(url = 'about:home') {
   const id = ++tabCounter;
-  tabs.push({ id, url, title: 'Google', loading: false, favicon: null });
+  tabs.push({ id, url, title: 'New Tab', loading: false, favicon: null });
   return id;
 }
 
 /* ─────────────────────────────────────────
-   MAIN APP FACTORY
+   MAIN APP FACTORY (INSTANT STARTUP)
 ───────────────────────────────────────── */
 export function createBrowserApp() {
   try {
-    // Reset tabs state for new window instance
+    // Reset state for instant launch
     tabs = [];
     activeTabId = null;
     tabCounter = 0;
@@ -50,18 +49,16 @@ export function createBrowserApp() {
     const container = document.createElement('div');
     container.className = 'flex flex-col h-full bg-[#202124] text-slate-100 font-sans overflow-hidden';
 
-    // Start with Google home tab
-    const firstTabId = createTab(DEFAULT_HOME);
+    // Instant Start Page tab
+    const firstTabId = createTab('about:home');
     activeTabId = firstTabId;
 
     container.innerHTML = buildShell();
     mountViews(container);
 
-    // Wire interactive events
     wireToolbar(container);
     wireBookmarks(container);
 
-    // Initial render
     renderTabs(container);
     setActiveTab(container, activeTabId);
 
@@ -93,7 +90,7 @@ function buildShell() {
         <button id="btn-back"    class="nav-btn" title="Back"><i class="fas fa-arrow-left text-sm"></i></button>
         <button id="btn-forward" class="nav-btn" title="Forward"><i class="fas fa-arrow-right text-sm"></i></button>
         <button id="btn-reload"  class="nav-btn" title="Reload"><i id="reload-icon" class="fas fa-redo text-sm"></i></button>
-        <button id="btn-home"    class="nav-btn" title="Home"><i class="fas fa-home text-sm"></i></button>
+        <button id="btn-home"    class="nav-btn" title="Home Screen"><i class="fas fa-home text-sm"></i></button>
       </div>
 
       <!-- Search Engine Selector -->
@@ -140,18 +137,18 @@ function buildShell() {
 
     <!-- ══ Loading Progress Bar ══ -->
     <div id="progress-bar"
-         class="h-[3px] bg-blue-500 w-0 transition-all duration-300 shrink-0 opacity-0">
+         class="h-[3px] bg-blue-500 w-0 transition-all duration-200 shrink-0 opacity-0">
     </div>
 
     <!-- ══ Web Canvas ══ -->
-    <div id="browser-canvas" class="flex-1 relative overflow-hidden bg-white">
+    <div id="browser-canvas" class="flex-1 relative overflow-hidden bg-[#202124]">
     </div>
 
     <!-- ══ Status Bar ══ -->
     <div id="status-bar"
          class="bg-[#292a2d] border-t border-[#5f6368]/20 px-3 py-0.5 text-[10px] text-slate-400 flex justify-between shrink-0">
-      <span id="status-text">Lincoln High School Protected Browser Network</span>
-      <span id="zoom-display" class="text-[10px] text-slate-500">Google Search Powered</span>
+      <span id="status-text">Lincoln High School Instant Safe Browser</span>
+      <span id="zoom-display" class="text-[10px] text-slate-500">Fast Mode</span>
     </div>
 
     <style>
@@ -206,21 +203,95 @@ function appendView(container, tabId, url) {
   wrapper.id = `view-wrapper-${tabId}`;
   wrapper.className = 'absolute inset-0 hidden';
 
-  const iframe = document.createElement('iframe');
-  iframe.id = `webview-${tabId}`;
-  iframe.src = url;
-  iframe.style.width  = '100%';
-  iframe.style.height = '100%';
-  iframe.style.border = 'none';
-  iframe.allow = 'fullscreen';
-  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
+  if (url === 'about:home') {
+    wrapper.innerHTML = renderStartPageHTML(tabId);
+    wireStartPageEvents(container, wrapper, tabId);
+  } else {
+    const iframe = document.createElement('iframe');
+    iframe.id = `webview-${tabId}`;
+    iframe.src = url;
+    iframe.style.width  = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.allow = 'fullscreen';
+    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
 
-  iframe.addEventListener('load', () => {
-    setLoading(container, tabId, false);
+    iframe.addEventListener('load', () => {
+      setLoading(container, tabId, false);
+    });
+
+    wrapper.appendChild(iframe);
+  }
+
+  canvas.appendChild(wrapper);
+}
+
+function renderStartPageHTML(tabId) {
+  return `
+    <div class="h-full w-full bg-[#202124] text-slate-100 flex flex-col items-center justify-center p-8 overflow-y-auto">
+      <!-- Chrome-style Search Header -->
+      <div class="text-center space-y-4 max-w-xl w-full mb-8">
+        <div class="flex items-center justify-center gap-3">
+          <i class="fab fa-chrome text-5xl text-blue-500 drop-shadow-md"></i>
+          <span class="text-3xl font-bold tracking-tight text-white">Google</span>
+        </div>
+        <p class="text-xs text-slate-400">Lincoln High School Protected Student Search</p>
+
+        <!-- Center Search Input -->
+        <div class="flex items-center bg-[#303134] hover:bg-[#3c3c3f] border border-slate-700 hover:border-slate-500 rounded-full px-4 py-3 shadow-xl transition-all focus-within:border-blue-500">
+          <i class="fas fa-search text-slate-400 text-sm mr-3"></i>
+          <input type="text" id="start-search-input-${tabId}" class="bg-transparent border-none outline-none text-white text-sm w-full" placeholder="Search Google or enter a web address..." autofocus>
+          <button id="start-search-btn-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-1.5 rounded-full transition-colors ml-2">
+            Search
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick Speed Dial Cards -->
+      <div class="max-w-xl w-full">
+        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">Frequent Educational Sites</div>
+        <div class="grid grid-cols-4 gap-3">
+          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://www.google.com">
+            <i class="fab fa-google text-blue-400 text-2xl"></i>
+            <span class="text-xs font-semibold text-slate-200">Google</span>
+          </button>
+          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://www.bing.com">
+            <i class="fab fa-microsoft text-cyan-400 text-2xl"></i>
+            <span class="text-xs font-semibold text-slate-200">Bing</span>
+          </button>
+          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://search.brave.com">
+            <i class="fas fa-shield-alt text-amber-500 text-2xl"></i>
+            <span class="text-xs font-semibold text-slate-200">Brave</span>
+          </button>
+          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://www.khanacademy.org">
+            <i class="fas fa-leaf text-emerald-400 text-2xl"></i>
+            <span class="text-xs font-semibold text-slate-200">Khan Academy</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function wireStartPageEvents(container, wrapper, tabId) {
+  const searchInput = wrapper.querySelector(`#start-search-input-${tabId}`);
+  const searchBtn = wrapper.querySelector(`#start-search-btn-${tabId}`);
+
+  const triggerSearch = () => {
+    const query = searchInput.value.trim();
+    if (query) navigate(container, tabId, query);
+  };
+
+  searchBtn?.addEventListener('click', triggerSearch);
+  searchInput?.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') triggerSearch();
   });
 
-  wrapper.appendChild(iframe);
-  canvas.appendChild(wrapper);
+  wrapper.querySelectorAll('.start-card-btn').forEach(card => {
+    card.addEventListener('click', () => {
+      navigate(container, tabId, card.dataset.url);
+    });
+  });
 }
 
 /* ─────────────────────────────────────────
@@ -229,6 +300,16 @@ function appendView(container, tabId, url) {
 function navigate(container, tabId, rawInput) {
   let url = rawInput.trim();
   if (!url) return;
+
+  if (url === 'about:home') {
+    appendNewView(container, tabId, 'about:home');
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) { tab.url = 'about:home'; tab.title = 'New Tab'; }
+    const addrBar = container.querySelector('#address-bar');
+    if (addrBar) addrBar.value = '';
+    renderTabs(container);
+    return;
+  }
 
   // Search query → Google / Bing / Brave Search
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
@@ -249,16 +330,13 @@ function navigate(container, tabId, rawInput) {
   const tab = tabs.find(t => t.id === tabId);
   if (tab) {
     tab.url = url;
-    if (url.includes('google.com')) tab.title = 'Google Search';
-    else if (url.includes('bing.com')) tab.title = 'Bing Search';
-    else if (url.includes('brave.com')) tab.title = 'Brave Search';
+    if (url.includes('google.com')) tab.title = 'Google';
+    else if (url.includes('bing.com')) tab.title = 'Bing';
+    else if (url.includes('brave.com')) tab.title = 'Brave';
     else tab.title = 'Loading…';
   }
 
-  const view = getView(container, tabId);
-  if (view) {
-    view.src = url;
-  }
+  appendNewView(container, tabId, url);
 
   const addrBar = container.querySelector('#address-bar');
   if (addrBar) addrBar.value = url;
@@ -284,7 +362,7 @@ function setLoading(container, tabId, isLoading) {
         bar.style.width = '70%'; bar.style.opacity = '1';
       } else {
         bar.style.width = '100%';
-        setTimeout(() => { bar.style.width = '0'; bar.style.opacity = '0'; }, 300);
+        setTimeout(() => { bar.style.width = '0'; bar.style.opacity = '0'; }, 200);
       }
     }
   }
@@ -293,10 +371,6 @@ function setLoading(container, tabId, isLoading) {
 function showBlockPage(container, tabId, blockedUrl, reason) {
   const wrapper = container.querySelector(`#view-wrapper-${tabId}`);
   if (!wrapper) return;
-
-  // Remove old view
-  const oldView = wrapper.querySelector('iframe');
-  if (oldView) oldView.remove();
 
   wrapper.innerHTML = `
     <div class="h-full overflow-y-auto flex items-center justify-center p-8 bg-[#202124]">
@@ -318,7 +392,7 @@ function showBlockPage(container, tabId, blockedUrl, reason) {
             <i class="fas fa-paper-plane"></i> Request Unblock from Teacher
           </button>
           <button id="go-home-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-5 py-2.5 rounded-full transition-colors">
-            Go to Google
+            Return to Start Page
           </button>
         </div>
       </div>
@@ -330,8 +404,7 @@ function showBlockPage(container, tabId, blockedUrl, reason) {
   if (addrBar) addrBar.value = blockedUrl;
 
   wrapper.querySelector(`#go-home-${tabId}`)?.addEventListener('click', () => {
-    appendNewView(container, tabId, DEFAULT_HOME);
-    navigate(container, tabId, DEFAULT_HOME);
+    navigate(container, tabId, 'about:home');
   });
 
   wrapper.querySelector(`#req-unblock-${tabId}`)?.addEventListener('click', (e) => {
@@ -345,12 +418,18 @@ function appendNewView(container, tabId, url) {
   if (!wrapper) return;
   wrapper.innerHTML = '';
 
-  const iframe = document.createElement('iframe');
-  iframe.id = `webview-${tabId}`;
-  iframe.src = url;
-  iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
-  iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
-  wrapper.appendChild(iframe);
+  if (url === 'about:home') {
+    wrapper.innerHTML = renderStartPageHTML(tabId);
+    wireStartPageEvents(container, wrapper, tabId);
+  } else {
+    const iframe = document.createElement('iframe');
+    iframe.id = `webview-${tabId}`;
+    iframe.src = url;
+    iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
+    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
+    iframe.addEventListener('load', () => setLoading(container, tabId, false));
+    wrapper.appendChild(iframe);
+  }
 }
 
 /* ─────────────────────────────────────────
@@ -363,7 +442,7 @@ function renderTabs(container) {
   bar.innerHTML = tabs.map(tab => `
     <div class="tab-item ${tab.id === activeTabId ? 'active' : ''}" data-tab-id="${tab.id}" title="${tab.title || tab.url}">
       <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[11px] shrink-0"></i>
-      <span class="truncate flex-1 text-[12px]">${tab.title || tab.url || 'Google'}</span>
+      <span class="truncate flex-1 text-[12px]">${tab.title || tab.url || 'New Tab'}</span>
       <button class="tab-close" data-close-tab="${tab.id}" title="Close Tab">✕</button>
     </div>
   `).join('') + `
@@ -404,18 +483,20 @@ function setActiveTab(container, tabId) {
 
   // Update address bar
   const addrBar = container.querySelector('#address-bar');
-  if (addrBar && tab) addrBar.value = tab.url || '';
+  if (addrBar && tab) {
+    addrBar.value = tab.url === 'about:home' ? '' : tab.url;
+  }
 
   renderTabs(container);
 }
 
 function openNewTab(container) {
-  const id = createTab(DEFAULT_HOME);
-  appendView(container, id, DEFAULT_HOME);
+  const id = createTab('about:home');
+  appendView(container, id, 'about:home');
   setActiveTab(container, id);
 
   const bar = container.querySelector('#address-bar');
-  if (bar) { bar.value = ''; bar.focus(); bar.select(); }
+  if (bar) { bar.value = ''; bar.focus(); }
 }
 
 function closeTab(container, tabId) {
@@ -476,16 +557,15 @@ function wireToolbar(container) {
     const view = getView(container, activeTabId);
     if (tab?.loading) {
       setLoading(container, activeTabId, false);
-    } else {
-      if (view) view.src = view.src;
+    } else if (view) {
+      view.src = view.src;
       setLoading(container, activeTabId, true);
     }
   });
 
   // Home button
   container.querySelector('#btn-home')?.addEventListener('click', () => {
-    const homeUrl = SEARCH_ENGINES[currentEngine]?.home || DEFAULT_HOME;
-    navigate(container, activeTabId, homeUrl);
+    navigate(container, activeTabId, 'about:home');
   });
 
   // New Tab button
