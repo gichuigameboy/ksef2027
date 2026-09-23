@@ -107,7 +107,7 @@ function buildChrome() {
   <div id="prog" class="h-0.5 bg-blue-500 w-0 opacity-0 shrink-0 transition-all duration-150"></div>
 
   <!-- Canvas: holds one wrapper per tab -->
-  <div id="canvas" class="flex-1 relative overflow-hidden"></div>
+  <div id="canvas" class="flex-1 flex overflow-hidden"></div>
 
   <!-- Status Bar -->
   <div class="bg-[#292a2d] border-t border-black/10 px-3 py-0.5 flex justify-between shrink-0">
@@ -130,9 +130,10 @@ function buildChrome() {
               cursor:pointer;opacity:0;transition:opacity .1s; }
     .tab:hover .tab-x,.tab.active .tab-x { opacity:1; }
     .tab-x:hover { background:rgba(255,255,255,.2);color:#fff; }
-    .tab-wrap { position:absolute;inset:0; }
+    .tab-wrap { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; position: relative; }
+    .tab-wrap.hidden { display: none !important; }
     .start-overlay { position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center; }
-    .start-overlay.hidden { display:none; }
+    .start-overlay.hidden { display:none !important; }
   </style>`;
 }
 
@@ -160,7 +161,7 @@ function buildTabDOM(root, tabId) {
     wv.id = `wv-${tabId}`;
     wv.setAttribute('partition', 'persist:school');
     wv.setAttribute('allowpopups', '');
-    wv.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+    wv.style.cssText = 'flex: 1 1 0%; width: 100%; height: 100%; border: none; display: flex;';
     wrap.appendChild(wv);
 
     wireWebview(root, tabId, wv);
