@@ -36,6 +36,11 @@ function createTab(url = DEFAULT_HOME) {
    MAIN APP FACTORY
 ───────────────────────────────────────── */
 export function createBrowserApp() {
+  // Reset tab state for new window instance
+  tabs = [];
+  activeTabId = null;
+  tabCounter = 0;
+
   const container = document.createElement('div');
   container.className = 'flex flex-col h-full bg-[#202124] text-slate-100 font-sans overflow-hidden';
 
@@ -170,12 +175,13 @@ function buildShell() {
    WEBVIEW / IFRAME CANVAS
 ───────────────────────────────────────── */
 function mountWebviews(container) {
-  const canvas = container.querySelector('#browser-canvas');
   tabs.forEach(tab => appendView(container, tab.id, tab.url));
 }
 
 function appendView(container, tabId, url) {
   const canvas = container.querySelector('#browser-canvas');
+  if (!canvas) return;
+
   const wrapper = document.createElement('div');
   wrapper.id = `view-wrapper-${tabId}`;
   wrapper.className = 'absolute inset-0 hidden';
@@ -212,9 +218,18 @@ function appendView(container, tabId, url) {
 }
 
 function wireWebviewEvents(container, tabId, wv) {
+  wv.addEventListener('dom-ready', () => {
+    if (tabId === activeTabId) {
+      syncNavButtons(container, tabId);
+    }
+  });
+
   wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
-  wv.addEventListener('did-stop-loading',  () => setLoading(container, tabId, false));
-  wv.addEventListener('did-fail-load',     () => setLoading(container, tabId, false));
+  wv.addEventListener('did-stop-loading',  () => {
+    setLoading(container, tabId, false);
+    if (tabId === activeTabId) syncNavButtons(container, tabId);
+  });
+  wv.addEventListener('did-fail-load', () => setLoading(container, tabId, false));
 
   wv.addEventListener('page-title-updated', (e) => {
     const tab = tabs.find(t => t.id === tabId);
@@ -230,21 +245,24 @@ function wireWebviewEvents(container, tabId, wv) {
     const tab = tabs.find(t => t.id === tabId);
     if (tab) { tab.url = e.url; }
     if (tabId === activeTabId) {
-      container.querySelector('#address-bar').value = e.url;
+      const addrBar = container.querySelector('#address-bar');
+      if (addrBar) addrBar.value = e.url;
       syncNavButtons(container, tabId);
     }
   });
 
   wv.addEventListener('did-navigate-in-page', (e) => {
     if (tabId === activeTabId) {
-      container.querySelector('#address-bar').value = e.url;
+      const addrBar = container.querySelector('#address-bar');
+      if (addrBar) addrBar.value = e.url;
       syncNavButtons(container, tabId);
     }
   });
 
   wv.addEventListener('update-target-url', (e) => {
     if (tabId === activeTabId) {
-      container.querySelector('#status-text').textContent = e.url || '';
+      const statusText = container.querySelector('#status-text');
+      if (statusText) statusText.textContent = e.url || '';
     }
   });
 
@@ -252,8 +270,7 @@ function wireWebviewEvents(container, tabId, wv) {
   wv.addEventListener('will-navigate', (e) => {
     const access = restrictionManager.checkUrlAccess(e.url);
     if (!access.allowed) {
-      e.preventDefault && e.preventDefault();
-      wv.stop();
+      if (typeof wv.stop === 'function') wv.stop();
       showBlockPage(container, tabId, e.url, access.reason);
     }
   });
@@ -285,13 +302,13 @@ function navigate(container, tabId, rawInput) {
   if (tab) { tab.url = url; tab.title = 'Loading…'; }
 
   const view = getView(container, tabId);
-  if (IS_ELECTRON && view && view.tagName === 'WEBVIEW') {
-    view.src = url;
-  } else if (view) {
+  if (view) {
     view.src = url;
   }
 
-  container.querySelector('#address-bar').value = url;
+  const addrBar = container.querySelector('#address-bar');
+  if (addrBar) addrBar.value = url;
+
   setLoading(container, tabId, true);
   renderTabs(container);
 }
@@ -304,12 +321,13 @@ function syncNavButtons(container, tabId) {
   const view = getView(container, tabId);
   const backBtn    = container.querySelector('#btn-back');
   const forwardBtn = container.querySelector('#btn-forward');
-  if (!view) return;
+  if (!view || !backBtn || !forwardBtn) return;
+
   if (IS_ELECTRON && view.tagName === 'WEBVIEW') {
-    backBtn.disabled    = !view.canGoBack();
-    forwardBtn.disabled = !view.canGoForward();
+    backBtn.disabled    = typeof view.canGoBack === 'function' ? !view.canGoBack() : true;
+    forwardBtn.disabled = typeof view.canGoForward === 'function' ? !view.canGoForward() : true;
   } else {
-    backBtn.disabled = forwardBtn.disabled = false; // iframe can't report history
+    backBtn.disabled = forwardBtn.disabled = false;
   }
 }
 
@@ -368,7 +386,8 @@ function showBlockPage(container, tabId, blockedUrl, reason) {
   `;
 
   setLoading(container, tabId, false);
-  container.querySelector(`#address-bar`).value = blockedUrl;
+  const addrBar = container.querySelector('#address-bar');
+  if (addrBar) addrBar.value = blockedUrl;
 
   wrapper.querySelector(`#go-home-${tabId}`)?.addEventListener('click', () => {
     appendNewView(container, tabId, DEFAULT_HOME);
@@ -496,50 +515,64 @@ function wireToolbar(container) {
   const addrBar = container.querySelector('#address-bar');
 
   // Enter to navigate
-  addrBar.addEventListener('keydown', (e) => {
+  addrBar?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter') navigate(container, activeTabId, addrBar.value);
   });
 
   // Select all on focus
-  addrBar.addEventListener('focus', () => addrBar.select());
+  addrBar?.addEventListener('focus', () => addrBar.select());
 
   // Back
-  container.querySelector('#btn-back').addEventListener('click', () => {
+  container.querySelector('#btn-back')?.addEventListener('click', () => {
     const view = getView(container, activeTabId);
-    if (IS_ELECTRON && view?.canGoBack()) view.goBack();
+    if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.goBack === 'function') {
+      view.goBack();
+    }
   });
 
   // Forward
-  container.querySelector('#btn-forward').addEventListener('click', () => {
+  container.querySelector('#btn-forward')?.addEventListener('click', () => {
     const view = getView(container, activeTabId);
-    if (IS_ELECTRON && view?.canGoForward()) view.goForward();
+    if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.goForward === 'function') {
+      view.goForward();
+    }
   });
 
   // Reload / Stop
-  container.querySelector('#btn-reload').addEventListener('click', () => {
+  container.querySelector('#btn-reload')?.addEventListener('click', () => {
     const tab = tabs.find(t => t.id === activeTabId);
     const view = getView(container, activeTabId);
     if (tab?.loading) {
-      if (IS_ELECTRON && view?.stop) view.stop();
+      if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.stop === 'function') {
+        view.stop();
+      }
       setLoading(container, activeTabId, false);
     } else {
-      if (IS_ELECTRON && view?.reload) view.reload();
-      else if (view) { view.src = view.src; }
+      if (IS_ELECTRON && view?.tagName === 'WEBVIEW' && typeof view.reload === 'function') {
+        view.reload();
+      } else if (view) {
+        view.src = view.src;
+      }
       setLoading(container, activeTabId, true);
     }
   });
 
   // New Tab button
-  container.querySelector('#btn-new-tab').addEventListener('click', () => openNewTab(container));
+  container.querySelector('#btn-new-tab')?.addEventListener('click', () => openNewTab(container));
 
   // Zoom (Electron only)
   container.querySelector('#btn-zoom-in')?.addEventListener('click', () => {
     const view = getView(container, activeTabId);
-    if (view?.getZoomFactor) view.setZoomFactor(view.getZoomFactor() + 0.1);
+    if (view && typeof view.getZoomFactor === 'function' && typeof view.setZoomFactor === 'function') {
+      view.setZoomFactor(view.getZoomFactor() + 0.1);
+    }
   });
+
   container.querySelector('#btn-zoom-out')?.addEventListener('click', () => {
     const view = getView(container, activeTabId);
-    if (view?.getZoomFactor) view.setZoomFactor(Math.max(0.5, view.getZoomFactor() - 0.1));
+    if (view && typeof view.getZoomFactor === 'function' && typeof view.setZoomFactor === 'function') {
+      view.setZoomFactor(Math.max(0.5, view.getZoomFactor() - 0.1));
+    }
   });
 
   if (IS_ELECTRON) {
@@ -552,7 +585,7 @@ function wireToolbar(container) {
    BOOKMARKS WIRING
 ───────────────────────────────────────── */
 function wireBookmarks(container) {
-  container.querySelector('#bookmarks-bar').addEventListener('click', (e) => {
+  container.querySelector('#bookmarks-bar')?.addEventListener('click', (e) => {
     const btn = e.target.closest('.bm-btn');
     if (!btn) return;
     navigate(container, activeTabId, btn.dataset.url);
