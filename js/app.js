@@ -38,8 +38,8 @@ document.addEventListener('DOMContentLoaded', () => {
           title: 'School Web Browser (Safe Network)',
           icon: '<i class="fab fa-chrome text-blue-400"></i>',
           content: createBrowserApp(),
-          width: 860,
-          height: 580
+          width: 1100,
+          height: 680
         });
       }
     },
