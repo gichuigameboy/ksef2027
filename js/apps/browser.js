@@ -1,676 +1,501 @@
 /**
- * ChromeOS Student Edition - High-Performance Speed-Optimized School Web Browser
- * Sub-second URL loading using Electron persistent session partitions and 0ms Start Page.
+ * ChromeOS Student Edition - Ultra-Fast School Browser
+ *
+ * KEY PERFORMANCE DESIGN:
+ * - Each tab has ONE persistent <webview> that is NEVER destroyed.
+ * - Navigation just sets webview.src — no renderer process respawning.
+ * - Start Page is a lightweight HTML overlay shown ON TOP of the webview.
+ * - Persistent session partition = cached DNS + SSL across all tabs.
+ * - All student restriction enforcement runs before any navigation fires.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
 
 const IS_ELECTRON = !!(window.electronAPI && window.electronAPI.isElectron);
 
-const SEARCH_ENGINES = {
-  google: { name: 'Google', url: 'https://www.google.com/search?q=', home: 'https://www.google.com', icon: 'fab fa-google text-blue-400' },
-  bing:   { name: 'Bing',   url: 'https://www.bing.com/search?q=',   home: 'https://www.bing.com',   icon: 'fab fa-microsoft text-cyan-400' },
-  brave:  { name: 'Brave',  url: 'https://search.brave.com/search?q=', home: 'https://search.brave.com', icon: 'fas fa-shield-alt text-amber-500' }
+const ENGINES = {
+  google: { url: 'https://www.google.com/search?q=', home: 'https://www.google.com' },
+  bing:   { url: 'https://www.bing.com/search?q=',   home: 'https://www.bing.com' },
+  brave:  { url: 'https://search.brave.com/search?q=', home: 'https://search.brave.com' },
 };
 
-let currentEngine = 'google';
+let engine = 'google';
 
 const BOOKMARKS = [
-  { label: 'Google',       icon: 'fab fa-google text-blue-400',       url: 'https://www.google.com' },
-  { label: 'Bing',         icon: 'fab fa-microsoft text-cyan-400',     url: 'https://www.bing.com' },
-  { label: 'Brave Search', icon: 'fas fa-shield-alt text-amber-500',  url: 'https://search.brave.com' },
-  { label: 'Khan Academy', icon: 'fas fa-leaf text-emerald-400',      url: 'https://www.khanacademy.org' },
-  { label: 'NASA',         icon: 'fas fa-rocket text-indigo-400',     url: 'https://www.nasa.gov' },
-  { label: 'Math Is Fun',  icon: 'fas fa-square-root-alt text-amber-400', url: 'https://www.mathsisfun.com' },
-  { label: 'Roblox (Block Test)', icon: 'fas fa-gamepad text-rose-400', url: 'https://roblox.com' }
+  { label: 'Google',       icon: 'fab fa-google text-blue-400',           url: 'https://www.google.com' },
+  { label: 'Bing',         icon: 'fab fa-microsoft text-cyan-400',         url: 'https://www.bing.com' },
+  { label: 'Brave',        icon: 'fas fa-shield-alt text-amber-500',       url: 'https://search.brave.com' },
+  { label: 'Khan Academy', icon: 'fas fa-leaf text-emerald-400',           url: 'https://www.khanacademy.org' },
+  { label: 'NASA',         icon: 'fas fa-rocket text-indigo-400',          url: 'https://www.nasa.gov' },
+  { label: 'Math Is Fun',  icon: 'fas fa-square-root-alt text-amber-400',  url: 'https://www.mathsisfun.com' },
 ];
 
-/* ─────────────────────────────────────────
-   TAB MODEL
-───────────────────────────────────────── */
+/* ─── TAB STATE ─── */
 let tabs = [];
 let activeTabId = null;
 let tabCounter = 0;
 
-function createTab(url = 'about:home') {
+function newTab(url = null) {
   const id = ++tabCounter;
-  tabs.push({ id, url, title: 'New Tab', loading: false, favicon: null });
+  tabs.push({ id, url, title: 'New Tab', loading: false });
   return id;
 }
 
-/* ─────────────────────────────────────────
-   MAIN APP FACTORY (INSTANT STARTUP)
-───────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════
+   ENTRY POINT
+═══════════════════════════════════════════════════ */
 export function createBrowserApp() {
-  try {
-    // Reset state for instant launch
-    tabs = [];
-    activeTabId = null;
-    tabCounter = 0;
+  // Reset per-instance state
+  tabs = []; activeTabId = null; tabCounter = 0;
 
-    const container = document.createElement('div');
-    container.className = 'flex flex-col h-full bg-[#202124] text-slate-100 font-sans overflow-hidden';
+  const root = document.createElement('div');
+  root.className = 'flex flex-col h-full bg-[#202124] text-white overflow-hidden font-sans';
+  root.innerHTML = buildChrome();
 
-    // Instant Start Page tab
-    const firstTabId = createTab('about:home');
-    activeTabId = firstTabId;
+  // Wire toolbar before adding tabs so elements exist
+  wireChrome(root);
 
-    container.innerHTML = buildShell();
-    mountViews(container);
+  // Open first tab — no URL means show start page
+  openTab(root, null);
 
-    wireToolbar(container);
-    wireBookmarks(container);
-
-    renderTabs(container);
-    setActiveTab(container, activeTabId);
-
-    return container;
-  } catch (err) {
-    console.error('Error in createBrowserApp:', err);
-    const fallback = document.createElement('div');
-    fallback.className = 'p-6 bg-slate-900 text-rose-400 font-sans h-full flex items-center justify-center';
-    fallback.innerHTML = `<div class="text-center"><i class="fas fa-exclamation-triangle text-3xl mb-2"></i><h3 class="font-bold text-base">Unable to load School Browser</h3><p class="text-xs text-slate-400 mt-1">${err.message}</p></div>`;
-    return fallback;
-  }
+  return root;
 }
 
-/* ─────────────────────────────────────────
-   SHELL HTML SKELETON
-───────────────────────────────────────── */
-function buildShell() {
+/* ═══════════════════════════════════════════════════
+   CHROME SHELL (static, rendered once)
+═══════════════════════════════════════════════════ */
+function buildChrome() {
   return `
-    <!-- ══ Tab Bar ══ -->
-    <div id="tab-bar"
-         class="flex items-end bg-[#35363a] border-b border-[#5f6368]/40 px-2 pt-1 gap-0.5 overflow-x-auto shrink-0 min-h-[38px]">
+  <!-- Tab Strip -->
+  <div id="tab-strip" class="flex items-end bg-[#35363a] px-2 pt-1 gap-0.5 min-h-[38px] overflow-x-auto shrink-0 border-b border-black/30"></div>
+
+  <!-- Toolbar -->
+  <div class="bg-[#292a2d] border-b border-black/20 px-2 py-1 flex items-center gap-1.5 shrink-0">
+    <button id="btn-back"    class="nb" title="Back"><i class="fas fa-arrow-left text-xs"></i></button>
+    <button id="btn-forward" class="nb" title="Forward"><i class="fas fa-arrow-right text-xs"></i></button>
+    <button id="btn-reload"  class="nb" title="Reload"><i id="reload-icon" class="fas fa-redo text-xs"></i></button>
+    <button id="btn-home"    class="nb" title="Home"><i class="fas fa-home text-xs"></i></button>
+
+    <!-- Engine Selector -->
+    <select id="engine-sel" class="bg-[#3c3c3f] text-slate-200 text-xs border border-slate-600/40 rounded-full px-2 py-1 outline-none cursor-pointer">
+      <option value="google">🔍 Google</option>
+      <option value="bing">🔍 Bing</option>
+      <option value="brave">🦁 Brave</option>
+    </select>
+
+    <!-- Omnibox -->
+    <div class="flex-1 flex items-center gap-1.5 bg-[#3c3c3f] hover:bg-[#484848] focus-within:bg-[#292a2d] focus-within:border-blue-500 border border-transparent rounded-full px-3 py-1">
+      <i class="fas fa-lock text-emerald-400 text-[10px]"></i>
+      <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
+             class="flex-1 bg-transparent outline-none text-[13px] text-white min-w-0"
+             placeholder="Search Google or enter a URL...">
+      <span class="text-[9px] bg-emerald-900/70 text-emerald-300 border border-emerald-700/40 px-1.5 py-0.5 rounded-full font-bold shrink-0">SAFE</span>
     </div>
 
-    <!-- ══ Toolbar ══ -->
-    <div class="bg-[#292a2d] border-b border-[#5f6368]/30 px-3 py-1.5 flex items-center gap-2 shrink-0">
+    <button id="btn-new-tab" class="nb" title="New Tab"><i class="fas fa-plus text-xs"></i></button>
+  </div>
 
-      <!-- Nav Buttons -->
-      <div class="flex items-center gap-0.5 text-slate-400">
-        <button id="btn-back"    class="nav-btn" title="Back"><i class="fas fa-arrow-left text-sm"></i></button>
-        <button id="btn-forward" class="nav-btn" title="Forward"><i class="fas fa-arrow-right text-sm"></i></button>
-        <button id="btn-reload"  class="nav-btn" title="Reload"><i id="reload-icon" class="fas fa-redo text-sm"></i></button>
-        <button id="btn-home"    class="nav-btn" title="Home Screen"><i class="fas fa-home text-sm"></i></button>
-      </div>
+  <!-- Bookmarks Bar -->
+  <div id="bm-bar" class="bg-[#292a2d] border-b border-black/10 px-3 py-0.5 flex items-center gap-0.5 text-xs overflow-x-auto shrink-0">
+    ${BOOKMARKS.map(b => `
+      <button class="bm flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/10 text-slate-300 hover:text-white shrink-0 transition-colors" data-url="${b.url}">
+        <i class="${b.icon} text-[10px]"></i><span class="text-[11px]">${b.label}</span>
+      </button>`).join('')}
+  </div>
 
-      <!-- Search Engine Selector -->
-      <div class="flex items-center bg-[#3c3c3f] rounded-full px-2 py-1 text-xs border border-slate-600/50">
-        <select id="engine-select" class="bg-transparent text-slate-200 font-semibold outline-none cursor-pointer text-xs pr-1">
-          <option value="google" ${currentEngine === 'google' ? 'selected' : ''}>🔍 Google</option>
-          <option value="bing"   ${currentEngine === 'bing' ? 'selected' : ''}>🔍 Bing</option>
-          <option value="brave"  ${currentEngine === 'brave' ? 'selected' : ''}>🦁 Brave</option>
-        </select>
-      </div>
+  <!-- Progress Bar -->
+  <div id="prog" class="h-0.5 bg-blue-500 w-0 opacity-0 shrink-0 transition-all duration-150"></div>
 
-      <!-- Omnibox / Address Bar -->
-      <div id="omnibox"
-           class="flex-1 flex items-center gap-2 bg-[#3c3c3f] hover:bg-[#484848] border border-transparent focus-within:border-blue-500 focus-within:bg-[#292a2d] rounded-full px-3 py-1 text-xs cursor-text transition-colors">
-        <i id="security-icon" class="fas fa-lock text-emerald-400 text-[11px]" title="Secure connection"></i>
-        <input id="address-bar"
-               type="text"
-               class="bg-transparent border-none outline-none text-slate-100 text-[13px] w-full font-sans"
-               spellcheck="false"
-               autocomplete="off"
-               placeholder="Search Google or type a web URL...">
-        <span class="shrink-0 text-[10px] bg-emerald-950/70 text-emerald-300 border border-emerald-600/40 px-2 py-0.5 rounded-full font-semibold">
-          SafeSearch
-        </span>
-      </div>
+  <!-- Canvas: holds one wrapper per tab -->
+  <div id="canvas" class="flex-1 relative overflow-hidden"></div>
 
-      <!-- New Tab -->
-      <div class="flex items-center gap-1 text-slate-400">
-        <button id="btn-new-tab" class="nav-btn" title="New Tab"><i class="fas fa-plus text-sm"></i></button>
-      </div>
-    </div>
+  <!-- Status Bar -->
+  <div class="bg-[#292a2d] border-t border-black/10 px-3 py-0.5 flex justify-between shrink-0">
+    <span id="status" class="text-[10px] text-slate-400">Lincoln High School Safe Browser</span>
+    <span class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Persistent Engine ⚡' : 'Web Mode'}</span>
+  </div>
 
-    <!-- ══ Bookmarks Bar ══ -->
-    <div id="bookmarks-bar"
-         class="bg-[#292a2d] border-b border-[#5f6368]/20 px-3 py-0.5 flex items-center gap-1 text-xs overflow-x-auto shrink-0">
-      <span class="text-[10px] text-slate-500 font-semibold mr-1 shrink-0">Quick Sites:</span>
-      ${BOOKMARKS.map(bm => `
-        <button class="bm-btn flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors shrink-0" data-url="${bm.url}">
-          <i class="${bm.icon} text-[11px]"></i>
-          <span class="text-[11px]">${bm.label}</span>
-        </button>
-      `).join('')}
-    </div>
-
-    <!-- ══ Loading Progress Bar ══ -->
-    <div id="progress-bar"
-         class="h-[3px] bg-blue-500 w-0 transition-all duration-150 shrink-0 opacity-0">
-    </div>
-
-    <!-- ══ Web Canvas ══ -->
-    <div id="browser-canvas" class="flex-1 relative overflow-hidden bg-[#202124]">
-    </div>
-
-    <!-- ══ Status Bar ══ -->
-    <div id="status-bar"
-         class="bg-[#292a2d] border-t border-[#5f6368]/20 px-3 py-0.5 text-[10px] text-slate-400 flex justify-between shrink-0">
-      <span id="status-text">Lincoln High School Instant Safe Browser</span>
-      <span id="zoom-display" class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Persistent Session Turbo Engine' : 'Web Mode Engine'}</span>
-    </div>
-
-    <style>
-      .nav-btn {
-        width:28px; height:28px; border-radius:50%;
-        display:flex; align-items:center; justify-content:center;
-        background:transparent; border:none; cursor:pointer;
-        color:#9aa0a6; transition:background 0.1s;
-      }
-      .nav-btn:hover { background:rgba(255,255,255,0.1); color:#fff; }
-      .nav-btn:active { transform:scale(0.92); }
-      .tab-item {
-        display:flex; align-items:center; gap:6px;
-        padding:6px 12px 6px 10px; border-radius:8px 8px 0 0;
-        min-width:130px; max-width:220px; cursor:pointer;
-        background:#2d2e32; color:#9aa0a6; font-size:12px;
-        border:1px solid transparent; border-bottom:none;
-        transition:background 0.12s; position:relative;
-      }
-      .tab-item:hover { background:#3a3b3f; color:#e8eaed; }
-      .tab-item.active {
-        background:#292a2d; color:#e8eaed;
-        border-color:#5f6368;
-        z-index:1;
-      }
-      .tab-close {
-        margin-left:auto; width:16px; height:16px; border-radius:50%;
-        display:flex; align-items:center; justify-content:center;
-        font-size:10px; color:#9aa0a6; background:transparent; border:none;
-        cursor:pointer; opacity:0; transition:opacity 0.1s, background 0.1s;
-        flex-shrink:0;
-      }
-      .tab-item:hover .tab-close,
-      .tab-item.active .tab-close { opacity:1; }
-      .tab-close:hover { background:rgba(255,255,255,0.2); color:#fff; }
-    </style>
-  `;
+  <style>
+    .nb { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+          background:transparent;border:none;cursor:pointer;color:#9aa0a6;transition:background .1s; }
+    .nb:hover { background:rgba(255,255,255,.1);color:#fff; }
+    .nb:active { transform:scale(.9); }
+    .tab { display:flex;align-items:center;gap:5px;padding:5px 10px 5px 8px;border-radius:8px 8px 0 0;
+           min-width:120px;max-width:200px;cursor:pointer;background:#2d2e32;color:#9aa0a6;font-size:11px;
+           border:1px solid transparent;border-bottom:none;transition:background .1s; }
+    .tab:hover { background:#3a3b3f;color:#e8eaed; }
+    .tab.active { background:#292a2d;color:#e8eaed;border-color:#5f6368;z-index:1; }
+    .tab-x { margin-left:auto;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;
+              justify-content:center;font-size:9px;color:#9aa0a6;background:transparent;border:none;
+              cursor:pointer;opacity:0;transition:opacity .1s; }
+    .tab:hover .tab-x,.tab.active .tab-x { opacity:1; }
+    .tab-x:hover { background:rgba(255,255,255,.2);color:#fff; }
+    .tab-wrap { position:absolute;inset:0; }
+    .start-overlay { position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center; }
+    .start-overlay.hidden { display:none; }
+  </style>`;
 }
 
-/* ─────────────────────────────────────────
-   WEB CANVAS MOUNTING (PERSISTENT TURBO SESSION)
-───────────────────────────────────────── */
-function mountViews(container) {
-  tabs.forEach(tab => appendView(container, tab.id, tab.url));
+/* ═══════════════════════════════════════════════════
+   TAB MANAGEMENT
+═══════════════════════════════════════════════════ */
+function openTab(root, url) {
+  const id = newTab(url);
+  buildTabDOM(root, id);
+  activateTab(root, id);
+  if (url) loadUrl(root, id, url);
 }
 
-function appendView(container, tabId, url) {
-  const canvas = container.querySelector('#browser-canvas');
-  if (!canvas) return;
+function buildTabDOM(root, tabId) {
+  const canvas = root.querySelector('#canvas');
 
-  const wrapper = document.createElement('div');
-  wrapper.id = `view-wrapper-${tabId}`;
-  wrapper.className = 'absolute inset-0 hidden';
+  // Tab wrapper holds one persistent webview + one start overlay
+  const wrap = document.createElement('div');
+  wrap.id = `tw-${tabId}`;
+  wrap.className = 'tab-wrap hidden';
 
-  if (url === 'about:home') {
-    wrapper.innerHTML = renderStartPageHTML(tabId);
-    wireStartPageEvents(container, wrapper, tabId);
-  } else if (IS_ELECTRON) {
+  if (IS_ELECTRON) {
+    // ── PERSISTENT WEBVIEW (never destroyed, just .src changed) ──
     const wv = document.createElement('webview');
-    wv.id = `webview-${tabId}`;
-    wv.style.width  = '100%';
-    wv.style.height = '100%';
-    wv.style.border = 'none';
-
-    // Persistent partition for fast cached DNS & SSL handshakes
-    wv.setAttribute('partition', 'persist:school_browser');
+    wv.id = `wv-${tabId}`;
+    wv.setAttribute('partition', 'persist:school');
     wv.setAttribute('allowpopups', '');
+    wv.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+    wrap.appendChild(wv);
 
-    wrapper.appendChild(wv);
-    wv.setAttribute('src', url);
-
-    wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
-    wv.addEventListener('did-stop-loading',  () => setLoading(container, tabId, false));
-    wv.addEventListener('did-fail-load',     () => setLoading(container, tabId, false));
-
-    wv.addEventListener('did-navigate', (e) => {
-      const tab = tabs.find(t => t.id === tabId);
-      if (tab) tab.url = e.url;
-      if (tabId === activeTabId) {
-        const addrBar = container.querySelector('#address-bar');
-        if (addrBar) addrBar.value = e.url;
-      }
-    });
-
-    wv.addEventListener('will-navigate', (e) => {
-      const access = restrictionManager.checkUrlAccess(e.url);
-      if (!access.allowed) {
-        try { wv.stop(); } catch (err) {}
-        showBlockPage(container, tabId, e.url, access.reason);
-      }
-    });
+    wireWebview(root, tabId, wv);
   } else {
-    let targetUrl = url;
-    if (url.includes('google.com/search') || url.includes('bing.com/search') || url.includes('brave.com/search')) {
-      const qMatch = url.match(/[?&]q=([^&]+)/);
-      if (qMatch) {
-        targetUrl = `https://en.m.wikipedia.org/w/index.php?search=${qMatch[1]}`;
-      }
-    } else if (url === 'https://www.google.com' || url === 'https://www.bing.com' || url === 'https://search.brave.com') {
-      targetUrl = 'https://en.m.wikipedia.org';
-    }
-
-    const iframe = document.createElement('iframe');
-    iframe.id = `webview-${tabId}`;
-    iframe.src = targetUrl;
-    iframe.style.width  = '100%';
-    iframe.style.height = '100%';
-    iframe.style.border = 'none';
-    iframe.allow = 'fullscreen';
-    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
-
-    iframe.addEventListener('load', () => setLoading(container, tabId, false));
-    wrapper.appendChild(iframe);
+    // Web-mode: single persistent iframe
+    const fr = document.createElement('iframe');
+    fr.id = `wv-${tabId}`;
+    fr.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+    fr.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
+    fr.allow = 'fullscreen';
+    fr.addEventListener('load', () => progress(root, tabId, false));
+    wrap.appendChild(fr);
   }
 
-  canvas.appendChild(wrapper);
+  // ── START PAGE OVERLAY (lightweight HTML, no network) ──
+  const overlay = document.createElement('div');
+  overlay.id = `sp-${tabId}`;
+  overlay.className = 'start-overlay bg-[#202124]';
+  overlay.innerHTML = startPageHTML(tabId);
+  wireStartPage(root, tabId, overlay);
+  wrap.appendChild(overlay);
+
+  canvas.appendChild(wrap);
 }
 
-function renderStartPageHTML(tabId) {
-  return `
-    <div class="h-full w-full bg-[#202124] text-slate-100 flex flex-col items-center justify-center p-8 overflow-y-auto">
-      <!-- Chrome-style Search Header -->
-      <div class="text-center space-y-4 max-w-xl w-full mb-8">
-        <div class="flex items-center justify-center gap-3">
-          <i class="fab fa-chrome text-5xl text-blue-500 drop-shadow-md"></i>
-          <span class="text-3xl font-bold tracking-tight text-white">Google</span>
-        </div>
-        <p class="text-xs text-slate-400">Lincoln High School Protected Student Search</p>
+function wireWebview(root, tabId, wv) {
+  wv.addEventListener('did-start-loading',  ()  => progress(root, tabId, true));
+  wv.addEventListener('did-stop-loading',   ()  => progress(root, tabId, false));
+  wv.addEventListener('did-fail-load',      ()  => progress(root, tabId, false));
 
-        <!-- Center Search Input -->
-        <div class="flex items-center bg-[#303134] hover:bg-[#3c3c3f] border border-slate-700 hover:border-slate-500 rounded-full px-4 py-3 shadow-xl transition-all focus-within:border-blue-500">
-          <i class="fas fa-search text-slate-400 text-sm mr-3"></i>
-          <input type="text" id="start-search-input-${tabId}" class="bg-transparent border-none outline-none text-white text-sm w-full" placeholder="Search Google or enter a web address..." autofocus>
-          <button id="start-search-btn-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-1.5 rounded-full transition-colors ml-2">
-            Search
-          </button>
-        </div>
-      </div>
-
-      <!-- Quick Speed Dial Cards -->
-      <div class="max-w-xl w-full">
-        <div class="text-[11px] font-semibold text-slate-400 uppercase tracking-wider mb-3 px-1">Frequent Educational Sites</div>
-        <div class="grid grid-cols-4 gap-3">
-          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://www.google.com">
-            <i class="fab fa-google text-blue-400 text-2xl"></i>
-            <span class="text-xs font-semibold text-slate-200">Google</span>
-          </button>
-          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://www.bing.com">
-            <i class="fab fa-microsoft text-cyan-400 text-2xl"></i>
-            <span class="text-xs font-semibold text-slate-200">Bing</span>
-          </button>
-          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://search.brave.com">
-            <i class="fas fa-shield-alt text-amber-500 text-2xl"></i>
-            <span class="text-xs font-semibold text-slate-200">Brave</span>
-          </button>
-          <button class="start-card-btn bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/60 p-3 rounded-2xl flex flex-col items-center text-center gap-2 transition-all hover:scale-105" data-url="https://www.khanacademy.org">
-            <i class="fas fa-leaf text-emerald-400 text-2xl"></i>
-            <span class="text-xs font-semibold text-slate-200">Khan Academy</span>
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-}
-
-function wireStartPageEvents(container, wrapper, tabId) {
-  const searchInput = wrapper.querySelector(`#start-search-input-${tabId}`);
-  const searchBtn = wrapper.querySelector(`#start-search-btn-${tabId}`);
-
-  const triggerSearch = () => {
-    const query = searchInput.value.trim();
-    if (query) navigate(container, tabId, query);
-  };
-
-  searchBtn?.addEventListener('click', triggerSearch);
-  searchInput?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') triggerSearch();
+  wv.addEventListener('did-navigate', e => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) tab.url = e.url;
+    if (tabId === activeTabId) {
+      root.querySelector('#omnibox').value = e.url;
+    }
   });
 
-  wrapper.querySelectorAll('.start-card-btn').forEach(card => {
-    card.addEventListener('click', () => {
-      navigate(container, tabId, card.dataset.url);
+  wv.addEventListener('page-title-updated', e => {
+    const tab = tabs.find(t => t.id === tabId);
+    if (tab) tab.title = e.title || 'Page';
+    renderTabStrip(root);
+  });
+
+  wv.addEventListener('update-target-url', e => {
+    if (tabId === activeTabId)
+      root.querySelector('#status').textContent = e.url || 'Lincoln High School Safe Browser';
+  });
+
+  // Block restricted sites before they load
+  wv.addEventListener('will-navigate', e => {
+    if (!restrictionManager.checkUrlAccess(e.url).allowed) {
+      try { wv.stop(); } catch (_) {}
+      showBlock(root, tabId, e.url, restrictionManager.checkUrlAccess(e.url).reason);
+    }
+  });
+}
+
+function activateTab(root, tabId) {
+  activeTabId = tabId;
+  // Hide all wrappers, show active
+  root.querySelectorAll('.tab-wrap').forEach(w => w.classList.add('hidden'));
+  const wrap = root.querySelector(`#tw-${tabId}`);
+  if (wrap) wrap.classList.remove('hidden');
+
+  const tab = tabs.find(t => t.id === tabId);
+  const omni = root.querySelector('#omnibox');
+  if (omni) omni.value = (!tab?.url) ? '' : tab.url;
+
+  renderTabStrip(root);
+}
+
+function closeTab(root, tabId) {
+  if (tabs.length === 1) return;
+  const idx = tabs.findIndex(t => t.id === tabId);
+  tabs = tabs.filter(t => t.id !== tabId);
+  root.querySelector(`#tw-${tabId}`)?.remove();
+  if (activeTabId === tabId) {
+    activateTab(root, tabs[Math.min(idx, tabs.length - 1)].id);
+  } else {
+    renderTabStrip(root);
+  }
+}
+
+function renderTabStrip(root) {
+  const strip = root.querySelector('#tab-strip');
+  if (!strip) return;
+  strip.innerHTML = tabs.map(tab => `
+    <div class="tab ${tab.id === activeTabId ? 'active' : ''}" data-tid="${tab.id}">
+      <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[10px] shrink-0"></i>
+      <span class="truncate flex-1">${tab.title || 'New Tab'}</span>
+      <button class="tab-x" data-close="${tab.id}">✕</button>
+    </div>`).join('') +
+    `<button id="strip-new" class="nb self-center ml-1 shrink-0" title="New Tab"><i class="fas fa-plus text-xs"></i></button>`;
+
+  strip.querySelectorAll('.tab').forEach(el => {
+    el.addEventListener('click', e => {
+      if (e.target.closest('.tab-x')) return;
+      activateTab(root, parseInt(el.dataset.tid));
     });
   });
+  strip.querySelectorAll('.tab-x').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      closeTab(root, parseInt(btn.dataset.close));
+    });
+  });
+  strip.querySelector('#strip-new')?.addEventListener('click', () => openTab(root, null));
 }
 
-/* ─────────────────────────────────────────
-   NAVIGATION HELPERS
-───────────────────────────────────────── */
-function navigate(container, tabId, rawInput) {
-  let url = rawInput.trim();
+/* ═══════════════════════════════════════════════════
+   NAVIGATION  (FAST: just sets .src on existing view)
+═══════════════════════════════════════════════════ */
+function loadUrl(root, tabId, url) {
+  const access = restrictionManager.checkUrlAccess(url);
+  if (!access.allowed) { showBlock(root, tabId, url, access.reason); return; }
+
+  // Hide start page overlay, show webview beneath
+  const overlay = root.querySelector(`#sp-${tabId}`);
+  if (overlay) overlay.classList.add('hidden');
+
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.src = url;   // ← FAST: reuse existing renderer
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) { tab.url = url; tab.title = urlTitle(url); }
+
+  if (tabId === activeTabId) root.querySelector('#omnibox').value = url;
+  progress(root, tabId, true);
+  renderTabStrip(root);
+}
+
+function navigate(root, tabId, raw) {
+  let url = raw.trim();
   if (!url) return;
 
-  if (url === 'about:home') {
-    appendNewView(container, tabId, 'about:home');
-    const tab = tabs.find(t => t.id === tabId);
-    if (tab) { tab.url = 'about:home'; tab.title = 'New Tab'; }
-    const addrBar = container.querySelector('#address-bar');
-    if (addrBar) addrBar.value = '';
-    renderTabs(container);
-    return;
-  }
-
-  // Search query → Google / Bing / Brave Search
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    if (url.includes('.') && !url.includes(' ')) {
+    if (/\.\w{2,}/.test(url) && !url.includes(' ')) {
       url = 'https://' + url;
     } else {
       const q = restrictionManager.inspectSearchQuery(url);
-      if (!q.safe) { showBlockPage(container, tabId, url, q.reason); return; }
-      const engine = SEARCH_ENGINES[currentEngine] || SEARCH_ENGINES.google;
-      url = `${engine.url}${encodeURIComponent(url)}`;
+      if (!q.safe) { showBlock(root, tabId, url, q.reason); return; }
+      url = ENGINES[engine].url + encodeURIComponent(url);
     }
   }
 
-  // Domain restriction check
-  const access = restrictionManager.checkUrlAccess(url);
-  if (!access.allowed) { showBlockPage(container, tabId, url, access.reason); return; }
+  loadUrl(root, tabId, url);
+}
 
+/* ═══════════════════════════════════════════════════
+   PROGRESS BAR
+═══════════════════════════════════════════════════ */
+let _progTimer = null;
+function progress(root, tabId, on) {
   const tab = tabs.find(t => t.id === tabId);
-  if (tab) {
-    tab.url = url;
-    if (url.includes('google.com')) tab.title = 'Google';
-    else if (url.includes('bing.com')) tab.title = 'Bing';
-    else if (url.includes('brave.com')) tab.title = 'Brave';
-    else tab.title = 'Loading…';
-  }
+  if (tab) tab.loading = on;
+  if (tabId !== activeTabId) return;
 
-  appendNewView(container, tabId, url);
-
-  const addrBar = container.querySelector('#address-bar');
-  if (addrBar) addrBar.value = url;
-
-  setLoading(container, tabId, true);
-  renderTabs(container);
-}
-
-function getView(container, tabId) {
-  return container.querySelector(`#webview-${tabId}`);
-}
-
-function setLoading(container, tabId, isLoading) {
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab) tab.loading = isLoading;
-
-  if (tabId === activeTabId) {
-    const icon = container.querySelector('#reload-icon');
-    const bar  = container.querySelector('#progress-bar');
-    if (icon) icon.className = isLoading ? 'fas fa-times text-sm' : 'fas fa-redo text-sm';
-    if (bar) {
-      if (isLoading) {
-        bar.style.width = '70%'; bar.style.opacity = '1';
-        // Auto timeout progress bar after 2 seconds for ultra-responsive feel
-        setTimeout(() => {
-          if (tab.loading) {
-            bar.style.width = '100%';
-            setTimeout(() => { bar.style.opacity = '0'; }, 200);
-          }
-        }, 2000);
-      } else {
-        bar.style.width = '100%';
-        setTimeout(() => { bar.style.width = '0'; bar.style.opacity = '0'; }, 150);
-      }
-    }
-  }
-}
-
-function showBlockPage(container, tabId, blockedUrl, reason) {
-  const wrapper = container.querySelector(`#view-wrapper-${tabId}`);
-  if (!wrapper) return;
-
-  wrapper.innerHTML = `
-    <div class="h-full overflow-y-auto flex items-center justify-center p-8 bg-[#202124]">
-      <div class="max-w-xl w-full bg-[#292a2d] border border-[#5f6368]/50 rounded-3xl p-8 text-center space-y-5 shadow-2xl">
-        <div class="w-16 h-16 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-3xl border border-rose-500/30">
-          <i class="fas fa-shield-alt"></i>
-        </div>
-        <h2 class="text-xl font-bold text-white">Access Restricted by Administrator</h2>
-        <p class="text-slate-400 text-sm leading-relaxed">
-          ${reason || 'This website is blocked by school/parent safety policy.'}
-        </p>
-        <div class="bg-[#1a1b1e] p-4 rounded-2xl border border-[#5f6368]/40 font-mono text-xs text-rose-300 text-left space-y-1">
-          <div><b class="text-slate-400">URL:</b> ${blockedUrl}</div>
-          <div><b class="text-slate-400">Policy:</b> Anti-Distraction &amp; Student Safety</div>
-          <div><b class="text-slate-400">Filter:</b> Lincoln High School Network</div>
-        </div>
-        <div class="flex justify-center gap-3">
-          <button id="req-unblock-${tabId}" class="bg-amber-600 hover:bg-amber-500 text-white font-semibold text-xs px-5 py-2.5 rounded-full transition-colors flex items-center gap-2">
-            <i class="fas fa-paper-plane"></i> Request Unblock from Teacher
-          </button>
-          <button id="go-home-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-5 py-2.5 rounded-full transition-colors">
-            Return to Start Page
-          </button>
-        </div>
-      </div>
-    </div>
-  `;
-
-  setLoading(container, tabId, false);
-  const addrBar = container.querySelector('#address-bar');
-  if (addrBar) addrBar.value = blockedUrl;
-
-  wrapper.querySelector(`#go-home-${tabId}`)?.addEventListener('click', () => {
-    navigate(container, tabId, 'about:home');
-  });
-
-  wrapper.querySelector(`#req-unblock-${tabId}`)?.addEventListener('click', (e) => {
-    e.target.innerHTML = '<i class="fas fa-check"></i> Request Sent';
-    e.target.className = 'bg-emerald-600 text-white font-semibold text-xs px-5 py-2.5 rounded-full cursor-default';
-  });
-}
-
-function appendNewView(container, tabId, url) {
-  const wrapper = container.querySelector(`#view-wrapper-${tabId}`);
-  if (!wrapper) return;
-  wrapper.innerHTML = '';
-
-  if (url === 'about:home') {
-    wrapper.innerHTML = renderStartPageHTML(tabId);
-    wireStartPageEvents(container, wrapper, tabId);
-  } else if (IS_ELECTRON) {
-    const wv = document.createElement('webview');
-    wv.id = `webview-${tabId}`;
-    wv.style.width = '100%'; wv.style.height = '100%'; wv.style.border = 'none';
-
-    // Persistent partition for fast cached DNS & SSL handshakes
-    wv.setAttribute('partition', 'persist:school_browser');
-    wv.setAttribute('allowpopups', '');
-
-    wrapper.appendChild(wv);
-    wv.setAttribute('src', url);
-
-    wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
-    wv.addEventListener('did-stop-loading',  () => setLoading(container, tabId, false));
-    wv.addEventListener('did-fail-load',     () => setLoading(container, tabId, false));
-
-    wv.addEventListener('did-navigate', (e) => {
-      const tab = tabs.find(t => t.id === tabId);
-      if (tab) tab.url = e.url;
-      if (tabId === activeTabId) {
-        const addrBar = container.querySelector('#address-bar');
-        if (addrBar) addrBar.value = e.url;
-      }
-    });
-
-    wv.addEventListener('will-navigate', (e) => {
-      const access = restrictionManager.checkUrlAccess(e.url);
-      if (!access.allowed) {
-        try { wv.stop(); } catch (err) {}
-        showBlockPage(container, tabId, e.url, access.reason);
-      }
-    });
-  } else {
-    let targetUrl = url;
-    if (url.includes('google.com/search') || url.includes('bing.com/search') || url.includes('brave.com/search')) {
-      const qMatch = url.match(/[?&]q=([^&]+)/);
-      if (qMatch) {
-        targetUrl = `https://en.m.wikipedia.org/w/index.php?search=${qMatch[1]}`;
-      }
-    } else if (url === 'https://www.google.com' || url === 'https://www.bing.com' || url === 'https://search.brave.com') {
-      targetUrl = 'https://en.m.wikipedia.org';
-    }
-
-    const iframe = document.createElement('iframe');
-    iframe.id = `webview-${tabId}`;
-    iframe.src = targetUrl;
-    iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
-    iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
-    iframe.addEventListener('load', () => setLoading(container, tabId, false));
-    wrapper.appendChild(iframe);
-  }
-}
-
-/* ─────────────────────────────────────────
-   TAB RENDERING & INTERACTION
-───────────────────────────────────────── */
-function renderTabs(container) {
-  const bar = container.querySelector('#tab-bar');
+  const bar = root.querySelector('#prog');
   if (!bar) return;
+  clearTimeout(_progTimer);
 
-  bar.innerHTML = tabs.map(tab => `
-    <div class="tab-item ${tab.id === activeTabId ? 'active' : ''}" data-tab-id="${tab.id}" title="${tab.title || tab.url}">
-      <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[11px] shrink-0"></i>
-      <span class="truncate flex-1 text-[12px]">${tab.title || tab.url || 'New Tab'}</span>
-      <button class="tab-close" data-close-tab="${tab.id}" title="Close Tab">✕</button>
-    </div>
-  `).join('') + `
-    <button id="new-tab-btn-inline"
-            class="flex items-center justify-center w-7 h-7 rounded-full hover:bg-white/10 text-slate-400 hover:text-white ml-1 self-center shrink-0 text-sm transition-colors"
-            title="New Tab">+</button>
-  `;
-
-  // Tab click to activate
-  bar.querySelectorAll('.tab-item').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.tab-close')) return;
-      const id = parseInt(el.dataset.tabId, 10);
-      setActiveTab(container, id);
-    });
-  });
-
-  // Close tab buttons
-  bar.querySelectorAll('.tab-close').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      closeTab(container, parseInt(btn.dataset.closeTab, 10));
-    });
-  });
-
-  // Inline new tab button
-  bar.querySelector('#new-tab-btn-inline')?.addEventListener('click', () => openNewTab(container));
-}
-
-function setActiveTab(container, tabId) {
-  activeTabId = tabId;
-  const tab = tabs.find(t => t.id === tabId);
-
-  // Show/hide wrappers
-  container.querySelectorAll('[id^="view-wrapper-"]').forEach(w => w.classList.add('hidden'));
-  const wrapper = container.querySelector(`#view-wrapper-${tabId}`);
-  if (wrapper) wrapper.classList.remove('hidden');
-
-  // Update address bar
-  const addrBar = container.querySelector('#address-bar');
-  if (addrBar && tab) {
-    addrBar.value = tab.url === 'about:home' ? '' : tab.url;
-  }
-
-  renderTabs(container);
-}
-
-function openNewTab(container) {
-  const id = createTab('about:home');
-  appendView(container, id, 'about:home');
-  setActiveTab(container, id);
-
-  const bar = container.querySelector('#address-bar');
-  if (bar) { bar.value = ''; bar.focus(); }
-}
-
-function closeTab(container, tabId) {
-  if (tabs.length === 1) return; // Never close last tab
-
-  const idx = tabs.findIndex(t => t.id === tabId);
-  tabs = tabs.filter(t => t.id !== tabId);
-
-  container.querySelector(`#view-wrapper-${tabId}`)?.remove();
-
-  if (activeTabId === tabId) {
-    const next = tabs[Math.min(idx, tabs.length - 1)];
-    setActiveTab(container, next.id);
+  if (on) {
+    bar.style.width = '60%'; bar.style.opacity = '1';
+    // Auto-complete after 3 s so UI never feels stuck
+    _progTimer = setTimeout(() => { bar.style.width='100%'; setTimeout(()=>{ bar.style.opacity='0'; bar.style.width='0'; },200); }, 3000);
   } else {
-    renderTabs(container);
+    bar.style.width = '100%';
+    _progTimer = setTimeout(() => { bar.style.opacity='0'; setTimeout(()=>{ bar.style.width='0'; },150); }, 200);
   }
+
+  renderTabStrip(root);
 }
 
-/* ─────────────────────────────────────────
-   TOOLBAR WIRING
-───────────────────────────────────────── */
-function wireToolbar(container) {
-  const addrBar = container.querySelector('#address-bar');
-  const engineSelect = container.querySelector('#engine-select');
+/* ═══════════════════════════════════════════════════
+   BLOCK PAGE
+═══════════════════════════════════════════════════ */
+function showBlock(root, tabId, blockedUrl, reason) {
+  progress(root, tabId, false);
 
-  // Engine switch
-  engineSelect?.addEventListener('change', (e) => {
-    currentEngine = e.target.value;
+  // Show overlay with block message instead of a real page
+  const overlay = root.querySelector(`#sp-${tabId}`);
+  if (!overlay) return;
+
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="max-w-lg w-full bg-[#292a2d] border border-[#5f6368]/50 rounded-3xl p-8 text-center space-y-5 shadow-2xl mx-4">
+      <div class="w-14 h-14 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-3xl border border-rose-500/30">
+        <i class="fas fa-shield-alt"></i>
+      </div>
+      <h2 class="text-lg font-bold text-white">Access Restricted</h2>
+      <p class="text-slate-400 text-sm">${reason || 'Blocked by school administrator policy.'}</p>
+      <div class="bg-[#1a1b1e] p-3 rounded-2xl font-mono text-xs text-rose-300 text-left space-y-1">
+        <div><b class="text-slate-400">URL:</b> ${blockedUrl}</div>
+        <div><b class="text-slate-400">Filter:</b> Lincoln High School Network</div>
+      </div>
+      <div class="flex justify-center gap-3">
+        <button id="blk-req-${tabId}" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-2">
+          <i class="fas fa-paper-plane"></i> Request Unblock
+        </button>
+        <button id="blk-home-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-full">
+          Return Home
+        </button>
+      </div>
+    </div>`;
+
+  root.querySelector(`#omnibox`).value = blockedUrl;
+
+  root.querySelector(`#blk-home-${tabId}`)?.addEventListener('click', () => {
+    showStartPage(root, tabId);
+  });
+  root.querySelector(`#blk-req-${tabId}`)?.addEventListener('click', e => {
+    e.target.innerHTML = '<i class="fas fa-check"></i> Sent!';
+    e.target.className = 'bg-emerald-700 text-white text-xs font-semibold px-4 py-2 rounded-full cursor-default';
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   START PAGE (pure HTML, zero network cost)
+═══════════════════════════════════════════════════ */
+function showStartPage(root, tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) { tab.url = null; tab.title = 'New Tab'; }
+  if (tabId === activeTabId) root.querySelector('#omnibox').value = '';
+  renderTabStrip(root);
+
+  const overlay = root.querySelector(`#sp-${tabId}`);
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = startPageHTML(tabId);
+  wireStartPage(root, tabId, overlay);
+}
+
+function startPageHTML(tabId) {
+  return `
+  <div class="flex flex-col items-center justify-center h-full p-8 text-center space-y-6">
+    <div class="flex items-center gap-3">
+      <i class="fab fa-chrome text-5xl text-blue-500"></i>
+      <span class="text-3xl font-bold text-white">Google</span>
+    </div>
+    <p class="text-xs text-slate-400">Lincoln High School Protected Student Browser</p>
+
+    <div class="w-full max-w-lg flex items-center bg-[#303134] hover:bg-[#3c3c3f] border border-slate-700 hover:border-slate-500 focus-within:border-blue-500 rounded-full px-4 py-3 shadow-xl transition-all">
+      <i class="fas fa-search text-slate-400 text-sm mr-3 shrink-0"></i>
+      <input id="sp-input-${tabId}" type="text"
+             class="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
+             placeholder="Search Google or enter a web address..."
+             autofocus>
+      <button id="sp-btn-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-1.5 rounded-full ml-2 shrink-0">
+        Go
+      </button>
+    </div>
+
+    <div class="grid grid-cols-4 gap-3 max-w-lg w-full mt-4">
+      ${[
+        { url:'https://www.google.com',          icon:'fab fa-google text-blue-400',         name:'Google' },
+        { url:'https://www.bing.com',            icon:'fab fa-microsoft text-cyan-400',       name:'Bing' },
+        { url:'https://search.brave.com',        icon:'fas fa-shield-alt text-amber-500',     name:'Brave' },
+        { url:'https://www.khanacademy.org',     icon:'fas fa-leaf text-emerald-400',         name:'Khan Academy' },
+        { url:'https://www.nasa.gov',            icon:'fas fa-rocket text-indigo-400',        name:'NASA' },
+        { url:'https://www.mathsisfun.com',      icon:'fas fa-square-root-alt text-amber-400',name:'Math Is Fun' },
+        { url:'https://www.wikipedia.org',       icon:'fab fa-wikipedia-w text-slate-300',    name:'Wikipedia' },
+        { url:'https://www.duolingo.com',        icon:'fas fa-language text-green-400',       name:'Duolingo' },
+      ].map(c => `
+        <button class="sp-card bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/50 p-3 rounded-2xl flex flex-col items-center gap-2 transition-all hover:scale-105" data-url="${c.url}">
+          <i class="${c.icon} text-2xl"></i>
+          <span class="text-[11px] font-semibold text-slate-200 text-center">${c.name}</span>
+        </button>`).join('')}
+    </div>
+  </div>`;
+}
+
+function wireStartPage(root, tabId, overlay) {
+  const input = overlay.querySelector(`#sp-input-${tabId}`);
+  const btn   = overlay.querySelector(`#sp-btn-${tabId}`);
+  const go = () => { const v = input?.value.trim(); if (v) navigate(root, tabId, v); };
+  btn?.addEventListener('click', go);
+  input?.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  overlay.querySelectorAll('.sp-card').forEach(c =>
+    c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
+}
+
+/* ═══════════════════════════════════════════════════
+   CHROME TOOLBAR WIRING
+═══════════════════════════════════════════════════ */
+function wireChrome(root) {
+  const omni = root.querySelector('#omnibox');
+
+  root.querySelector('#engine-sel').addEventListener('change', e => { engine = e.target.value; });
+
+  omni.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { navigate(root, activeTabId, omni.value); omni.blur(); }
+  });
+  omni.addEventListener('focus', () => omni.select());
+
+  root.querySelector('#btn-back').addEventListener('click', () => {
+    const v = root.querySelector(`#wv-${activeTabId}`);
+    if (IS_ELECTRON && v?.canGoBack?.()) v.goBack();
+    else if (v?.contentWindow) try { v.contentWindow.history.back(); } catch (_) {}
   });
 
-  // Enter to navigate
-  addrBar?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') navigate(container, activeTabId, addrBar.value);
+  root.querySelector('#btn-forward').addEventListener('click', () => {
+    const v = root.querySelector(`#wv-${activeTabId}`);
+    if (IS_ELECTRON && v?.canGoForward?.()) v.goForward();
+    else if (v?.contentWindow) try { v.contentWindow.history.forward(); } catch (_) {}
   });
 
-  // Select all on focus
-  addrBar?.addEventListener('focus', () => addrBar.select());
-
-  // Back
-  container.querySelector('#btn-back')?.addEventListener('click', () => {
-    const view = getView(container, activeTabId);
-    if (view && view.contentWindow) {
-      try { view.contentWindow.history.back(); } catch (e) {}
-    }
-  });
-
-  // Forward
-  container.querySelector('#btn-forward')?.addEventListener('click', () => {
-    const view = getView(container, activeTabId);
-    if (view && view.contentWindow) {
-      try { view.contentWindow.history.forward(); } catch (e) {}
-    }
-  });
-
-  // Reload / Stop
-  container.querySelector('#btn-reload')?.addEventListener('click', () => {
+  root.querySelector('#btn-reload').addEventListener('click', () => {
     const tab = tabs.find(t => t.id === activeTabId);
-    const view = getView(container, activeTabId);
+    const v   = root.querySelector(`#wv-${activeTabId}`);
     if (tab?.loading) {
-      setLoading(container, activeTabId, false);
-    } else if (view) {
-      view.src = view.src;
-      setLoading(container, activeTabId, true);
+      try { if (IS_ELECTRON) v?.stop(); } catch (_) {}
+      progress(root, activeTabId, false);
+    } else {
+      if (IS_ELECTRON) { try { v?.reload(); } catch (_) {} }
+      else if (v) v.src = v.src;
+      progress(root, activeTabId, true);
     }
   });
 
-  // Home button
-  container.querySelector('#btn-home')?.addEventListener('click', () => {
-    navigate(container, activeTabId, 'about:home');
+  root.querySelector('#btn-home').addEventListener('click', () => showStartPage(root, activeTabId));
+  root.querySelector('#btn-new-tab').addEventListener('click', () => openTab(root, null));
+
+  // Bookmarks bar
+  root.querySelector('#bm-bar').addEventListener('click', e => {
+    const b = e.target.closest('.bm');
+    if (b) navigate(root, activeTabId, b.dataset.url);
   });
 
-  // New Tab button
-  container.querySelector('#btn-new-tab')?.addEventListener('click', () => openNewTab(container));
+  // Initial tab strip render
+  renderTabStrip(root);
 }
 
-/* ─────────────────────────────────────────
-   BOOKMARKS WIRING
-───────────────────────────────────────── */
-function wireBookmarks(container) {
-  container.querySelector('#bookmarks-bar')?.addEventListener('click', (e) => {
-    const btn = e.target.closest('.bm-btn');
-    if (!btn) return;
-    navigate(container, activeTabId, btn.dataset.url);
-  });
+/* ─── helpers ─── */
+function urlTitle(url) {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch (_) { return url; }
 }
