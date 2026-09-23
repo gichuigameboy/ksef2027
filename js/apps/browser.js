@@ -1,9 +1,11 @@
 /**
  * ChromeOS Student Edition - High-Performance Speed-Optimized School Web Browser
- * Instant 0ms startup time with Chrome-style Start Page, Google/Bing/Brave Search, and multi-tab browsing.
+ * Instant 0ms startup time with Chrome-style Start Page, Google/Bing/Brave Search, and native Electron webview tag.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
+
+const IS_ELECTRON = !!(window.electronAPI && window.electronAPI.isElectron);
 
 const SEARCH_ENGINES = {
   google: { name: 'Google', url: 'https://www.google.com/search?q=', home: 'https://www.google.com', icon: 'fab fa-google text-blue-400' },
@@ -148,7 +150,7 @@ function buildShell() {
     <div id="status-bar"
          class="bg-[#292a2d] border-t border-[#5f6368]/20 px-3 py-0.5 text-[10px] text-slate-400 flex justify-between shrink-0">
       <span id="status-text">Lincoln High School Instant Safe Browser</span>
-      <span id="zoom-display" class="text-[10px] text-slate-500">Fast Mode</span>
+      <span id="zoom-display" class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Native Webview Engine' : 'Web Mode Engine'}</span>
     </div>
 
     <style>
@@ -206,20 +208,58 @@ function appendView(container, tabId, url) {
   if (url === 'about:home') {
     wrapper.innerHTML = renderStartPageHTML(tabId);
     wireStartPageEvents(container, wrapper, tabId);
+  } else if (IS_ELECTRON) {
+    const wv = document.createElement('webview');
+    wv.id = `webview-${tabId}`;
+    wv.style.width  = '100%';
+    wv.style.height = '100%';
+    wv.style.border = 'none';
+
+    wrapper.appendChild(wv);
+    wv.setAttribute('allowpopups', '');
+    wv.setAttribute('src', url);
+
+    wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
+    wv.addEventListener('did-stop-loading',  () => setLoading(container, tabId, false));
+    wv.addEventListener('did-fail-load',     () => setLoading(container, tabId, false));
+
+    wv.addEventListener('did-navigate', (e) => {
+      const tab = tabs.find(t => t.id === tabId);
+      if (tab) tab.url = e.url;
+      if (tabId === activeTabId) {
+        const addrBar = container.querySelector('#address-bar');
+        if (addrBar) addrBar.value = e.url;
+      }
+    });
+
+    wv.addEventListener('will-navigate', (e) => {
+      const access = restrictionManager.checkUrlAccess(e.url);
+      if (!access.allowed) {
+        try { wv.stop(); } catch (err) {}
+        showBlockPage(container, tabId, e.url, access.reason);
+      }
+    });
   } else {
+    let targetUrl = url;
+    if (url.includes('google.com/search') || url.includes('bing.com/search') || url.includes('brave.com/search')) {
+      const qMatch = url.match(/[?&]q=([^&]+)/);
+      if (qMatch) {
+        targetUrl = `https://en.m.wikipedia.org/w/index.php?search=${qMatch[1]}`;
+      }
+    } else if (url === 'https://www.google.com' || url === 'https://www.bing.com' || url === 'https://search.brave.com') {
+      targetUrl = 'https://en.m.wikipedia.org';
+    }
+
     const iframe = document.createElement('iframe');
     iframe.id = `webview-${tabId}`;
-    iframe.src = url;
+    iframe.src = targetUrl;
     iframe.style.width  = '100%';
     iframe.style.height = '100%';
     iframe.style.border = 'none';
     iframe.allow = 'fullscreen';
     iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
 
-    iframe.addEventListener('load', () => {
-      setLoading(container, tabId, false);
-    });
-
+    iframe.addEventListener('load', () => setLoading(container, tabId, false));
     wrapper.appendChild(iframe);
   }
 
@@ -421,10 +461,48 @@ function appendNewView(container, tabId, url) {
   if (url === 'about:home') {
     wrapper.innerHTML = renderStartPageHTML(tabId);
     wireStartPageEvents(container, wrapper, tabId);
+  } else if (IS_ELECTRON) {
+    const wv = document.createElement('webview');
+    wv.id = `webview-${tabId}`;
+    wv.style.width = '100%'; wv.style.height = '100%'; wv.style.border = 'none';
+    wrapper.appendChild(wv);
+    wv.setAttribute('allowpopups', '');
+    wv.setAttribute('src', url);
+
+    wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
+    wv.addEventListener('did-stop-loading',  () => setLoading(container, tabId, false));
+    wv.addEventListener('did-fail-load',     () => setLoading(container, tabId, false));
+
+    wv.addEventListener('did-navigate', (e) => {
+      const tab = tabs.find(t => t.id === tabId);
+      if (tab) tab.url = e.url;
+      if (tabId === activeTabId) {
+        const addrBar = container.querySelector('#address-bar');
+        if (addrBar) addrBar.value = e.url;
+      }
+    });
+
+    wv.addEventListener('will-navigate', (e) => {
+      const access = restrictionManager.checkUrlAccess(e.url);
+      if (!access.allowed) {
+        try { wv.stop(); } catch (err) {}
+        showBlockPage(container, tabId, e.url, access.reason);
+      }
+    });
   } else {
+    let targetUrl = url;
+    if (url.includes('google.com/search') || url.includes('bing.com/search') || url.includes('brave.com/search')) {
+      const qMatch = url.match(/[?&]q=([^&]+)/);
+      if (qMatch) {
+        targetUrl = `https://en.m.wikipedia.org/w/index.php?search=${qMatch[1]}`;
+      }
+    } else if (url === 'https://www.google.com' || url === 'https://www.bing.com' || url === 'https://search.brave.com') {
+      targetUrl = 'https://en.m.wikipedia.org';
+    }
+
     const iframe = document.createElement('iframe');
     iframe.id = `webview-${tabId}`;
-    iframe.src = url;
+    iframe.src = targetUrl;
     iframe.style.width = '100%'; iframe.style.height = '100%'; iframe.style.border = 'none';
     iframe.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
     iframe.addEventListener('load', () => setLoading(container, tabId, false));
