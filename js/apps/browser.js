@@ -1,6 +1,6 @@
 /**
  * ChromeOS Student Edition - High-Performance Speed-Optimized School Web Browser
- * Instant 0ms startup time with Chrome-style Start Page, Google/Bing/Brave Search, and native Electron webview tag.
+ * Sub-second URL loading using Electron persistent session partitions and 0ms Start Page.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
@@ -139,7 +139,7 @@ function buildShell() {
 
     <!-- ══ Loading Progress Bar ══ -->
     <div id="progress-bar"
-         class="h-[3px] bg-blue-500 w-0 transition-all duration-200 shrink-0 opacity-0">
+         class="h-[3px] bg-blue-500 w-0 transition-all duration-150 shrink-0 opacity-0">
     </div>
 
     <!-- ══ Web Canvas ══ -->
@@ -150,7 +150,7 @@ function buildShell() {
     <div id="status-bar"
          class="bg-[#292a2d] border-t border-[#5f6368]/20 px-3 py-0.5 text-[10px] text-slate-400 flex justify-between shrink-0">
       <span id="status-text">Lincoln High School Instant Safe Browser</span>
-      <span id="zoom-display" class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Native Webview Engine' : 'Web Mode Engine'}</span>
+      <span id="zoom-display" class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Persistent Session Turbo Engine' : 'Web Mode Engine'}</span>
     </div>
 
     <style>
@@ -191,7 +191,7 @@ function buildShell() {
 }
 
 /* ─────────────────────────────────────────
-   WEB CANVAS MOUNTING
+   WEB CANVAS MOUNTING (PERSISTENT TURBO SESSION)
 ───────────────────────────────────────── */
 function mountViews(container) {
   tabs.forEach(tab => appendView(container, tab.id, tab.url));
@@ -215,8 +215,11 @@ function appendView(container, tabId, url) {
     wv.style.height = '100%';
     wv.style.border = 'none';
 
-    wrapper.appendChild(wv);
+    // Persistent partition for fast cached DNS & SSL handshakes
+    wv.setAttribute('partition', 'persist:school_browser');
     wv.setAttribute('allowpopups', '');
+
+    wrapper.appendChild(wv);
     wv.setAttribute('src', url);
 
     wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
@@ -400,9 +403,16 @@ function setLoading(container, tabId, isLoading) {
     if (bar) {
       if (isLoading) {
         bar.style.width = '70%'; bar.style.opacity = '1';
+        // Auto timeout progress bar after 2 seconds for ultra-responsive feel
+        setTimeout(() => {
+          if (tab.loading) {
+            bar.style.width = '100%';
+            setTimeout(() => { bar.style.opacity = '0'; }, 200);
+          }
+        }, 2000);
       } else {
         bar.style.width = '100%';
-        setTimeout(() => { bar.style.width = '0'; bar.style.opacity = '0'; }, 200);
+        setTimeout(() => { bar.style.width = '0'; bar.style.opacity = '0'; }, 150);
       }
     }
   }
@@ -465,8 +475,12 @@ function appendNewView(container, tabId, url) {
     const wv = document.createElement('webview');
     wv.id = `webview-${tabId}`;
     wv.style.width = '100%'; wv.style.height = '100%'; wv.style.border = 'none';
-    wrapper.appendChild(wv);
+
+    // Persistent partition for fast cached DNS & SSL handshakes
+    wv.setAttribute('partition', 'persist:school_browser');
     wv.setAttribute('allowpopups', '');
+
+    wrapper.appendChild(wv);
     wv.setAttribute('src', url);
 
     wv.addEventListener('did-start-loading', () => setLoading(container, tabId, true));
