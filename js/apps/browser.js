@@ -1,19 +1,27 @@
 /**
- * ChromeOS Student Edition - Chrome-like School Web Browser
- * Multi-tab browser with real live navigation, bookmarks, omnibox, and active domain restrictions.
+ * ChromeOS Student Edition - Real Web Browser (Google / Bing / Brave Search Powered)
+ * Supports real search engines (Google, Bing, Brave), multi-tab browsing, live iframe rendering, and school domain restrictions.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
 
-const DEFAULT_HOME = 'https://en.m.wikipedia.org/wiki/Main_Page';
+const SEARCH_ENGINES = {
+  google: { name: 'Google', url: 'https://www.google.com/search?q=', home: 'https://www.google.com', icon: 'fab fa-google text-blue-400' },
+  bing:   { name: 'Bing',   url: 'https://www.bing.com/search?q=',   home: 'https://www.bing.com',   icon: 'fab fa-microsoft text-cyan-400' },
+  brave:  { name: 'Brave',  url: 'https://search.brave.com/search?q=', home: 'https://search.brave.com', icon: 'fas fa-shield-alt text-amber-500' }
+};
+
+let currentEngine = 'google';
+const DEFAULT_HOME = SEARCH_ENGINES.google.home;
 
 const BOOKMARKS = [
-  { label: 'Wikipedia',    icon: 'fab fa-wikipedia-w text-gray-300',  url: 'https://en.m.wikipedia.org' },
+  { label: 'Google',       icon: 'fab fa-google text-blue-400',       url: 'https://www.google.com' },
+  { label: 'Bing',         icon: 'fab fa-microsoft text-cyan-400',     url: 'https://www.bing.com' },
+  { label: 'Brave Search', icon: 'fas fa-shield-alt text-amber-500',  url: 'https://search.brave.com' },
   { label: 'Khan Academy', icon: 'fas fa-leaf text-emerald-400',      url: 'https://www.khanacademy.org' },
   { label: 'NASA',         icon: 'fas fa-rocket text-indigo-400',     url: 'https://www.nasa.gov' },
   { label: 'Math Is Fun',  icon: 'fas fa-square-root-alt text-amber-400', url: 'https://www.mathsisfun.com' },
-  { label: 'Free Library', icon: 'fas fa-book text-blue-300',         url: 'https://www.gutenberg.org' },
-  { label: 'Duolingo',     icon: 'fas fa-language text-green-400',    url: 'https://www.duolingo.com' },
+  { label: 'Roblox (Block Test)', icon: 'fas fa-gamepad text-rose-400', url: 'https://roblox.com' }
 ];
 
 /* ─────────────────────────────────────────
@@ -25,7 +33,7 @@ let tabCounter = 0;
 
 function createTab(url = DEFAULT_HOME) {
   const id = ++tabCounter;
-  tabs.push({ id, url, title: 'New Tab', loading: false, favicon: null });
+  tabs.push({ id, url, title: 'Google', loading: false, favicon: null });
   return id;
 }
 
@@ -42,7 +50,7 @@ export function createBrowserApp() {
     const container = document.createElement('div');
     container.className = 'flex flex-col h-full bg-[#202124] text-slate-100 font-sans overflow-hidden';
 
-    // Start with default home tab
+    // Start with Google home tab
     const firstTabId = createTab(DEFAULT_HOME);
     activeTabId = firstTabId;
 
@@ -85,6 +93,16 @@ function buildShell() {
         <button id="btn-back"    class="nav-btn" title="Back"><i class="fas fa-arrow-left text-sm"></i></button>
         <button id="btn-forward" class="nav-btn" title="Forward"><i class="fas fa-arrow-right text-sm"></i></button>
         <button id="btn-reload"  class="nav-btn" title="Reload"><i id="reload-icon" class="fas fa-redo text-sm"></i></button>
+        <button id="btn-home"    class="nav-btn" title="Home"><i class="fas fa-home text-sm"></i></button>
+      </div>
+
+      <!-- Search Engine Selector -->
+      <div class="flex items-center bg-[#3c3c3f] rounded-full px-2 py-1 text-xs border border-slate-600/50">
+        <select id="engine-select" class="bg-transparent text-slate-200 font-semibold outline-none cursor-pointer text-xs pr-1">
+          <option value="google" ${currentEngine === 'google' ? 'selected' : ''}>🔍 Google</option>
+          <option value="bing"   ${currentEngine === 'bing' ? 'selected' : ''}>🔍 Bing</option>
+          <option value="brave"  ${currentEngine === 'brave' ? 'selected' : ''}>🦁 Brave</option>
+        </select>
       </div>
 
       <!-- Omnibox / Address Bar -->
@@ -96,7 +114,7 @@ function buildShell() {
                class="bg-transparent border-none outline-none text-slate-100 text-[13px] w-full font-sans"
                spellcheck="false"
                autocomplete="off"
-               placeholder="Search Wikipedia or enter a URL...">
+               placeholder="Search Google or type a web URL...">
         <span class="shrink-0 text-[10px] bg-emerald-950/70 text-emerald-300 border border-emerald-600/40 px-2 py-0.5 rounded-full font-semibold">
           SafeSearch
         </span>
@@ -111,7 +129,7 @@ function buildShell() {
     <!-- ══ Bookmarks Bar ══ -->
     <div id="bookmarks-bar"
          class="bg-[#292a2d] border-b border-[#5f6368]/20 px-3 py-0.5 flex items-center gap-1 text-xs overflow-x-auto shrink-0">
-      <span class="text-[10px] text-slate-500 font-semibold mr-1 shrink-0">Bookmarks:</span>
+      <span class="text-[10px] text-slate-500 font-semibold mr-1 shrink-0">Quick Sites:</span>
       ${BOOKMARKS.map(bm => `
         <button class="bm-btn flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/10 text-slate-300 hover:text-white transition-colors shrink-0" data-url="${bm.url}">
           <i class="${bm.icon} text-[11px]"></i>
@@ -132,8 +150,8 @@ function buildShell() {
     <!-- ══ Status Bar ══ -->
     <div id="status-bar"
          class="bg-[#292a2d] border-t border-[#5f6368]/20 px-3 py-0.5 text-[10px] text-slate-400 flex justify-between shrink-0">
-      <span id="status-text">Lincoln High Safe Network Connection Active</span>
-      <span id="zoom-display" class="text-[10px] text-slate-500">100%</span>
+      <span id="status-text">Lincoln High School Protected Browser Network</span>
+      <span id="zoom-display" class="text-[10px] text-slate-500">Google Search Powered</span>
     </div>
 
     <style>
@@ -212,14 +230,15 @@ function navigate(container, tabId, rawInput) {
   let url = rawInput.trim();
   if (!url) return;
 
-  // Search query → Wikipedia SafeSearch
+  // Search query → Google / Bing / Brave Search
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     if (url.includes('.') && !url.includes(' ')) {
       url = 'https://' + url;
     } else {
       const q = restrictionManager.inspectSearchQuery(url);
       if (!q.safe) { showBlockPage(container, tabId, url, q.reason); return; }
-      url = `https://en.m.wikipedia.org/w/index.php?search=${encodeURIComponent(url)}`;
+      const engine = SEARCH_ENGINES[currentEngine] || SEARCH_ENGINES.google;
+      url = `${engine.url}${encodeURIComponent(url)}`;
     }
   }
 
@@ -228,7 +247,13 @@ function navigate(container, tabId, rawInput) {
   if (!access.allowed) { showBlockPage(container, tabId, url, access.reason); return; }
 
   const tab = tabs.find(t => t.id === tabId);
-  if (tab) { tab.url = url; tab.title = 'Loading…'; }
+  if (tab) {
+    tab.url = url;
+    if (url.includes('google.com')) tab.title = 'Google Search';
+    else if (url.includes('bing.com')) tab.title = 'Bing Search';
+    else if (url.includes('brave.com')) tab.title = 'Brave Search';
+    else tab.title = 'Loading…';
+  }
 
   const view = getView(container, tabId);
   if (view) {
@@ -293,7 +318,7 @@ function showBlockPage(container, tabId, blockedUrl, reason) {
             <i class="fas fa-paper-plane"></i> Request Unblock from Teacher
           </button>
           <button id="go-home-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs px-5 py-2.5 rounded-full transition-colors">
-            Go Home
+            Go to Google
           </button>
         </div>
       </div>
@@ -338,7 +363,7 @@ function renderTabs(container) {
   bar.innerHTML = tabs.map(tab => `
     <div class="tab-item ${tab.id === activeTabId ? 'active' : ''}" data-tab-id="${tab.id}" title="${tab.title || tab.url}">
       <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[11px] shrink-0"></i>
-      <span class="truncate flex-1 text-[12px]">${tab.title || tab.url || 'New Tab'}</span>
+      <span class="truncate flex-1 text-[12px]">${tab.title || tab.url || 'Google'}</span>
       <button class="tab-close" data-close-tab="${tab.id}" title="Close Tab">✕</button>
     </div>
   `).join('') + `
@@ -414,6 +439,12 @@ function closeTab(container, tabId) {
 ───────────────────────────────────────── */
 function wireToolbar(container) {
   const addrBar = container.querySelector('#address-bar');
+  const engineSelect = container.querySelector('#engine-select');
+
+  // Engine switch
+  engineSelect?.addEventListener('change', (e) => {
+    currentEngine = e.target.value;
+  });
 
   // Enter to navigate
   addrBar?.addEventListener('keydown', (e) => {
@@ -449,6 +480,12 @@ function wireToolbar(container) {
       if (view) view.src = view.src;
       setLoading(container, activeTabId, true);
     }
+  });
+
+  // Home button
+  container.querySelector('#btn-home')?.addEventListener('click', () => {
+    const homeUrl = SEARCH_ENGINES[currentEngine]?.home || DEFAULT_HOME;
+    navigate(container, activeTabId, homeUrl);
   });
 
   // New Tab button
