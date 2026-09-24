@@ -69,7 +69,7 @@ export function createAdminPanelApp() {
           </div>
           <div>
             <h2 class="font-bold text-white text-base">District & Parental Control Center</h2>
-            <p class="text-xs text-slate-400">Lincoln High School Chromebook Policy Engine</p>
+            <p class="text-xs text-slate-400">Dawamu Chromebook Policy Engine</p>
           </div>
         </div>
 

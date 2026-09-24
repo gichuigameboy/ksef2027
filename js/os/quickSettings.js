@@ -31,7 +31,7 @@ class QuickSettings {
           </div>
           <div>
             <div class="font-bold text-sm text-white">Student Account</div>
-            <div class="text-xs text-gray-400">Lincoln High School ${isDesktopNative ? '• Desktop Native OS' : ''}</div>
+            <div class="text-xs text-gray-400">Dawamu ${isDesktopNative ? '• Desktop Native OS' : ''}</div>
           </div>
         </div>
 

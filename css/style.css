@@ -1,8 +1,8 @@
 /* ChromeOS Material 3 Design System & Window Management Styles */
 
 :root {
-  --cros-primary: #1a73e8;
-  --cros-primary-hover: #1557b0;
+  --cros-primary: #389e3c;
+  --cros-primary-hover: #2e7d32;
   --cros-surface: rgba(255, 255, 255, 0.88);
   --cros-surface-dark: rgba(32, 33, 36, 0.92);
   --cros-shelf-bg: rgba(24, 28, 36, 0.75);
@@ -47,8 +47,8 @@ body, html {
   position: relative;
   width: 100vw;
   height: calc(100vh - 54px);
-  background: radial-gradient(circle at 20% 20%, #1e3a8a 0%, #0f172a 60%),
-              radial-gradient(circle at 80% 80%, #312e81 0%, #0f172a 60%);
+  background: radial-gradient(circle at 20% 20%, #14532d 0%, #022c22 60%),
+              radial-gradient(circle at 80% 80%, #064e3b 0%, #022c22 60%);
   background-size: cover;
   background-position: center;
   overflow: hidden;

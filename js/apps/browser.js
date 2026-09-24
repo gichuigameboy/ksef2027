@@ -111,7 +111,7 @@ function buildChrome() {
 
   <!-- Status Bar -->
   <div class="bg-[#292a2d] border-t border-black/10 px-3 py-0.5 flex justify-between shrink-0">
-    <span id="status" class="text-[10px] text-slate-400">Lincoln High School Safe Browser</span>
+    <span id="status" class="text-[10px] text-slate-400">Dawamu Safe Browser</span>
     <span class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Persistent Engine ⚡' : 'Web Mode'}</span>
   </div>
 
@@ -208,7 +208,7 @@ function wireWebview(root, tabId, wv) {
 
   wv.addEventListener('update-target-url', e => {
     if (tabId === activeTabId)
-      root.querySelector('#status').textContent = e.url || 'Lincoln High School Safe Browser';
+      root.querySelector('#status').textContent = e.url || 'Dawamu Safe Browser';
   });
 
   // Block restricted sites before they load
@@ -356,7 +356,7 @@ function showBlock(root, tabId, blockedUrl, reason) {
       <p class="text-slate-400 text-sm">${reason || 'Blocked by school administrator policy.'}</p>
       <div class="bg-[#1a1b1e] p-3 rounded-2xl font-mono text-xs text-rose-300 text-left space-y-1">
         <div><b class="text-slate-400">URL:</b> ${blockedUrl}</div>
-        <div><b class="text-slate-400">Filter:</b> Lincoln High School Network</div>
+        <div><b class="text-slate-400">Filter:</b> Dawamu Network Filter</div>
       </div>
       <div class="flex justify-center gap-3">
         <button id="blk-req-${tabId}" class="bg-amber-600 hover:bg-amber-500 text-white text-xs font-semibold px-4 py-2 rounded-full flex items-center gap-2">
@@ -399,18 +399,17 @@ function startPageHTML(tabId) {
   return `
   <div class="flex flex-col items-center justify-center h-full p-8 text-center space-y-6">
     <div class="flex items-center gap-3">
-      <i class="fab fa-chrome text-5xl text-blue-500"></i>
-      <span class="text-3xl font-bold text-white">Google</span>
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-16 w-auto object-contain drop-shadow-md">
     </div>
-    <p class="text-xs text-slate-400">Lincoln High School Protected Student Browser</p>
+    <p class="text-xs text-slate-400 font-semibold tracking-wider uppercase">Transforming Boys Into Leaders</p>
 
-    <div class="w-full max-w-lg flex items-center bg-[#303134] hover:bg-[#3c3c3f] border border-slate-700 hover:border-slate-500 focus-within:border-blue-500 rounded-full px-4 py-3 shadow-xl transition-all">
+    <div class="w-full max-w-lg flex items-center bg-[#303134] hover:bg-[#3c3c3f] border border-slate-700 hover:border-slate-500 focus-within:border-emerald-500 rounded-full px-4 py-3 shadow-xl transition-all">
       <i class="fas fa-search text-slate-400 text-sm mr-3 shrink-0"></i>
       <input id="sp-input-${tabId}" type="text"
              class="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
-             placeholder="Search Google or enter a web address..."
+             placeholder="Search the web or enter an address..."
              autofocus>
-      <button id="sp-btn-${tabId}" class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-1.5 rounded-full ml-2 shrink-0">
+      <button id="sp-btn-${tabId}" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white font-bold text-xs px-4 py-1.5 rounded-full ml-2 shrink-0">
         Go
       </button>
     </div>
