@@ -16,6 +16,7 @@ import { createClassroomApp } from './apps/classroom.js';
 import { createCalculatorApp } from './apps/calculator.js';
 import { createFocusTimerApp } from './apps/focusTimer.js';
 import { createAdminPanelApp } from './apps/adminPanel.js';
+import { createInstallerApp } from './apps/installer.js';
 
 /* ═══════════════════════════════════════════════════
    STUDENT ACCOUNTS DATABASE
@@ -315,6 +316,23 @@ document.addEventListener('DOMContentLoaded', () => {
           content: () => createAdminPanelApp(),
           width: 740,
           height: 540
+        });
+      }
+    },
+    {
+      id: 'installer',
+      title: 'Install Dawamu OS to PC',
+      icon: '<i class="fas fa-download text-emerald-300"></i>',
+      bgColor: 'bg-emerald-800',
+      keywords: ['install', 'setup', 'disk', 'ssd', 'hdd', 'partition', 'bootable', 'drive', 'usb'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'installer',
+          title: 'Dawamu OS Disk Installation Wizard',
+          icon: '<i class="fas fa-download text-emerald-300"></i>',
+          content: () => createInstallerApp(),
+          width: 820,
+          height: 600
         });
       }
     },
