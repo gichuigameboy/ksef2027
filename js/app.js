@@ -54,13 +54,109 @@ document.addEventListener('DOMContentLoaded', () => {
   const launcherEl = document.getElementById('launcher-overlay');
   const quickSettingsEl = document.getElementById('quick-settings-overlay');
 
-  /* ─── LOGIN GATE ─── */
-  const loginScreen = document.getElementById('os-login-screen');
-  const loginForm   = document.getElementById('os-login-form');
-  const loginAdm    = document.getElementById('login-adm');
-  const loginPass   = document.getElementById('login-pass');
-  const loginErr    = document.getElementById('login-error-msg');
+  /* ─── SCREENS ─── */
+  const bootScreen    = document.getElementById('os-boot-screen');
+  const loginScreen   = document.getElementById('os-login-screen');
+  const powerOffScreen= document.getElementById('os-power-off-screen');
+  const powerOnBtn    = document.getElementById('os-power-on-btn');
 
+  const bootLogLines  = document.getElementById('boot-log-lines');
+  const bootProgressBar = document.getElementById('boot-progress-bar');
+  const bootStatusText= document.getElementById('boot-status-text');
+
+  const loginForm     = document.getElementById('os-login-form');
+  const loginAdm      = document.getElementById('login-adm');
+  const loginPass     = document.getElementById('login-pass');
+  const loginErr      = document.getElementById('login-error-msg');
+
+  /* ─── POWER & REBOOT MANAGER ─── */
+  window.dawamuPower = {
+    shutdown: () => {
+      // Hide all overlays & show powered-off black standby screen
+      bootScreen.classList.add('hidden');
+      loginScreen.classList.add('hidden');
+      document.getElementById('curfew-lockout-screen')?.classList.remove('active');
+      powerOffScreen.classList.remove('hidden');
+    },
+    reboot: () => {
+      // Re-trigger full BIOS boot sequence
+      powerOffScreen.classList.add('hidden');
+      loginScreen.classList.add('hidden');
+      currentStudent = null;
+      runBootSequence();
+    },
+    signOut: () => {
+      currentStudent = null;
+      loginAdm.value = '';
+      loginPass.value = '';
+      loginErr.classList.add('hidden');
+      loginScreen.style.opacity = '1';
+      loginScreen.style.transform = 'scale(1)';
+      loginScreen.style.display = 'flex';
+      loginScreen.classList.remove('hidden');
+    }
+  };
+
+  if (powerOnBtn) {
+    powerOnBtn.addEventListener('click', () => {
+      powerOffScreen.classList.add('hidden');
+      runBootSequence();
+    });
+  }
+
+  /* ─── BOOT SEQUENCE ─── */
+  function runBootSequence() {
+    bootScreen.style.opacity = '1';
+    bootScreen.style.display = 'flex';
+    bootScreen.classList.remove('hidden');
+
+    if (bootProgressBar) bootProgressBar.style.width = '0%';
+    if (bootStatusText) bootStatusText.textContent = 'Hardware Diagnostics & Self-Test...';
+    if (bootLogLines) bootLogLines.innerHTML = '';
+
+    const logs = [
+      { text: '[  0.012 ] ACPI: Core System Tables loaded', pct: 15, status: 'Loading Hardware Drivers...' },
+      { text: '[  0.054 ] Memory: 8192 MB LPDDR4 ECC RAM verified OK', pct: 30, status: 'Checking System Integrity...' },
+      { text: '[  0.118 ] Dawamu Security Kernel v2.4 (x86_64) loaded', pct: 45, status: 'Initializing Secure Kernel...' },
+      { text: '[  0.240 ] Storage: Encrypted Kiosk Rootfs Mounted (ro)', pct: 60, status: 'Mounting School File System...' },
+      { text: '[  0.375 ] Dawamu Policy Daemon v1.4: Active', pct: 75, status: 'Enforcing District Security Rules...' },
+      { text: '[  0.490 ] Safe DNS Firewall & URL Filter: Engaged', pct: 90, status: 'Starting Network Isolation...' },
+      { text: '[  0.620 ] Display Manager: Initializing Student Login...', pct: 100, status: 'Ready.' }
+    ];
+
+    logs.forEach((log, index) => {
+      setTimeout(() => {
+        if (bootLogLines) {
+          const div = document.createElement('div');
+          div.className = 'text-slate-400 text-[11px] leading-tight';
+          div.textContent = log.text;
+          bootLogLines.appendChild(div);
+        }
+        if (bootProgressBar) bootProgressBar.style.width = `${log.pct}%`;
+        if (bootStatusText) bootStatusText.textContent = log.status;
+
+        // When boot finishes, smoothly transition to Login Screen
+        if (index === logs.length - 1) {
+          setTimeout(() => {
+            bootScreen.style.transition = 'opacity 0.6s ease';
+            bootScreen.style.opacity = '0';
+            setTimeout(() => {
+              bootScreen.style.display = 'none';
+              bootScreen.classList.add('hidden');
+              // Show Login Screen
+              loginScreen.style.opacity = '1';
+              loginScreen.style.transform = 'scale(1)';
+              loginScreen.style.display = 'flex';
+              loginScreen.classList.remove('hidden');
+              loginAdm?.focus();
+            }, 600);
+          }, 400);
+        }
+      }, (index + 1) * 220);
+    });
+  }
+
+  /* ─── LOGIN GATE ─── */
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
@@ -77,6 +173,7 @@ document.addEventListener('DOMContentLoaded', () => {
         loginScreen.style.transform = 'scale(1.05)';
         setTimeout(() => {
           loginScreen.style.display = 'none';
+          loginScreen.classList.add('hidden');
           bootDesktop();
         }, 500);
       } else {
@@ -90,8 +187,15 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Start the Initial Boot Sequence
+  runBootSequence();
+
+  let desktopInitialized = false;
   function bootDesktop() {
-    windowManager.init(desktopEl);
+    if (!desktopInitialized) {
+      windowManager.init(desktopEl);
+      desktopInitialized = true;
+    }
 
   // App Registry Definition
   const appRegistry = [

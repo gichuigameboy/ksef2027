@@ -14,8 +14,53 @@
 </head>
 <body class="dark-mode overflow-hidden select-none">
 
-  <!-- OS Login Screen Overlay -->
-  <div id="os-login-screen" class="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-[#0f172a] bg-cover bg-center transition-transform duration-700" style="background-image: radial-gradient(circle at 50% 50%, #064e3b 0%, #022c22 100%);">
+  <!-- 1. System Powered Off Screen (Standby / Power-On) -->
+  <div id="os-power-off-screen" class="fixed inset-0 z-[200000] bg-black hidden flex flex-col items-center justify-center select-none">
+    <div class="text-center space-y-6 flex flex-col items-center">
+      <button id="os-power-on-btn" class="w-24 h-24 rounded-full bg-slate-900 border-2 border-emerald-500/40 text-emerald-400 hover:text-emerald-300 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(56,158,60,0.5)] active:scale-95 flex items-center justify-center text-4xl transition-all cursor-pointer group" title="Press to Boot Dawamu OS">
+        <i class="fas fa-power-off group-hover:scale-110 transition-transform"></i>
+      </button>
+      <div class="space-y-1">
+        <div class="text-white font-bold text-sm tracking-widest uppercase">System Powered Down</div>
+        <div class="text-slate-500 text-xs">Click the Power Button to Boot Dawamu OS</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Dawamu BIOS / UEFI POST & Boot Sequence Screen -->
+  <div id="os-boot-screen" class="fixed inset-0 z-[150000] bg-black text-white flex flex-col justify-between p-8 font-mono select-none">
+    <!-- BIOS Diagnostics Terminal -->
+    <div id="boot-terminal-log" class="text-xs text-slate-400 space-y-1 font-mono">
+      <div class="text-emerald-400 font-bold">DAWAMU SECURE BOOTLOADER v2.4 (UEFI x86_64)</div>
+      <div class="text-slate-500">Copyright (C) Dawamu School IT Infrastructure. All Rights Reserved.</div>
+      <div class="pt-2 text-slate-300" id="boot-log-lines"></div>
+    </div>
+
+    <!-- Center Splash Logo & Progress -->
+    <div class="flex flex-col items-center justify-center text-center space-y-5 my-auto">
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-28 w-auto object-contain drop-shadow-[0_0_25px_rgba(56,158,60,0.4)] animate-pulse">
+      <div>
+        <h1 class="text-2xl font-bold tracking-tight text-white font-sans">DAWAMU OS</h1>
+        <p class="text-xs text-[#389e3c] font-semibold tracking-[0.25em] uppercase font-sans mt-1">Transforming Boys Into Leaders</p>
+      </div>
+
+      <!-- Boot Loader Bar -->
+      <div class="w-64 bg-slate-900 border border-slate-800 rounded-full h-2 overflow-hidden p-0.5">
+        <div id="boot-progress-bar" class="bg-gradient-to-r from-emerald-600 to-green-400 h-full rounded-full transition-all duration-300 w-0"></div>
+      </div>
+      <div id="boot-status-text" class="text-[11px] text-slate-400 font-sans">Initializing Secure Kernel...</div>
+    </div>
+
+    <!-- Footer -->
+    <div class="flex justify-between text-[10px] text-slate-600 border-t border-slate-900 pt-3">
+      <span>SECURE BOOT: ENABLED</span>
+      <span>PRESS DEL/F2 FOR SETUP • F12 FOR NETWORK BOOT</span>
+      <span>BUILD: 2026.09.29-PROD</span>
+    </div>
+  </div>
+
+  <!-- 3. OS Login Screen Overlay -->
+  <div id="os-login-screen" class="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-[#0f172a] bg-cover bg-center transition-transform duration-700 hidden" style="background-image: radial-gradient(circle at 50% 50%, #064e3b 0%, #022c22 100%);">
     <div class="bg-[#1e293b]/90 backdrop-blur-md p-10 rounded-3xl border border-[#389e3c]/30 shadow-2xl flex flex-col items-center min-w-[360px]">
       <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-24 w-auto object-contain mb-4 drop-shadow-md">
       <h2 class="text-white text-2xl font-bold mb-1">Student Login</h2>

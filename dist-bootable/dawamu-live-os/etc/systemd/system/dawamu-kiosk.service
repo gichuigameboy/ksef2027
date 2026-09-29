@@ -1,0 +1,15 @@
+[Unit]
+Description=Dawamu OS Student Kiosk Display Manager
+After=network.target sound.target
+
+[Service]
+Type=simple
+User=student
+Environment=DISPLAY=:0
+Environment=XAUTHORITY=/home/student/.Xauthority
+ExecStart=/usr/bin/xinit /opt/dawamu-os/node_modules/electron/dist/electron /opt/dawamu-os/main.js --kiosk --no-sandbox -- /usr/bin/X :0 -nocursor -nolisten tcp
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=graphical.target

@@ -75,21 +75,21 @@ class QuickSettings {
         </button>
       </div>
 
-      ${
-        isDesktopNative
-          ? `
-        <!-- Desktop OS Actions -->
-        <div class="grid grid-cols-2 gap-2 border-t border-gray-700/50 pt-2">
-          <button id="desktop-kiosk-btn" class="p-2.5 rounded-xl bg-indigo-900/40 hover:bg-indigo-900/60 border border-indigo-500/40 text-indigo-200 text-xs font-semibold flex items-center justify-center gap-2">
-            <i class="fas fa-expand text-xs"></i> Fullscreen Kiosk
-          </button>
-          <button id="desktop-exit-btn" class="p-2.5 rounded-xl bg-rose-900/40 hover:bg-rose-900/60 border border-rose-500/40 text-rose-200 text-xs font-semibold flex items-center justify-center gap-2">
-            <i class="fas fa-power-off text-xs"></i> Shutdown OS
-          </button>
-        </div>
-      `
-          : ''
-      }
+      <!-- Power & Session Controls -->
+      <div class="grid grid-cols-3 gap-2 border-t border-gray-700/50 pt-2">
+        <button id="qs-signout-btn" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600/40 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all" title="Sign Out Student">
+          <i class="fas fa-sign-out-alt text-xs text-amber-400"></i>
+          <span class="text-[10px]">Sign Out</span>
+        </button>
+        <button id="qs-reboot-btn" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600/40 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all" title="Reboot Dawamu OS">
+          <i class="fas fa-redo text-xs text-blue-400"></i>
+          <span class="text-[10px]">Reboot</span>
+        </button>
+        <button id="qs-shutdown-btn" class="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-700/40 text-rose-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all" title="Shut Down OS">
+          <i class="fas fa-power-off text-xs text-rose-400"></i>
+          <span class="text-[10px]">Shut Down</span>
+        </button>
+      </div>
 
       <!-- Sliders -->
       <div class="space-y-3 pt-2">
@@ -122,20 +122,24 @@ class QuickSettings {
         return;
       }
 
-      const kioskBtn = e.target.closest('#desktop-kiosk-btn');
-      if (kioskBtn && window.electronAPI) {
-        window.electronAPI.toggleFullscreen();
+      const signOutBtn = e.target.closest('#qs-signout-btn');
+      if (signOutBtn) {
+        this.close();
+        if (window.dawamuPower) window.dawamuPower.signOut();
         return;
       }
 
-      const exitBtn = e.target.closest('#desktop-exit-btn');
-      if (exitBtn && window.electronAPI) {
-        const pin = prompt('Enter Admin Security PIN to Exit Desktop OS:');
-        if (stateStore.verifyAdminPin(pin)) {
-          window.electronAPI.exitApp();
-        } else if (pin !== null) {
-          alert('Incorrect PIN. Shutdown request denied.');
-        }
+      const rebootBtn = e.target.closest('#qs-reboot-btn');
+      if (rebootBtn) {
+        this.close();
+        if (window.dawamuPower) window.dawamuPower.reboot();
+        return;
+      }
+
+      const shutdownBtn = e.target.closest('#qs-shutdown-btn');
+      if (shutdownBtn) {
+        this.close();
+        if (window.dawamuPower) window.dawamuPower.shutdown();
         return;
       }
 
