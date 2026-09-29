@@ -17,6 +17,8 @@ import { createCalculatorApp } from './apps/calculator.js';
 import { createFocusTimerApp } from './apps/focusTimer.js';
 import { createAdminPanelApp } from './apps/adminPanel.js';
 import { createInstallerApp } from './apps/installer.js';
+import { createExplorerApp } from './apps/explorer.js';
+import { createSettingsApp } from './apps/settings.js';
 
 /* ═══════════════════════════════════════════════════
    STUDENT ACCOUNTS DATABASE
@@ -201,6 +203,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // App Registry Definition
   const appRegistry = [
     {
+      id: 'explorer',
+      title: 'This PC (File Explorer)',
+      icon: '<i class="fas fa-folder-open text-blue-400"></i>',
+      bgColor: 'bg-blue-700',
+      keywords: ['files', 'folders', 'documents', 'c drive', 'pc', 'explorer', 'my computer'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'explorer',
+          title: 'This PC - Dawamu File Explorer',
+          icon: '<i class="fas fa-folder-open text-blue-400"></i>',
+          content: () => createExplorerApp(),
+          width: 920,
+          height: 580
+        });
+      }
+    },
+    {
       id: 'browser',
       title: 'School Web Browser',
       icon: '<i class="fab fa-chrome text-blue-400"></i>',
@@ -337,6 +356,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     },
     {
+      id: 'settings',
+      title: 'Settings',
+      icon: '<i class="fas fa-cog text-slate-300"></i>',
+      bgColor: 'bg-slate-700',
+      keywords: ['settings', 'preferences', 'system', 'display', 'volume', 'theme', 'personalization', 'sound'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'settings',
+          title: 'Settings - Dawamu OS',
+          icon: '<i class="fas fa-cog text-slate-300"></i>',
+          content: () => createSettingsApp(),
+          width: 860,
+          height: 580
+        });
+      }
+    },
+    {
       id: 'appStore',
       title: 'Chrome Web Store',
       icon: '<i class="fas fa-store text-rose-400"></i>',
@@ -349,6 +385,18 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   ];
+
+  // Desktop Icons Click Handler (Windows Style)
+  const desktopIconsContainer = document.getElementById('desktop-icons');
+  if (desktopIconsContainer) {
+    desktopIconsContainer.addEventListener('click', (e) => {
+      const iconEl = e.target.closest('.desktop-icon');
+      if (!iconEl) return;
+      const appId = iconEl.dataset.appId;
+      const app = appRegistry.find(a => a.id === appId);
+      if (app) app.launch();
+    });
+  }
 
   // Initialize OS Shell Modules
   shelf.init(shelfEl, appRegistry);

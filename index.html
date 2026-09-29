@@ -104,12 +104,57 @@
   </div>
 
   <!-- Main Desktop Viewport Canvas -->
-  <main id="desktop">
-    <!-- Desktop Welcome Widget -->
-    <div class="absolute top-10 left-10 text-white space-y-3 max-w-md pointer-events-none drop-shadow-lg flex flex-col items-start">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain">
-      <div class="flex items-center gap-2 text-[#389e3c] font-semibold text-[10px] uppercase tracking-[0.2em] bg-emerald-950/60 backdrop-blur border border-[#389e3c]/30 px-3 py-1.5 rounded-full w-fit">
-        <i class="fas fa-shield-alt text-sm"></i> Transforming Boys Into Leaders
+  <main id="desktop" class="relative w-full h-full overflow-hidden">
+    <!-- Desktop Icons Grid (Windows Style) -->
+    <div id="desktop-icons" class="absolute top-6 left-6 grid grid-flow-col grid-rows-6 gap-4 z-10 select-none">
+      <div class="desktop-icon flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white/10 active:bg-white/20 cursor-pointer w-20 text-center transition-all group" data-app-id="explorer">
+        <div class="w-12 h-12 rounded-xl bg-blue-600/20 border border-blue-400/30 flex items-center justify-center text-2xl text-blue-400 mb-1 group-hover:scale-105 transition-transform shadow-md">
+          <i class="fas fa-folder-open"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight">This PC</span>
+      </div>
+
+      <div class="desktop-icon flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white/10 active:bg-white/20 cursor-pointer w-20 text-center transition-all group" data-app-id="browser">
+        <div class="w-12 h-12 rounded-xl bg-blue-500/20 border border-blue-400/30 flex items-center justify-center text-2xl text-blue-400 mb-1 group-hover:scale-105 transition-transform shadow-md">
+          <i class="fab fa-chrome"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight">Safe Web</span>
+      </div>
+
+      <div class="desktop-icon flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white/10 active:bg-white/20 cursor-pointer w-20 text-center transition-all group" data-app-id="offlineBrowser">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-2xl text-emerald-400 mb-1 group-hover:scale-105 transition-transform shadow-md">
+          <i class="fas fa-globe-africa"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight">Offline Web</span>
+      </div>
+
+      <div class="desktop-icon flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white/10 active:bg-white/20 cursor-pointer w-20 text-center transition-all group" data-app-id="docs">
+        <div class="w-12 h-12 rounded-xl bg-indigo-500/20 border border-indigo-400/30 flex items-center justify-center text-2xl text-indigo-300 mb-1 group-hover:scale-105 transition-transform shadow-md">
+          <i class="fas fa-file-alt"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight">Notes & Docs</span>
+      </div>
+
+      <div class="desktop-icon flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white/10 active:bg-white/20 cursor-pointer w-20 text-center transition-all group" data-app-id="classroom">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center text-2xl text-emerald-400 mb-1 group-hover:scale-105 transition-transform shadow-md">
+          <i class="fas fa-graduation-cap"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight">Classroom</span>
+      </div>
+
+      <div class="desktop-icon flex flex-col items-center justify-center p-2 rounded-xl hover:bg-white/10 active:bg-white/20 cursor-pointer w-20 text-center transition-all group" data-app-id="installer">
+        <div class="w-12 h-12 rounded-xl bg-emerald-500/30 border border-emerald-400/40 flex items-center justify-center text-2xl text-emerald-300 mb-1 group-hover:scale-105 transition-transform shadow-md">
+          <i class="fas fa-download"></i>
+        </div>
+        <span class="text-[11px] font-semibold text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.8)] leading-tight">Install to PC</span>
+      </div>
+    </div>
+
+    <!-- Desktop Welcome Widget (Positioned Top-Right) -->
+    <div class="absolute top-8 right-8 text-white space-y-2 max-w-sm pointer-events-none drop-shadow-lg flex flex-col items-end text-right">
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-16 w-auto object-contain">
+      <div class="flex items-center gap-2 text-[#389e3c] font-semibold text-[10px] uppercase tracking-[0.2em] bg-emerald-950/70 backdrop-blur border border-[#389e3c]/30 px-3 py-1.5 rounded-full w-fit">
+        <i class="fas fa-shield-alt text-xs"></i> Transforming Boys Into Leaders
       </div>
     </div>
   </main>
