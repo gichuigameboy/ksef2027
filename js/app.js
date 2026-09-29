@@ -10,6 +10,7 @@ import { launcher } from './os/launcher.js';
 import { quickSettings } from './os/quickSettings.js';
 
 import { createBrowserApp } from './apps/browser.js';
+import { createOfflineBrowserApp } from './apps/offlineBrowser.js';
 import { createDocsApp } from './apps/docs.js';
 import { createClassroomApp } from './apps/classroom.js';
 import { createCalculatorApp } from './apps/calculator.js';
@@ -108,6 +109,23 @@ document.addEventListener('DOMContentLoaded', () => {
           content: () => createBrowserApp(),
           width: 1100,
           height: 680
+        });
+      }
+    },
+    {
+      id: 'offlineBrowser',
+      title: 'Offline Web Encyclopedia',
+      icon: '<i class="fas fa-globe-africa text-emerald-400"></i>',
+      bgColor: 'bg-emerald-700',
+      keywords: ['offline', 'browser', 'wikipedia', 'khan academy', 'encyclopedia', 'lessons', 'reading', 'nasa'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'offlineBrowser',
+          title: 'Dawamu Offline Web Encyclopedia & Library',
+          icon: '<i class="fas fa-globe-africa text-emerald-400"></i>',
+          content: () => createOfflineBrowserApp(),
+          width: 1050,
+          height: 660
         });
       }
     },
