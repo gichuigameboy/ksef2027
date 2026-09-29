@@ -158,11 +158,12 @@ export function createSettingsApp() {
             </div>
 
             <div class="bg-[#262626] border border-[#333] rounded-2xl p-5 space-y-2.5 text-xs">
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">OS Version:</span> <b class="text-white">Dawamu 11 (Build 2026.09.29)</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Kernel:</span> <b class="text-white">Dawamu Security Linux 6.8.0-x86_64</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Memory Footprint:</span> <b class="text-emerald-400">380 MB / 8 GB (Ultra-Lightweight)</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Managed District:</span> <b class="text-white">Dawamu Educational Technology Dept</b></div>
-              <div class="flex justify-between py-1"><span class="text-slate-400">Security Mode:</span> <b class="text-emerald-400">SecureBoot Kiosk Active</b></div>
+              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">OS Architecture:</span> <b class="text-white">Dawamu Ultra-Lightweight Core (x86_64)</b></div>
+              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Active RAM Footprint:</span> <b class="text-emerald-400" id="set-live-ram"><i class="fas fa-circle-notch fa-spin"></i> Reading RAM...</b></div>
+              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Total System Memory:</span> <b class="text-white" id="set-total-ram">8 GB System RAM</b></div>
+              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Rendering Engine:</span> <b class="text-white">GPU Zero-Copy Hardware Acceleration</b></div>
+              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Background Resource Caps:</span> <b class="text-emerald-400">V8 Throttled (256 MB Max)</b></div>
+              <div class="flex justify-between py-1"><span class="text-slate-400">Security Mode:</span> <b class="text-emerald-400">Dawamu Kiosk Lock Active</b></div>
             </div>
           </div>
         `;
@@ -190,6 +191,20 @@ export function createSettingsApp() {
       stateStore.updateSettings({ nightLight: !current });
       render();
     });
+
+    // Read live lightweight memory telemetry
+    if (window.electronAPI?.getSystemInfo) {
+      window.electronAPI.getSystemInfo().then(info => {
+        const liveRamEl = root.querySelector('#set-live-ram');
+        const totalRamEl = root.querySelector('#set-total-ram');
+        if (liveRamEl && info.usedMemMB) {
+          liveRamEl.textContent = `${info.usedMemMB} (Ultra-Low Footprint)`;
+        }
+        if (totalRamEl && info.totalMem) {
+          totalRamEl.textContent = `${info.totalMem} (${info.freeMem} Free)`;
+        }
+      }).catch(() => {});
+    }
   }
 
   render();
