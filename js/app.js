@@ -1,5 +1,5 @@
 /**
- * ChromeOS Student Edition - Master Application Entry Point
+ * Dawamu OS - Master Application Entry Point
  */
 
 import { stateStore } from './os/state.js';
@@ -16,13 +16,81 @@ import { createCalculatorApp } from './apps/calculator.js';
 import { createFocusTimerApp } from './apps/focusTimer.js';
 import { createAdminPanelApp } from './apps/adminPanel.js';
 
+/* ═══════════════════════════════════════════════════
+   STUDENT ACCOUNTS DATABASE
+   Admission Number → { name, grade, password }
+   Admin account uses PIN 1234 (unchanged)
+═══════════════════════════════════════════════════ */
+const STUDENT_DB = {
+  '1001': { name: 'Brian Ochieng',    grade: 'Form 1',  password: 'dawamu2026' },
+  '1002': { name: 'Kevin Mwangi',     grade: 'Form 1',  password: 'dawamu2026' },
+  '1003': { name: 'Daniel Kiprop',    grade: 'Form 1',  password: 'dawamu2026' },
+  '1004': { name: 'Samuel Otieno',    grade: 'Form 2',  password: 'dawamu2026' },
+  '1005': { name: 'James Kamau',      grade: 'Form 2',  password: 'dawamu2026' },
+  '1006': { name: 'Peter Wanjiru',    grade: 'Form 2',  password: 'dawamu2026' },
+  '1007': { name: 'Victor Nyamweya',  grade: 'Form 3',  password: 'dawamu2026' },
+  '1008': { name: 'Martin Kibet',     grade: 'Form 3',  password: 'dawamu2026' },
+  '1009': { name: 'Emmanuel Odhiambo',grade: 'Form 3',  password: 'dawamu2026' },
+  '1010': { name: 'Dennis Mutua',     grade: 'Form 4',  password: 'dawamu2026' },
+  '1011': { name: 'Collins Wekesa',   grade: 'Form 4',  password: 'dawamu2026' },
+  '1012': { name: 'Patrick Njoroge',  grade: 'Form 4',  password: 'dawamu2026' },
+  '2001': { name: 'Alex Maina',       grade: 'Form 1',  password: 'student123' },
+  '2002': { name: 'Ryan Karanja',     grade: 'Form 1',  password: 'student123' },
+  '2003': { name: 'Felix Otieno',     grade: 'Form 2',  password: 'student123' },
+  '2004': { name: 'Ian Cheruiyot',    grade: 'Form 2',  password: 'student123' },
+  '2005': { name: 'Oscar Wambua',     grade: 'Form 3',  password: 'student123' },
+  '2006': { name: 'Trevor Ndirangu', grade: 'Form 3',  password: 'student123' },
+  '2007': { name: 'Allan Simiyu',     grade: 'Form 4',  password: 'student123' },
+  '2008': { name: 'George Barasa',    grade: 'Form 4',  password: 'student123' },
+};
+
+// Currently logged-in student info (null = not logged in)
+let currentStudent = null;
+
 document.addEventListener('DOMContentLoaded', () => {
   const desktopEl = document.getElementById('desktop');
   const shelfEl = document.getElementById('shelf');
   const launcherEl = document.getElementById('launcher-overlay');
   const quickSettingsEl = document.getElementById('quick-settings-overlay');
 
-  windowManager.init(desktopEl);
+  /* ─── LOGIN GATE ─── */
+  const loginScreen = document.getElementById('os-login-screen');
+  const loginForm   = document.getElementById('os-login-form');
+  const loginAdm    = document.getElementById('login-adm');
+  const loginPass   = document.getElementById('login-pass');
+  const loginErr    = document.getElementById('login-error-msg');
+
+  if (loginForm) {
+    loginForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const adm  = loginAdm.value.trim();
+      const pass = loginPass.value;
+
+      const student = STUDENT_DB[adm];
+      if (student && student.password === pass) {
+        // ✅ Login successful
+        currentStudent = { admNo: adm, ...student };
+        loginErr.classList.add('hidden');
+        loginScreen.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
+        loginScreen.style.opacity = '0';
+        loginScreen.style.transform = 'scale(1.05)';
+        setTimeout(() => {
+          loginScreen.style.display = 'none';
+          bootDesktop();
+        }, 500);
+      } else {
+        // ❌ Invalid credentials
+        loginErr.classList.remove('hidden');
+        loginErr.querySelector('span').textContent =
+          STUDENT_DB[adm] ? 'Incorrect password' : 'Admission number not found';
+        loginPass.value = '';
+        loginAdm.focus();
+      }
+    });
+  }
+
+  function bootDesktop() {
+    windowManager.init(desktopEl);
 
   // App Registry Definition
   const appRegistry = [
@@ -183,4 +251,22 @@ document.addEventListener('DOMContentLoaded', () => {
     if (classroomApp) classroomApp.launch();
     if (docsApp) docsApp.launch();
   }, 200);
+
+  // Personalize the desktop welcome widget with the logged-in student name
+  if (currentStudent) {
+    const welcomeWidget = desktopEl.querySelector('.pointer-events-none');
+    if (welcomeWidget) {
+      // Add a greeting line after the logo
+      const greeting = document.createElement('div');
+      greeting.className = 'text-white text-lg font-bold mt-2';
+      greeting.innerHTML = `Welcome, <span class="text-[#4ade80]">${currentStudent.name}</span>`;
+      const subtitle = document.createElement('div');
+      subtitle.className = 'text-slate-400 text-xs';
+      subtitle.textContent = `Adm No: ${currentStudent.admNo} • ${currentStudent.grade}`;
+      welcomeWidget.appendChild(greeting);
+      welcomeWidget.appendChild(subtitle);
+    }
+  }
+
+  } // end bootDesktop()
 });
