@@ -1,23 +1,23 @@
 {
-  "name": "chromeos-student-edition",
+  "name": "dawamu-os",
   "version": "1.0.0",
-  "description": "ChromeOS Student Edition - Standalone K-12 Desktop Operating System Environment",
+  "description": "Dawamu OS - Ultra-Lightweight School Operating System Environment",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
     "kiosk": "electron . --kiosk"
   },
   "keywords": [
-    "chromeos",
-    "k12",
+    "dawamu",
     "education",
     "operating-system",
     "desktop-app",
-    "electron"
+    "electron",
+    "lightweight"
   ],
-  "author": "Antigravity Education Team",
+  "author": "Dawamu School IT Infrastructure",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^44.4.1"
+    "electron": "^28.2.0"
   }
 }

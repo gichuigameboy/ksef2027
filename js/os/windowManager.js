@@ -138,16 +138,18 @@ class WindowManager {
       if (action === 'close') this.closeWindow(id);
     });
 
-    // Window Dragging functionality
+    // Window Dragging functionality (60 FPS requestAnimationFrame Optimized)
     let isDragging = false;
     let startX = 0, startY = 0;
     let initialLeft = 0, initialTop = 0;
+    let rafId = null;
 
     header.addEventListener('mousedown', (e) => {
       if (e.target.closest('.win-btn')) return;
       if (winData.maximized) return; // Don't drag when maximized
 
       isDragging = true;
+      element.classList.add('dragging');
       startX = e.clientX;
       startY = e.clientY;
       initialLeft = parseInt(element.style.left, 10) || 0;
@@ -155,27 +157,38 @@ class WindowManager {
 
       const onMouseMove = (moveEvent) => {
         if (!isDragging) return;
-        const dx = moveEvent.clientX - startX;
-        const dy = moveEvent.clientY - startY;
+        if (rafId) return;
 
-        const maxLeft = (this.desktopEl.clientWidth || window.innerWidth) - 100;
-        const maxTop = (this.desktopEl.clientHeight || window.innerHeight) - 80;
+        rafId = requestAnimationFrame(() => {
+          rafId = null;
+          if (!isDragging) return;
+          const dx = moveEvent.clientX - startX;
+          const dy = moveEvent.clientY - startY;
 
-        const newLeft = Math.max(-50, Math.min(maxLeft, initialLeft + dx));
-        const newTop = Math.max(0, Math.min(maxTop, initialTop + dy));
+          const maxLeft = (this.desktopEl.clientWidth || window.innerWidth) - 100;
+          const maxTop = (this.desktopEl.clientHeight || window.innerHeight) - 80;
 
-        element.style.left = `${newLeft}px`;
-        element.style.top = `${newTop}px`;
+          const newLeft = Math.max(-50, Math.min(maxLeft, initialLeft + dx));
+          const newTop = Math.max(0, Math.min(maxTop, initialTop + dy));
+
+          element.style.left = `${newLeft}px`;
+          element.style.top = `${newTop}px`;
+        });
       };
 
       const onMouseUp = () => {
         isDragging = false;
+        element.classList.remove('dragging');
+        if (rafId) {
+          cancelAnimationFrame(rafId);
+          rafId = null;
+        }
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
       };
 
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
+      document.addEventListener('mousemove', onMouseMove, { passive: true });
+      document.addEventListener('mouseup', onMouseUp, { passive: true });
     });
   }
 

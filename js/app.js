@@ -19,6 +19,9 @@ import { createAdminPanelApp } from './apps/adminPanel.js';
 import { createInstallerApp } from './apps/installer.js';
 import { createExplorerApp } from './apps/explorer.js';
 import { createSettingsApp } from './apps/settings.js';
+import { createWordApp } from './apps/word.js';
+import { createSpreadsheetApp } from './apps/spreadsheet.js';
+import { createDatabaseApp } from './apps/database.js';
 
 /* ═══════════════════════════════════════════════════
    STUDENT ACCOUNTS DATABASE
@@ -51,42 +54,45 @@ const STUDENT_DB = {
 // Currently logged-in student info (null = not logged in)
 let currentStudent = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+function startDawamuOS() {
   const desktopEl = document.getElementById('desktop');
   const shelfEl = document.getElementById('shelf');
   const launcherEl = document.getElementById('launcher-overlay');
   const quickSettingsEl = document.getElementById('quick-settings-overlay');
 
   /* ─── SCREENS ─── */
-  const bootScreen    = document.getElementById('os-boot-screen');
-  const loginScreen   = document.getElementById('os-login-screen');
-  const powerOffScreen= document.getElementById('os-power-off-screen');
-  const powerOnBtn    = document.getElementById('os-power-on-btn');
+  const loginScreen = document.getElementById('os-login-screen');
 
-  const bootLogLines  = document.getElementById('boot-log-lines');
-  const bootProgressBar = document.getElementById('boot-progress-bar');
-  const bootStatusText= document.getElementById('boot-status-text');
+  const loginForm = document.getElementById('os-login-form');
+  const loginAdm  = document.getElementById('login-adm');
+  const loginPass = document.getElementById('login-pass');
+  const loginErr  = document.getElementById('login-error-msg');
 
-  const loginForm     = document.getElementById('os-login-form');
-  const loginAdm      = document.getElementById('login-adm');
-  const loginPass     = document.getElementById('login-pass');
-  const loginErr      = document.getElementById('login-error-msg');
+  /* ─── Show login instantly ─── */
+  loginScreen.style.display = 'flex';
+  loginScreen.classList.remove('hidden');
+  loginAdm?.focus();
 
-  /* ─── POWER & REBOOT MANAGER ─── */
+  /* ─── POWER MANAGER ─── */
   window.dawamuPower = {
     shutdown: () => {
-      // Hide all overlays & show powered-off black standby screen
-      bootScreen.classList.add('hidden');
-      loginScreen.classList.add('hidden');
+      // For a lightweight OS, shutdown just signs out and shows a black screen overlay
       document.getElementById('curfew-lockout-screen')?.classList.remove('active');
-      powerOffScreen.classList.remove('hidden');
+      loginScreen.style.display = 'none';
+      document.body.style.background = '#000';
     },
     reboot: () => {
-      // Re-trigger full BIOS boot sequence
-      powerOffScreen.classList.add('hidden');
-      loginScreen.classList.add('hidden');
+      // Reboot = sign out and show login screen again instantly
       currentStudent = null;
-      runBootSequence();
+      loginAdm.value = '';
+      loginPass.value = '';
+      loginErr.classList.add('hidden');
+      document.body.style.background = '';
+      loginScreen.style.opacity = '1';
+      loginScreen.style.transform = 'scale(1)';
+      loginScreen.style.display = 'flex';
+      loginScreen.classList.remove('hidden');
+      loginAdm?.focus();
     },
     signOut: () => {
       currentStudent = null;
@@ -97,101 +103,54 @@ document.addEventListener('DOMContentLoaded', () => {
       loginScreen.style.transform = 'scale(1)';
       loginScreen.style.display = 'flex';
       loginScreen.classList.remove('hidden');
+      loginAdm?.focus();
     }
   };
 
-  if (powerOnBtn) {
-    powerOnBtn.addEventListener('click', () => {
-      powerOffScreen.classList.add('hidden');
-      runBootSequence();
-    });
-  }
-
-  /* ─── BOOT SEQUENCE ─── */
-  function runBootSequence() {
-    bootScreen.style.opacity = '1';
-    bootScreen.style.display = 'flex';
-    bootScreen.classList.remove('hidden');
-
-    if (bootProgressBar) bootProgressBar.style.width = '0%';
-    if (bootStatusText) bootStatusText.textContent = 'Hardware Diagnostics & Self-Test...';
-    if (bootLogLines) bootLogLines.innerHTML = '';
-
-    const logs = [
-      { text: '[  0.012 ] ACPI: Core System Tables loaded', pct: 15, status: 'Loading Hardware Drivers...' },
-      { text: '[  0.054 ] Memory: 8192 MB LPDDR4 ECC RAM verified OK', pct: 30, status: 'Checking System Integrity...' },
-      { text: '[  0.118 ] Dawamu Security Kernel v2.4 (x86_64) loaded', pct: 45, status: 'Initializing Secure Kernel...' },
-      { text: '[  0.240 ] Storage: Encrypted Kiosk Rootfs Mounted (ro)', pct: 60, status: 'Mounting School File System...' },
-      { text: '[  0.375 ] Dawamu Policy Daemon v1.4: Active', pct: 75, status: 'Enforcing District Security Rules...' },
-      { text: '[  0.490 ] Safe DNS Firewall & URL Filter: Engaged', pct: 90, status: 'Starting Network Isolation...' },
-      { text: '[  0.620 ] Display Manager: Initializing Student Login...', pct: 100, status: 'Ready.' }
-    ];
-
-    logs.forEach((log, index) => {
+  /* ─── LOGIN GATE & QUICK LOGIN ─── */
+  function performLogin(adm, pass) {
+    const student = STUDENT_DB[adm];
+    if (student && student.password === pass) {
+      currentStudent = { admNo: adm, ...student };
+      loginErr?.classList.add('hidden');
+      loginScreen.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+      loginScreen.style.opacity = '0';
+      loginScreen.style.transform = 'scale(1.03)';
       setTimeout(() => {
-        if (bootLogLines) {
-          const div = document.createElement('div');
-          div.className = 'text-slate-400 text-[11px] leading-tight';
-          div.textContent = log.text;
-          bootLogLines.appendChild(div);
-        }
-        if (bootProgressBar) bootProgressBar.style.width = `${log.pct}%`;
-        if (bootStatusText) bootStatusText.textContent = log.status;
-
-        // When boot finishes, smoothly transition to Login Screen
-        if (index === logs.length - 1) {
-          setTimeout(() => {
-            bootScreen.style.transition = 'opacity 0.6s ease';
-            bootScreen.style.opacity = '0';
-            setTimeout(() => {
-              bootScreen.style.display = 'none';
-              bootScreen.classList.add('hidden');
-              // Show Login Screen
-              loginScreen.style.opacity = '1';
-              loginScreen.style.transform = 'scale(1)';
-              loginScreen.style.display = 'flex';
-              loginScreen.classList.remove('hidden');
-              loginAdm?.focus();
-            }, 600);
-          }, 400);
-        }
-      }, (index + 1) * 220);
-    });
+        loginScreen.style.display = 'none';
+        loginScreen.classList.add('hidden');
+        bootDesktop();
+      }, 250);
+    } else {
+      loginErr?.classList.remove('hidden');
+      if (loginErr?.querySelector('span')) {
+        loginErr.querySelector('span').textContent =
+          STUDENT_DB[adm] ? 'Incorrect password' : 'Admission number not found';
+      }
+      if (loginPass) loginPass.value = '';
+      loginAdm?.focus();
+    }
   }
 
-  /* ─── LOGIN GATE ─── */
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
       const adm  = loginAdm.value.trim();
       const pass = loginPass.value;
-
-      const student = STUDENT_DB[adm];
-      if (student && student.password === pass) {
-        // ✅ Login successful
-        currentStudent = { admNo: adm, ...student };
-        loginErr.classList.add('hidden');
-        loginScreen.style.transition = 'opacity 0.5s ease, transform 0.5s ease';
-        loginScreen.style.opacity = '0';
-        loginScreen.style.transform = 'scale(1.05)';
-        setTimeout(() => {
-          loginScreen.style.display = 'none';
-          loginScreen.classList.add('hidden');
-          bootDesktop();
-        }, 500);
-      } else {
-        // ❌ Invalid credentials
-        loginErr.classList.remove('hidden');
-        loginErr.querySelector('span').textContent =
-          STUDENT_DB[adm] ? 'Incorrect password' : 'Admission number not found';
-        loginPass.value = '';
-        loginAdm.focus();
-      }
+      performLogin(adm, pass);
     });
   }
 
-  // Start the Initial Boot Sequence
-  runBootSequence();
+  // Quick Demo Account Click Handlers
+  document.querySelectorAll('[data-quick-login]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const adm = btn.getAttribute('data-adm') || '1001';
+      const pass = btn.getAttribute('data-pass') || 'dawamu2026';
+      if (loginAdm) loginAdm.value = adm;
+      if (loginPass) loginPass.value = pass;
+      performLogin(adm, pass);
+    });
+  });
 
   let desktopInitialized = false;
   function bootDesktop() {
@@ -254,6 +213,23 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     },
     {
+      id: 'books844',
+      title: '8-4-4 Coursebooks (F3 & F4)',
+      icon: '<i class="fas fa-book-reader text-emerald-400"></i>',
+      bgColor: 'bg-emerald-800',
+      keywords: ['books', '844', 'form 3', 'form 4', 'kcse', 'curriculum', 'mathematics', 'biology', 'chemistry', 'physics', 'history', 'geography', 'business', 'literature', 'fasihi'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'offlineBrowser',
+          title: '8-4-4 Form 3 & Form 4 Coursebook Library',
+          icon: '<i class="fas fa-book-reader text-emerald-400"></i>',
+          content: () => createOfflineBrowserApp('dawamu://books-844'),
+          width: 1080,
+          height: 680
+        });
+      }
+    },
+    {
       id: 'docs',
       title: 'Docs & Homework Notes',
       icon: '<i class="fas fa-file-alt text-blue-300"></i>',
@@ -267,6 +243,57 @@ document.addEventListener('DOMContentLoaded', () => {
           content: () => createDocsApp(),
           width: 840,
           height: 560
+        });
+      }
+    },
+    {
+      id: 'word',
+      title: 'Dawamu Word',
+      icon: '<i class="fas fa-file-word text-blue-400"></i>',
+      bgColor: 'bg-blue-700',
+      keywords: ['word', 'document', 'write', 'essay', 'report', 'letter', 'docx', 'office'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'word',
+          title: 'Dawamu Word Processor',
+          icon: '<i class="fas fa-file-word text-blue-400"></i>',
+          content: () => createWordApp(),
+          width: 980,
+          height: 640
+        });
+      }
+    },
+    {
+      id: 'spreadsheet',
+      title: 'Dawamu Sheets',
+      icon: '<i class="fas fa-file-excel text-emerald-400"></i>',
+      bgColor: 'bg-emerald-700',
+      keywords: ['spreadsheet', 'excel', 'sheets', 'calc', 'math', 'gradebook', 'table', 'csv', 'formulas'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'spreadsheet',
+          title: 'Dawamu Spreadsheet',
+          icon: '<i class="fas fa-file-excel text-emerald-400"></i>',
+          content: () => createSpreadsheetApp(),
+          width: 1000,
+          height: 620
+        });
+      }
+    },
+    {
+      id: 'database',
+      title: 'School Database',
+      icon: '<i class="fas fa-database text-purple-400"></i>',
+      bgColor: 'bg-purple-800',
+      keywords: ['database', 'records', 'students', 'courses', 'library', 'sql', 'dbms'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'database',
+          title: 'Dawamu School Database',
+          icon: '<i class="fas fa-database text-purple-400"></i>',
+          content: () => createDatabaseApp(),
+          width: 960,
+          height: 600
         });
       }
     },
@@ -398,6 +425,30 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Cross-App Dawamu URL Navigation (from File Explorer or Web to Offline Browser)
+  window.addEventListener('open-dawamu-url', (e) => {
+    const url = e.detail?.url;
+    if (!url) return;
+    const existing = windowManager.windows.get('offlineBrowser');
+    if (existing) {
+      windowManager.focusWindow('offlineBrowser');
+      const input = existing.element.querySelector('#omnibox');
+      if (input) {
+        input.value = url;
+        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+      }
+    } else {
+      windowManager.createWindow({
+        id: 'offlineBrowser',
+        title: 'Dawamu Offline Web Encyclopedia & Library',
+        icon: '<i class="fas fa-globe-africa text-emerald-400"></i>',
+        content: () => createOfflineBrowserApp(url),
+        width: 1050,
+        height: 660
+      });
+    }
+  });
+
   // Initialize OS Shell Modules
   shelf.init(shelfEl, appRegistry);
   launcher.init(launcherEl, appRegistry);
@@ -431,14 +482,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Check initial curfew rules
   restrictionManager.evaluateSecurityRules();
 
-  // Launch Default Welcome Apps
-  setTimeout(() => {
-    const classroomApp = appRegistry.find((a) => a.id === 'classroom');
-    const docsApp = appRegistry.find((a) => a.id === 'docs');
 
-    if (classroomApp) classroomApp.launch();
-    if (docsApp) docsApp.launch();
-  }, 200);
 
   // Personalize the desktop welcome widget with the logged-in student name
   if (currentStudent) {
@@ -457,4 +501,10 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   } // end bootDesktop()
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startDawamuOS);
+} else {
+  startDawamuOS();
+}

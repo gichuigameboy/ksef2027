@@ -94,79 +94,118 @@ export function createBrowserApp() {
 function buildChrome() {
   return `
   <!-- Tab Strip -->
-  <div id="tab-strip" class="flex items-end bg-[#35363a] px-2 pt-1 gap-0.5 min-h-[38px] overflow-x-auto shrink-0 border-b border-black/30"></div>
+  <div id="tab-strip" class="flex items-end bg-[#070c16] px-3 pt-2 gap-1.5 min-h-[42px] overflow-x-auto shrink-0 border-b border-white/5 select-none"></div>
 
   <!-- Toolbar -->
-  <div class="bg-[#292a2d] border-b border-black/20 px-2 py-1 flex items-center gap-1.5 shrink-0">
-    <button id="btn-back"    class="nb" title="Back"><i class="fas fa-arrow-left text-xs"></i></button>
-    <button id="btn-forward" class="nb" title="Forward"><i class="fas fa-arrow-right text-xs"></i></button>
-    <button id="btn-reload"  class="nb" title="Reload"><i id="reload-icon" class="fas fa-redo text-xs"></i></button>
-    <button id="btn-home"    class="nb" title="Home"><i class="fas fa-home text-xs"></i></button>
-
-    <select id="engine-sel" class="bg-[#3c3c3f] text-slate-200 text-xs border border-slate-600/40 rounded-full px-2 py-1 outline-none cursor-pointer">
-      <option value="google">🔍 Google</option>
-      <option value="bing">🔍 Bing</option>
-      <option value="brave">🦁 Brave</option>
-    </select>
-
-    <div class="flex-1 flex items-center gap-1.5 bg-[#3c3c3f] hover:bg-[#484848] focus-within:bg-[#292a2d] focus-within:border-emerald-500 border border-transparent rounded-full px-3 py-1">
-      <i class="fas fa-lock text-emerald-400 text-[10px]"></i>
-      <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
-             class="flex-1 bg-transparent outline-none text-[13px] text-white min-w-0"
-             placeholder="Search or enter a URL...">
-      <span class="text-[9px] bg-emerald-900/70 text-emerald-300 border border-emerald-700/40 px-1.5 py-0.5 rounded-full font-bold shrink-0">SAFE</span>
+  <div class="bg-[#0b1322] border-b border-white/10 px-3.5 py-2 flex items-center gap-2.5 shrink-0 relative backdrop-blur-xl">
+    <div class="flex items-center gap-1.5 text-slate-300">
+      <button id="btn-back"    class="nb" title="Back"><i class="fas fa-arrow-left text-xs"></i></button>
+      <button id="btn-forward" class="nb" title="Forward"><i class="fas fa-arrow-right text-xs"></i></button>
+      <button id="btn-reload"  class="nb" title="Reload"><i id="reload-icon" class="fas fa-redo text-xs"></i></button>
+      <button id="btn-home"    class="nb" title="Home"><i class="fas fa-home text-xs"></i></button>
     </div>
 
-    <button id="btn-new-tab" class="nb" title="New Tab"><i class="fas fa-plus text-xs"></i></button>
+    <!-- Search Engine Selector -->
+    <div class="relative flex items-center">
+      <select id="engine-sel" class="bg-white/5 hover:bg-white/10 text-slate-200 text-xs border border-white/10 hover:border-emerald-500/40 rounded-xl px-3 py-1.5 outline-none cursor-pointer transition-all font-semibold appearance-none pr-7">
+        <option value="google" class="bg-[#0b1322]">Google</option>
+        <option value="bing" class="bg-[#0b1322]">Bing</option>
+        <option value="brave" class="bg-[#0b1322]">Brave</option>
+      </select>
+      <i class="fas fa-chevron-down text-[9px] text-slate-400 absolute right-2.5 pointer-events-none"></i>
+    </div>
+
+    <!-- Omnibox URL / Search Bar -->
+    <div class="flex-1 flex items-center gap-2.5 bg-[#070e1c] hover:bg-[#091326] focus-within:bg-[#050a14] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 border border-white/10 rounded-2xl px-4 py-1.5 transition-all shadow-inner">
+      <div class="flex items-center gap-1.5 text-emerald-400 text-xs shrink-0">
+        <i class="fas fa-lock text-[11px]"></i>
+      </div>
+      <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
+             class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-400 min-w-0 font-medium"
+             placeholder="Search Google or enter school URL...">
+      <div class="flex items-center gap-1.5 shrink-0">
+        <span class="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          SAFE
+        </span>
+      </div>
+    </div>
+
+    <!-- Downloads Drawer Button -->
+    <button id="btn-downloads" class="nb relative" title="Downloads (Stored in Virtual OS)">
+      <i class="fas fa-arrow-down text-xs text-slate-300"></i>
+      <span id="dl-badge" class="hidden absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full"></span>
+    </button>
+
+    <button id="btn-new-tab" class="nb text-emerald-400 hover:text-white" title="New Tab"><i class="fas fa-plus text-xs"></i></button>
+
+    <!-- Downloads Flyout Popover -->
+    <div id="dl-popover" class="hidden absolute top-12 right-3 w-84 bg-[#091120]/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl p-4 z-50 flex flex-col gap-3">
+      <div class="flex items-center justify-between border-b border-white/10 pb-2.5">
+        <div class="text-xs font-bold text-white flex items-center gap-2">
+          <div class="w-6 h-6 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xs">
+            <i class="fas fa-download"></i>
+          </div>
+          <span>Safe Downloads</span>
+        </div>
+        <span class="text-[10px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-800/40 px-2 py-0.5 rounded-full">Stored in This PC</span>
+      </div>
+      <div id="dl-list" class="max-h-60 overflow-y-auto space-y-2 text-xs">
+        <div class="text-slate-400 text-center py-6 text-[11px]"><i class="fas fa-folder-open text-2xl text-slate-600 mb-2 block"></i>No downloaded files yet</div>
+      </div>
+    </div>
   </div>
 
   <!-- Bookmarks Bar -->
-  <div id="bm-bar" class="bg-[#292a2d] border-b border-black/10 px-3 py-0.5 flex items-center gap-0.5 text-xs overflow-x-auto shrink-0">
+  <div id="bm-bar" class="bg-[#070c16] border-b border-white/5 px-3.5 py-1.5 flex items-center gap-1.5 text-xs overflow-x-auto shrink-0 select-none">
     ${BOOKMARKS.map(b => `
-      <button class="bm flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/10 text-slate-300 hover:text-white shrink-0 transition-colors" data-url="${b.url}">
-        <i class="${b.icon} text-[10px]"></i><span class="text-[11px]">${b.label}</span>
+      <button class="bm flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-transparent hover:border-white/10 shrink-0 transition-all text-xs font-medium" data-url="${b.url}">
+        <i class="${b.icon} text-[11px]"></i><span class="text-[11px]">${b.label}</span>
       </button>`).join('')}
-    <span class="border-l border-slate-700/50 h-4 mx-1"></span>
-    <button class="bm flex items-center gap-1.5 px-2 py-1 rounded hover:bg-white/10 text-amber-300 hover:text-amber-200 shrink-0 transition-colors font-semibold" data-url="dawamu://offline">
-      <i class="fas fa-plane text-[10px]"></i><span class="text-[11px]">Offline Tools</span>
+    <span class="border-l border-white/10 h-4 mx-1"></span>
+    <button class="bm flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-600/40 shrink-0 transition-all text-xs font-semibold shadow-sm" data-url="dawamu://offline">
+      <i class="fas fa-graduation-cap text-[10px]"></i><span class="text-[11px]">Offline Tools</span>
     </button>
   </div>
 
   <!-- Progress Bar -->
-  <div id="prog" class="h-0.5 bg-[#389e3c] w-0 opacity-0 shrink-0 transition-all duration-150"></div>
+  <div id="prog" class="h-0.5 bg-gradient-to-r from-emerald-500 to-teal-400 w-0 opacity-0 shrink-0 transition-all duration-150"></div>
 
   <!-- Canvas: holds one wrapper per tab -->
   <div id="canvas" class="flex-1 flex overflow-hidden"></div>
 
   <!-- Status Bar -->
-  <div class="bg-[#292a2d] border-t border-black/10 px-3 py-0.5 flex justify-between shrink-0">
-    <span id="status" class="text-[10px] text-slate-400">Dawamu Safe Browser</span>
+  <div class="bg-[#070c16] border-t border-white/5 px-4 py-1.5 flex justify-between shrink-0 text-slate-400 text-[11px] font-sans">
+    <span id="status" class="truncate max-w-md flex items-center gap-1.5">
+      <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+      Dawamu Safe Browser • Protected Student Session
+    </span>
     <div class="flex items-center gap-3">
       <span id="net-badge" class="flex items-center gap-1 text-[10px]"></span>
-      <span class="text-[10px] text-slate-500">${IS_ELECTRON ? 'Persistent Engine ⚡' : 'Web Mode'}</span>
+      <span class="text-[10px] text-emerald-400 font-semibold font-mono bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">Virtual OS Drive Active</span>
     </div>
   </div>
 
   <style>
-    .nb { width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-          background:transparent;border:none;cursor:pointer;color:#9aa0a6;transition:background .1s; }
-    .nb:hover { background:rgba(255,255,255,.1);color:#fff; }
-    .nb:active { transform:scale(.9); }
-    .tab { display:flex;align-items:center;gap:5px;padding:5px 10px 5px 8px;border-radius:8px 8px 0 0;
-           min-width:120px;max-width:200px;cursor:pointer;background:#2d2e32;color:#9aa0a6;font-size:11px;
-           border:1px solid transparent;border-bottom:none;transition:background .1s; }
-    .tab:hover { background:#3a3b3f;color:#e8eaed; }
-    .tab.active { background:#292a2d;color:#e8eaed;border-color:#5f6368;z-index:1; }
-    .tab-x { margin-left:auto;width:14px;height:14px;border-radius:50%;display:flex;align-items:center;
-              justify-content:center;font-size:9px;color:#9aa0a6;background:transparent;border:none;
-              cursor:pointer;opacity:0;transition:opacity .1s; }
-    .tab:hover .tab-x,.tab.active .tab-x { opacity:1; }
-    .tab-x:hover { background:rgba(255,255,255,.2);color:#fff; }
+    .nb { width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); cursor:pointer; color:#94a3b8; transition:all .15s cubic-bezier(0.16, 1, 0.3, 1); }
+    .nb:hover { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.16); transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+    .nb:active { transform:scale(.92); }
+    .tab { display:flex; align-items:center; gap:8px; padding:7px 14px; border-radius:12px 12px 0 0;
+           min-width:130px; max-width:220px; cursor:pointer; background:#0f172a; color:#94a3b8; font-size:11px;
+           border:1px solid rgba(255,255,255,.06); border-bottom:none; transition:all .14s ease; position:relative; }
+    .tab:hover { background:#162238; color:#f1f5f9; }
+    .tab.active { background:#0b1322; color:#ffffff; border-color:rgba(255,255,255,.14); font-weight:600; box-shadow:inset 0 2px 0 #10b981; z-index:1; }
+    .tab-x { margin-left:auto; width:16px; height:16px; border-radius:50%; display:flex; align-items:center;
+              justify-content:center; font-size:9px; color:#94a3b8; background:transparent; border:none;
+              cursor:pointer; opacity:0.6; transition:all .12s; }
+    .tab:hover .tab-x, .tab.active .tab-x { opacity:1; }
+    .tab-x:hover { background:rgba(239,68,68,.3); color:#fca5a5; transform:scale(1.1); }
     .tab-wrap { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; position: relative; }
     .tab-wrap.hidden { display: none !important; }
-    .start-overlay { position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;overflow-y:auto; }
+    .start-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; overflow-y:auto; background: radial-gradient(circle at 50% 20%, #0d1e33 0%, #060a12 100%); }
     .start-overlay.hidden { display:none !important; }
-    .offline-tool { position:absolute;inset:0;z-index:11;overflow-y:auto;background:#202124; }
+    .offline-tool { position:absolute; inset:0; z-index:11; overflow-y:auto; background:#0b1322; }
     .offline-tool.hidden { display:none !important; }
   </style>`;
 }
@@ -226,6 +265,21 @@ function buildTabDOM(root, tabId) {
 function wireWebview(root, tabId, wv) {
   wv.addEventListener('did-start-loading',  ()  => progress(root, tabId, true));
   wv.addEventListener('did-stop-loading',   ()  => progress(root, tabId, false));
+
+  // Anti-CAPTCHA / Anti-Bot Bypass: Disables navigator.webdriver flag inside webviews
+  wv.addEventListener('dom-ready', () => {
+    try {
+      wv.executeJavaScript(`
+        try {
+          delete window.navigator.__proto__.webdriver;
+          Object.defineProperty(navigator, 'webdriver', { get: () => undefined, configurable: true });
+          if (!window.chrome) {
+            window.chrome = { runtime: {}, app: {}, csi: () => {}, loadTimes: () => {} };
+          }
+        } catch(_) {}
+      `);
+    } catch (_) {}
+  });
 
   wv.addEventListener('did-fail-load', (e) => {
     progress(root, tabId, false);
@@ -515,60 +569,72 @@ function showStartPage(root, tabId) {
 
 function startPageHTML(tabId) {
   const offlineNotice = !navigator.onLine
-    ? `<div class="flex items-center gap-2 bg-amber-900/30 border border-amber-700/40 text-amber-300 text-xs px-4 py-2 rounded-full mb-2">
-        <i class="fas fa-plane"></i> You're offline — use the tools below!
+    ? `<div class="flex items-center gap-2 bg-amber-950/80 border border-amber-600/50 text-amber-300 text-xs px-4 py-2 rounded-full mb-3 shadow-lg">
+        <i class="fas fa-plane"></i> Working in Offline Mode — Built-in educational tools are active!
       </div>` : '';
 
   return `
-  <div class="flex flex-col items-center justify-center h-full p-6 text-center space-y-4 overflow-y-auto">
-    <div class="flex items-center gap-3">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-14 w-auto object-contain drop-shadow-md">
+  <div class="flex flex-col items-center justify-center min-h-full p-8 text-center space-y-5 overflow-y-auto max-w-3xl mx-auto">
+    <div class="flex flex-col items-center gap-2">
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform">
+      <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-300 text-[10px] font-bold uppercase tracking-widest mt-1">
+        <i class="fas fa-shield-alt text-xs"></i> Dawamu Safe Web Environment
+      </div>
     </div>
-    <p class="text-[10px] text-slate-400 font-semibold tracking-wider uppercase">Transforming Boys Into Leaders</p>
+
     ${offlineNotice}
 
-    <div class="w-full max-w-lg flex items-center bg-[#303134] hover:bg-[#3c3c3f] border border-slate-700 hover:border-slate-500 focus-within:border-emerald-500 rounded-full px-4 py-3 shadow-xl transition-all">
-      <i class="fas fa-search text-slate-400 text-sm mr-3 shrink-0"></i>
+    <!-- Modern Central Search Bar -->
+    <div class="w-full max-w-xl flex items-center bg-[#0d1627]/90 hover:bg-[#111e35] focus-within:bg-[#070d18] border border-white/15 hover:border-emerald-500/50 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 rounded-2xl px-4 py-3 shadow-2xl transition-all">
+      <i class="fas fa-search text-emerald-400 text-sm mr-3 shrink-0"></i>
       <input id="sp-input-${tabId}" type="text"
-             class="flex-1 bg-transparent outline-none text-white text-sm min-w-0"
-             placeholder="Search the web or enter an address..."
+             class="flex-1 bg-transparent outline-none text-white text-sm min-w-0 placeholder-slate-400 font-medium"
+             placeholder="Search Google, Wikipedia, or enter URL..."
              autofocus>
-      <button id="sp-btn-${tabId}" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white font-bold text-xs px-4 py-1.5 rounded-full ml-2 shrink-0">Go</button>
+      <button id="sp-btn-${tabId}" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs px-5 py-2 rounded-xl ml-2 shrink-0 shadow-md transition-all active:scale-95">Search</button>
     </div>
 
-    <!-- Online Sites -->
-    <div class="grid grid-cols-4 gap-3 max-w-lg w-full mt-2">
-      ${[
-        { url:'https://www.google.com', icon:'fab fa-google text-blue-400', name:'Google' },
-        { url:'https://www.bing.com', icon:'fab fa-microsoft text-cyan-400', name:'Bing' },
-        { url:'https://search.brave.com', icon:'fas fa-shield-alt text-amber-500', name:'Brave' },
-        { url:'https://www.khanacademy.org', icon:'fas fa-leaf text-emerald-400', name:'Khan Academy' },
-        { url:'https://www.nasa.gov', icon:'fas fa-rocket text-indigo-400', name:'NASA' },
-        { url:'https://www.mathsisfun.com', icon:'fas fa-square-root-alt text-amber-400', name:'Math Is Fun' },
-        { url:'https://www.wikipedia.org', icon:'fab fa-wikipedia-w text-slate-300', name:'Wikipedia' },
-        { url:'https://www.duolingo.com', icon:'fas fa-language text-green-400', name:'Duolingo' },
-      ].map(c => `
-        <button class="sp-card bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/50 p-3 rounded-2xl flex flex-col items-center gap-2 transition-all hover:scale-105" data-url="${c.url}">
-          <i class="${c.icon} text-2xl"></i>
-          <span class="text-[11px] font-semibold text-slate-200 text-center">${c.name}</span>
-        </button>`).join('')}
+    <!-- Pinned Online Learning Shortcuts -->
+    <div class="w-full max-w-xl">
+      <div class="text-left text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2.5 flex items-center justify-between">
+        <span class="flex items-center gap-1.5"><i class="fas fa-star text-amber-400 text-xs"></i> Verified Academic Portals</span>
+        <span class="text-[10px] text-slate-500 font-normal">Fast Access</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2.5">
+        ${[
+          { url:'https://www.google.com',      icon:'fab fa-google text-blue-400',          name:'Google', bg: 'from-blue-900/30 to-indigo-900/20' },
+          { url:'https://www.khanacademy.org', icon:'fas fa-leaf text-emerald-400',         name:'Khan Academy', bg: 'from-emerald-900/30 to-teal-900/20' },
+          { url:'https://www.wikipedia.org',   icon:'fab fa-wikipedia-w text-slate-200',    name:'Wikipedia', bg: 'from-slate-800/40 to-slate-900/20' },
+          { url:'https://www.nasa.gov',        icon:'fas fa-rocket text-rose-400',          name:'NASA', bg: 'from-rose-900/30 to-amber-900/20' },
+          { url:'https://search.brave.com',    icon:'fas fa-shield-alt text-amber-500',      name:'Brave', bg: 'from-amber-900/30 to-orange-900/20' },
+          { url:'https://www.mathsisfun.com',  icon:'fas fa-square-root-alt text-amber-400', name:'Math Is Fun', bg: 'from-amber-900/30 to-yellow-900/20' },
+          { url:'https://www.bing.com',        icon:'fab fa-microsoft text-cyan-400',        name:'Bing', bg: 'from-cyan-900/30 to-blue-900/20' },
+          { url:'https://www.duolingo.com',    icon:'fas fa-language text-green-400',       name:'Duolingo', bg: 'from-green-900/30 to-emerald-900/20' },
+        ].map(c => `
+          <button class="sp-card bg-gradient-to-br ${c.bg} hover:brightness-125 border border-white/10 hover:border-emerald-500/40 p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:-translate-y-1 hover:shadow-xl group" data-url="${c.url}">
+            <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+              <i class="${c.icon}"></i>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-200 group-hover:text-white truncate w-full">${c.name}</span>
+          </button>`).join('')}
+      </div>
     </div>
 
-    <!-- Offline Tools Section -->
-    <div class="w-full max-w-lg mt-4">
-      <div class="text-left text-[11px] text-slate-500 font-bold uppercase tracking-widest mb-2 flex items-center gap-2">
-        <i class="fas fa-plane text-amber-400"></i> Offline Tools — Always Available
+    <!-- Offline Built-in Utilities -->
+    <div class="w-full max-w-xl pt-2">
+      <div class="text-left text-[11px] text-emerald-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+        <i class="fas fa-laptop-code text-xs"></i> Built-in Offline Utilities
       </div>
       <div class="grid grid-cols-5 gap-2">
         ${[
-          { url:'dawamu://dictionary',      icon:'fas fa-book text-sky-400',           name:'Dictionary' },
-          { url:'dawamu://periodic-table',   icon:'fas fa-atom text-purple-400',        name:'Elements' },
-          { url:'dawamu://math',             icon:'fas fa-calculator text-amber-400',   name:'Math Ref' },
-          { url:'dawamu://notes',            icon:'fas fa-sticky-note text-yellow-400', name:'Notes' },
-          { url:'dawamu://history',          icon:'fas fa-landmark text-rose-400',      name:'History' },
+          { url:'dawamu://dictionary',     icon:'fas fa-book text-sky-400',           name:'Dictionary' },
+          { url:'dawamu://periodic-table',  icon:'fas fa-atom text-purple-400',        name:'Elements' },
+          { url:'dawamu://math',            icon:'fas fa-calculator text-amber-400',   name:'Math Ref' },
+          { url:'dawamu://notes',           icon:'fas fa-sticky-note text-yellow-400', name:'Notes' },
+          { url:'dawamu://history',         icon:'fas fa-landmark text-rose-400',      name:'History' },
         ].map(c => `
-          <button class="sp-card bg-[#1a2e1a] hover:bg-[#264d26] border border-emerald-900/50 p-2.5 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:scale-105" data-url="${c.url}">
-            <i class="${c.icon} text-xl"></i>
+          <button class="sp-card bg-slate-900/70 hover:bg-slate-800/90 border border-emerald-900/40 hover:border-emerald-500/50 p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all hover:scale-105" data-url="${c.url}">
+            <i class="${c.icon} text-lg"></i>
             <span class="text-[10px] font-semibold text-slate-300 text-center">${c.name}</span>
           </button>`).join('')}
       </div>
@@ -630,6 +696,58 @@ function wireChrome(root) {
     const b = e.target.closest('.bm');
     if (b) navigate(root, activeTabId, b.dataset.url);
   });
+
+  // Downloads popover and live notifications
+  const dlBtn = root.querySelector('#btn-downloads');
+  const dlPopover = root.querySelector('#dl-popover');
+  const dlBadge = root.querySelector('#dl-badge');
+  const dlList = root.querySelector('#dl-list');
+  const downloadedItems = [];
+
+  const updateDownloadUI = () => {
+    if (!dlList) return;
+    if (downloadedItems.length === 0) {
+      dlList.innerHTML = `<div class="text-slate-400 text-center py-4 text-[11px]">No recent downloads</div>`;
+      dlBadge?.classList.add('hidden');
+    } else {
+      dlBadge?.classList.remove('hidden');
+      dlList.innerHTML = downloadedItems.map(item => `
+        <div class="p-2 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 truncate">
+            <i class="fas fa-file text-emerald-400 text-sm"></i>
+            <div class="truncate">
+              <div class="font-semibold text-white truncate text-[11px]">${item.name}</div>
+              <div class="text-[9px] text-slate-400">${item.size || 'Saved in This PC > Downloads'}</div>
+            </div>
+          </div>
+          <span class="text-[9px] bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded-full shrink-0 font-semibold">This PC</span>
+        </div>
+      `).join('');
+    }
+  };
+
+  dlBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dlPopover?.classList.toggle('hidden');
+  });
+
+  document.addEventListener('click', () => {
+    dlPopover?.classList.add('hidden');
+  });
+
+  if (window.electronAPI?.onDownloadComplete) {
+    window.electronAPI.onDownloadComplete((data) => {
+      downloadedItems.unshift(data);
+      updateDownloadUI();
+      const statusEl = root.querySelector('#status');
+      if (statusEl) {
+        statusEl.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i>Downloaded ${data.name} to This PC &gt; Downloads</span>`;
+        setTimeout(() => {
+          statusEl.textContent = 'Dawamu Safe Browser • Protected Session';
+        }, 5000);
+      }
+    });
+  }
 
   renderTabStrip(root);
 }

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# ChromeOS Student Edition - Standalone Desktop OS Application Launcher
+# Dawamu OS - Instant Native Desktop Launcher
 
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 cd "$SCRIPT_DIR"
 
 echo "========================================================="
-echo "  Starting ChromeOS Student Edition Desktop OS Environment..."
+echo "  Launching Dawamu OS (High-Performance Desktop)...     "
 echo "========================================================="
 
-# Launch via npx electron
-npx electron . "$@"
+# Launch Electron with native GPU acceleration
+exec npx electron . "$@"

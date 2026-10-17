@@ -1,0 +1,36 @@
+Dawamu OS - Kenyan 8-4-4 Senior Secondary Revision Notes
+SUBJECT: KLB Secondary Mathematics Form 4
+LEVEL: KCSE Candidate Master Guide
+
+CHAPTER 1: MATRICES AND TRANSFORMATIONS
+- Transformation Matrices:
+  * Reflection in line y = x: [0, 1; 1, 0]
+  * Reflection in line y = -x: [0, -1; -1, 0]
+  * Rotation through angle θ: [cosθ, -sinθ; sinθ, cosθ]
+  * Enlargement by scale factor k about origin: [k, 0; 0, k]
+  * Area Scale Factor = |det(T)|
+
+CHAPTER 2: STATISTICS II
+- Mean: x̄ = A + (Σfd / Σf)
+- Standard Deviation: σ = √[(Σfd² / Σf) - (Σfd / Σf)²]
+- Cumulative Frequency (Ogive) curves for estimating median, quartiles, and percentiles.
+
+CHAPTER 3: THREE-DIMENSIONAL GEOMETRY
+- Angles between lines and planes; projection of a line.
+- Dihedral angles between intersecting planes.
+
+CHAPTER 4: LONGITUDES AND LATITUDES
+- Great circle distance: D = 60θ Nautical Miles
+- Small circle distance along latitude α: D = 60θ cosα Nautical Miles
+- 1 Knot = 1 Nautical mile per hour = 1.853 km/h
+- 1° longitude difference = 4 minutes time difference.
+
+CHAPTER 5: CALCULUS (DIFFERENTIATION & INTEGRATION)
+- Differentiation: d/dx(axⁿ) = anxⁿ⁻¹
+- Stationary Points: dy/dx = 0; Max if d²y/dx² < 0; Min if d²y/dx² > 0.
+- Kinematics: v = ds/dt, a = dv/dt = d²s/dt²
+- Integration: ∫ axⁿ dx = [axⁿ⁺¹ / (n + 1)] + c
+- Area under curve: Area = ∫[a to b] y dx
+- Trapezium Rule: Area ≈ (h/2)[(y0 + yn) + 2(y1 + y2 + ... + yn-1)]
+
+(c) Dawamu OS Secondary Educational Ecosystem. 100% Offline Kiosk.
