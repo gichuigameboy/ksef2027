@@ -1,15 +1,36 @@
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
 import 'core/theme/app_theme.dart';
+import 'firebase_options.dart';
 import 'providers/auth_provider.dart';
 import 'providers/learning_provider.dart';
 import 'providers/diagnostic_provider.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/shell/responsive_shell.dart';
+import 'services/auth_service.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  await Firebase.initializeApp(
+    options: FirebaseOptions(
+      apiKey: DefaultFirebaseOptions.apiKey,
+      authDomain: DefaultFirebaseOptions.authDomain,
+      databaseURL: DefaultFirebaseOptions.databaseURL,
+      projectId: DefaultFirebaseOptions.projectId,
+      storageBucket: DefaultFirebaseOptions.storageBucket,
+      messagingSenderId: DefaultFirebaseOptions.messagingSenderId,
+      appId: DefaultFirebaseOptions.appId,
+      measurementId: DefaultFirebaseOptions.measurementId,
+    ),
+  );
+
+  // Set up cached-token refresh listener (keeps AuthService.authHeaders in sync).
+  AuthService.initialize();
+
   runApp(const EduGuardApp());
 }
 
@@ -25,7 +46,8 @@ class _EduGuardAppState extends State<EduGuardApp> {
 
   void toggleTheme() {
     setState(() {
-      _themeMode = _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+      _themeMode =
+          _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     });
   }
 
@@ -58,7 +80,9 @@ class AuthGate extends StatelessWidget {
 
     if (auth.isLoading) {
       return const Scaffold(
-        body: Center(child: CircularProgressIndicator(color: Color(0xFF10A37F))),
+        body: Center(
+          child: CircularProgressIndicator(color: Color(0xFF10A37F)),
+        ),
       );
     }
 
