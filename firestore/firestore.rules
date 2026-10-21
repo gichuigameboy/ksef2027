@@ -1,0 +1,106 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper authorization predicates
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    
+    function isTeacher() {
+      return isAuthenticated() && getUserData().role == 'teacher';
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+    
+    function isTeacherOfClass(classId) {
+      return isTeacher() && request.auth.uid in get(/databases/$(database)/documents/classes/$(classId)).data.teacherIds;
+    }
+
+    // 1. User Profiles: Strict owner isolation
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isTeacher() || isAdmin();
+      allow create: if isAuthenticated() && request.auth.uid == userId;
+      allow update: if isOwner(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 2. Student Records: Dedicated /students/{uid} collection
+    match /students/{userId} {
+      allow read: if isOwner(userId) || isTeacher() || isAdmin();
+      allow create, update: if isOwner(userId) || isAdmin();
+      
+      // Authoritative Mastery & Retention: Read-only for students; backend/admin writes
+      match /mastery/{topicId} {
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow write: if isAdmin();
+      }
+
+      match /retention/{topicId} {
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow write: if isAdmin();
+      }
+
+      // Student Attempts: Owner can create attempts with matching userId; cannot edit past attempts
+      match /attempts/{attemptId} {
+        allow create: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow update, delete: if isAdmin();
+      }
+
+      // Diagnostic Sessions
+      match /diagnostics/{diagnosticId} {
+        allow create, update: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow delete: if isAdmin();
+      }
+
+      // Learning Sessions
+      match /sessions/{sessionId} {
+        allow create, update: if isOwner(userId) && request.resource.data.studentId == userId;
+        allow read: if isOwner(userId) || isTeacher() || isAdmin();
+        allow delete: if isAdmin();
+      }
+    }
+
+    // 3. Curriculum: Subjects & Topics (Public Authenticated Read, Admin Write)
+    match /subjects/{subjectId} {
+      allow read: if isAuthenticated();
+      allow write: if isAdmin();
+
+      match /topics/{topicId} {
+        allow read: if isAuthenticated();
+        allow write: if isAdmin();
+      }
+    }
+
+    // 4. Question Bank: Read allowed; answers/explanations sanitized server-side
+    match /questions/{questionId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isTeacher() || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // 5. Classes (Teacher & Enrolled Student Access)
+    match /classes/{classId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.teacherIds ||
+        request.auth.uid in resource.data.studentIds ||
+        isAdmin()
+      );
+      allow create: if isTeacher() || isAdmin();
+      allow update: if isTeacherOfClass(classId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+  }
+}
