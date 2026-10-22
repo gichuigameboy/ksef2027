@@ -218,77 +218,53 @@ export function createEduGuardApp(student = null) {
   // ─── MAIN APP RENDER FUNCTION ────────────────────────────────────────────────
   function render() {
     root.innerHTML = `
-      <!-- App Header Bar -->
-      <header class="bg-[#0f172a] border-b border-white/10 px-5 py-3 flex items-center justify-between shrink-0 shadow-md">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-600 flex items-center justify-center text-white text-xl shadow-lg shadow-emerald-950/40">
+      <!-- App Header -->
+      <header class="bg-[#0f172a] border-b border-white/10 px-4 py-2.5 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 rounded-lg bg-emerald-700 flex items-center justify-center text-white text-sm">
             <i class="fas fa-shield-halved"></i>
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="font-extrabold text-base text-white tracking-tight">EduGuard</span>
-              <span class="text-[10px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-                AI Platform • KSEF 2027
-              </span>
+              <span class="font-semibold text-sm text-white">EduGuard</span>
+              <span class="text-[10px] text-slate-500">KSEF 2027</span>
             </div>
-            <div class="text-[11px] text-slate-400">
-              Student: <b class="text-emerald-400">${currentStudent.name}</b> (${currentStudent.admNo} • ${currentStudent.grade})
+            <div class="text-[10px] text-slate-500">
+              ${currentStudent.name} · ${currentStudent.grade}
             </div>
           </div>
         </div>
 
-        <!-- System Protection Badges -->
-        <div class="flex items-center gap-3">
-          <div class="flex items-center gap-2 bg-[#1e293b] border border-white/10 px-3 py-1.5 rounded-xl text-xs">
-            <span class="w-2 h-2 rounded-full ${proctorActive ? 'bg-rose-500 animate-ping' : 'bg-emerald-400'}"></span>
-            <span class="text-slate-300 font-medium">Proctor Guard:</span>
-            <b class="${proctorActive ? 'text-rose-400' : 'text-emerald-400'}">${proctorActive ? 'LIVE MONITORING' : 'READY'}</b>
-          </div>
-
-          <div class="flex items-center gap-2 bg-[#1e293b] border border-white/10 px-3 py-1.5 rounded-xl text-xs">
-            <i class="fas fa-microchip text-cyan-400"></i>
-            <span class="text-slate-300 font-medium">AI Engine:</span>
-            <span class="text-cyan-300 font-bold">Local + FastAPI</span>
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5 text-xs">
+            <span class="w-1.5 h-1.5 rounded-full ${proctorActive ? 'bg-rose-500' : 'bg-emerald-500'}"></span>
+            <span class="text-slate-400">${proctorActive ? 'Proctoring' : 'Ready'}</span>
           </div>
         </div>
       </header>
 
-      <!-- App Navigation Tabs -->
-      <nav class="bg-[#0b1021] border-b border-white/10 px-4 flex items-center gap-1 shrink-0 overflow-x-auto">
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === 'tutor' ? 'text-emerald-400 border-emerald-500 bg-white/5' : 'text-slate-400 border-transparent hover:text-white'}" data-tab="tutor">
-          <i class="fas fa-brain text-sm"></i>
-          <span>AI Study Tutor</span>
+      <!-- Navigation Tabs -->
+      <nav class="bg-[#0b1021] border-b border-white/10 px-3 flex items-center shrink-0 overflow-x-auto gap-0.5">
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'tutor' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="tutor">
+          <i class="fas fa-brain text-xs"></i> AI Tutor
         </button>
-
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === 'proctor' ? 'text-emerald-400 border-emerald-500 bg-white/5' : 'text-slate-400 border-transparent hover:text-white'}" data-tab="proctor">
-          <i class="fas fa-shield-virus text-sm"></i>
-          <span>Exam Proctor Guard</span>
-          ${proctorActive ? `<span class="bg-rose-500 text-white text-[9px] px-1.5 py-0.2 rounded-full font-bold">LIVE</span>` : ''}
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'proctor' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="proctor">
+          <i class="fas fa-shield-halved text-xs"></i> Exam Guard${proctorActive ? ` <span class="w-1.5 h-1.5 rounded-full bg-rose-500 ml-0.5"></span>` : ''}
         </button>
-
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === 'diagnostic' ? 'text-emerald-400 border-emerald-500 bg-white/5' : 'text-slate-400 border-transparent hover:text-white'}" data-tab="diagnostic">
-          <i class="fas fa-stethoscope text-sm"></i>
-          <span>Diagnostic Engine</span>
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'diagnostic' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="diagnostic">
+          <i class="fas fa-stethoscope text-xs"></i> Diagnostic
         </button>
-
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === 'knowledgemap' ? 'text-emerald-400 border-emerald-500 bg-white/5' : 'text-slate-400 border-transparent hover:text-white'}" data-tab="knowledgemap">
-          <i class="fas fa-chart-pie text-sm"></i>
-          <span>Knowledge & Retention</span>
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'knowledgemap' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="knowledgemap">
+          <i class="fas fa-chart-pie text-xs"></i> Knowledge Map
         </button>
-
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === 'notes' ? 'text-emerald-400 border-emerald-500 bg-white/5' : 'text-slate-400 border-transparent hover:text-white'}" data-tab="notes">
-          <i class="fas fa-file-waveform text-sm"></i>
-          <span>Notes AI Analyzer</span>
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'notes' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="notes">
+          <i class="fas fa-file-lines text-xs"></i> Notes
         </button>
-
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ${activeTab === 'teacher' ? 'text-emerald-400 border-emerald-500 bg-white/5' : 'text-slate-400 border-transparent hover:text-white'}" data-tab="teacher">
-          <i class="fas fa-chalkboard-user text-sm"></i>
-          <span>Teacher & Proctor View</span>
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${activeTab === 'teacher' ? 'text-emerald-400 border-emerald-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="teacher">
+          <i class="fas fa-chalkboard-user text-xs"></i> Teacher View
         </button>
-
-        <button class="nav-tab px-4 py-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-all cursor-pointer ml-auto ${activeTab === 'hybrid' ? 'text-cyan-400 border-cyan-500 bg-cyan-950/30' : 'text-slate-400 border-transparent hover:text-cyan-300'}" data-tab="hybrid">
-          <i class="fas fa-link text-xs"></i>
-          <span>Live EduGuard Service</span>
+        <button class="nav-tab px-3.5 py-2.5 text-xs border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ml-auto ${activeTab === 'hybrid' ? 'text-cyan-400 border-cyan-500' : 'text-slate-500 border-transparent hover:text-slate-300'}" data-tab="hybrid">
+          <i class="fas fa-link text-xs"></i> Services
         </button>
       </nav>
 
@@ -333,22 +309,20 @@ export function createEduGuardApp(student = null) {
   function renderTutorTab(container) {
     container.innerHTML = `
       <div class="flex flex-col h-full bg-[#0b1329]">
-        <!-- Prompt Presets Bar -->
-        <div class="bg-[#0f172a]/90 border-b border-white/5 px-4 py-2.5 flex items-center gap-2 overflow-x-auto shrink-0 text-xs">
-          <span class="text-slate-400 font-semibold flex items-center gap-1 shrink-0">
-            <i class="fas fa-wand-magic-sparkles text-amber-400"></i> KCSE Prompts:
-          </span>
-          <button class="prompt-chip bg-white/5 hover:bg-emerald-900/40 hover:border-emerald-500/50 border border-white/10 text-slate-200 px-3 py-1 rounded-full shrink-0 transition-all cursor-pointer">
-            Explain Photosynthesis Light vs Dark Stages
+        <!-- Quick Prompts -->
+        <div class="border-b border-white/5 px-3 py-2 flex items-center gap-1.5 overflow-x-auto shrink-0">
+          <span class="text-[10px] text-slate-600 shrink-0">Try:</span>
+          <button class="prompt-chip bg-white/4 hover:bg-white/8 border border-white/8 text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer text-[11px]">
+            Photosynthesis stages
           </button>
-          <button class="prompt-chip bg-white/5 hover:bg-emerald-900/40 hover:border-emerald-500/50 border border-white/10 text-slate-200 px-3 py-1 rounded-full shrink-0 transition-all cursor-pointer">
-            How to solve Quadratic Equations with formula
+          <button class="prompt-chip bg-white/4 hover:bg-white/8 border border-white/8 text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer text-[11px]">
+            Quadratic equations
           </button>
-          <button class="prompt-chip bg-white/5 hover:bg-emerald-900/40 hover:border-emerald-500/50 border border-white/10 text-slate-200 px-3 py-1 rounded-full shrink-0 transition-all cursor-pointer">
-            Le Chatelier's Principle in Chemistry
+          <button class="prompt-chip bg-white/4 hover:bg-white/8 border border-white/8 text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer text-[11px]">
+            Le Chatelier's Principle
           </button>
-          <button class="prompt-chip bg-white/5 hover:bg-emerald-900/40 hover:border-emerald-500/50 border border-white/10 text-slate-200 px-3 py-1 rounded-full shrink-0 transition-all cursor-pointer">
-            Newton's Laws of Motion with Examples
+          <button class="prompt-chip bg-white/4 hover:bg-white/8 border border-white/8 text-slate-400 hover:text-slate-200 px-2.5 py-1 rounded-lg shrink-0 transition-colors cursor-pointer text-[11px]">
+            Newton's Laws
           </button>
         </div>
 
@@ -477,44 +451,30 @@ export function createEduGuardApp(student = null) {
     if (!proctorActive && !examCompleted) {
       // Ready to start Exam Mode
       container.innerHTML = `
-        <div class="h-full flex flex-col items-center justify-center p-8 text-center bg-gradient-to-b from-[#0b1329] to-[#080d1c] overflow-y-auto">
-          <div class="w-20 h-20 bg-rose-500/10 border border-rose-500/30 rounded-3xl flex items-center justify-center text-rose-400 text-3xl mb-4 shadow-xl">
-            <i class="fas fa-shield-virus"></i>
+        <div class="h-full flex flex-col items-center justify-center p-8 text-center bg-[#0b1329] overflow-y-auto gap-6">
+          <div class="w-14 h-14 bg-rose-500/10 rounded-xl flex items-center justify-center text-rose-400 text-2xl">
+            <i class="fas fa-shield-halved"></i>
           </div>
 
-          <h1 class="text-2xl font-extrabold text-white mb-2">EduGuard Exam Proctor Shield</h1>
-          <p class="text-xs text-slate-300 max-w-lg mb-6 leading-relaxed">
-            Welcome to the secure exam environment. EduGuard's proctoring algorithms track student application focus, prevent unauthorized tab switching, monitor clipboard actions, and ensure exam integrity.
-          </p>
-
-          <!-- Security Policy Badges -->
-          <div class="grid grid-cols-3 gap-4 max-w-xl w-full mb-8 text-left text-xs">
-            <div class="bg-[#152140] border border-white/10 p-4 rounded-2xl">
-              <div class="text-emerald-400 font-bold mb-1 flex items-center gap-1.5">
-                <i class="fas fa-window-restore"></i> Focus Lock
-              </div>
-              <p class="text-slate-400 text-[11px]">Switching windows or minimizing Dawamu OS triggers an immediate integrity deduction.</p>
-            </div>
-
-            <div class="bg-[#152140] border border-white/10 p-4 rounded-2xl">
-              <div class="text-cyan-400 font-bold mb-1 flex items-center gap-1.5">
-                <i class="fas fa-clipboard-check"></i> Clip Guard
-              </div>
-              <p class="text-slate-400 text-[11px]">Copying or pasting external content during the examination is blocked and logged.</p>
-            </div>
-
-            <div class="bg-[#152140] border border-white/10 p-4 rounded-2xl">
-              <div class="text-amber-400 font-bold mb-1 flex items-center gap-1.5">
-                <i class="fas fa-gauge-high"></i> Integrity Index
-              </div>
-              <p class="text-slate-400 text-[11px]">Real-time audit log generated for teacher verification and grading accreditation.</p>
-            </div>
+          <div>
+            <h1 class="text-lg font-semibold text-white mb-1">Exam Proctor Guard</h1>
+            <p class="text-xs text-slate-400 max-w-md leading-relaxed">
+              Secure exam mode — tracks focus, prevents tab-switching, and logs integrity events.
+            </p>
           </div>
 
-          <!-- Start Exam Trigger -->
-          <button id="start-exam-btn" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm px-8 py-3.5 rounded-2xl shadow-xl shadow-emerald-950/50 flex items-center gap-2 cursor-pointer transition-all active:scale-95">
-            <i class="fas fa-play"></i>
-            <span>Begin Proctored KCSE Sample Examination (5 Questions)</span>
+          <!-- Policy summary -->
+          <div class="flex items-center gap-3 text-xs text-slate-400">
+            <span class="flex items-center gap-1.5"><i class="fas fa-window-restore text-emerald-400"></i> Focus Lock</span>
+            <span class="text-slate-700">·</span>
+            <span class="flex items-center gap-1.5"><i class="fas fa-clipboard-check text-cyan-400"></i> Clip Guard</span>
+            <span class="text-slate-700">·</span>
+            <span class="flex items-center gap-1.5"><i class="fas fa-gauge-high text-amber-400"></i> Integrity Score</span>
+          </div>
+
+          <button id="start-exam-btn" class="bg-emerald-700 hover:bg-emerald-600 text-white font-medium text-sm px-7 py-2.5 rounded-xl flex items-center gap-2 cursor-pointer transition-colors active:scale-95">
+            <i class="fas fa-play text-xs"></i>
+            Begin 5-Question KCSE Sample Exam
           </button>
         </div>
       `;
@@ -558,24 +518,21 @@ export function createEduGuardApp(student = null) {
 
       container.innerHTML = `
         <div class="h-full overflow-y-auto p-6 bg-[#0b1329] space-y-6">
-          <div class="bg-gradient-to-r from-emerald-900/60 to-cyan-950/60 border border-emerald-500/30 rounded-3xl p-6 flex items-center justify-between shadow-xl">
+          <div class="flex items-center justify-between bg-[#152140] border border-white/10 rounded-xl p-4">
             <div>
-              <div class="text-xs uppercase tracking-wider text-emerald-400 font-bold mb-1">
-                <i class="fas fa-circle-check mr-1"></i> Examination Completed
+              <div class="flex items-center gap-2 text-emerald-400 text-xs mb-1">
+                <i class="fas fa-circle-check"></i> Exam Complete
               </div>
-              <h1 class="text-2xl font-extrabold text-white">Student Assessment & Integrity Scorecard</h1>
-              <p class="text-xs text-slate-300 mt-1">Candidate: <b>${currentStudent.name}</b> (${currentStudent.admNo} • ${currentStudent.grade})</p>
+              <p class="text-sm font-semibold text-white">${currentStudent.name} · ${currentStudent.grade}</p>
             </div>
-
-            <div class="flex items-center gap-6">
-              <div class="text-center bg-[#152140]/80 p-3.5 rounded-2xl border border-white/10">
-                <div class="text-2xl font-black text-emerald-400">${academicScore}%</div>
-                <div class="text-[10px] text-slate-400 font-semibold uppercase">Academic Score</div>
+            <div class="flex items-center gap-4 text-center">
+              <div>
+                <div class="text-xl font-bold text-emerald-400">${academicScore}%</div>
+                <div class="text-[10px] text-slate-500">Academic</div>
               </div>
-
-              <div class="text-center bg-[#152140]/80 p-3.5 rounded-2xl border ${integrityScore < 75 ? 'border-rose-500/50' : 'border-emerald-500/50'}">
-                <div class="text-2xl font-black ${integrityScore < 75 ? 'text-rose-400' : 'text-emerald-400'}">${integrityScore}%</div>
-                <div class="text-[10px] text-slate-400 font-semibold uppercase">Exam Integrity</div>
+              <div>
+                <div class="text-xl font-bold ${integrityScore < 75 ? 'text-rose-400' : 'text-emerald-400'}">${integrityScore}%</div>
+                <div class="text-[10px] text-slate-500">Integrity</div>
               </div>
             </div>
           </div>
@@ -734,18 +691,16 @@ export function createEduGuardApp(student = null) {
   function renderDiagnosticTab(container) {
     container.innerHTML = `
       <div class="h-full overflow-y-auto p-6 bg-[#0b1329] space-y-6">
-        <!-- Diagnostic Header Banner -->
-        <div class="bg-gradient-to-r from-cyan-950 to-blue-950 border border-cyan-500/30 rounded-3xl p-6 flex items-center justify-between shadow-xl">
-          <div class="space-y-1">
-            <div class="flex items-center gap-2 text-cyan-400 font-bold text-xs uppercase tracking-wider">
-              <i class="fas fa-stethoscope"></i> Adaptive Diagnostic Engine
-            </div>
-            <h1 class="text-2xl font-extrabold text-white">Competency & Learning Gap Diagnosis</h1>
-            <p class="text-xs text-slate-300">Pinpoints cognitive roadblocks in Kenyan KCSE subjects and outputs prescriptive recovery pathways.</p>
+        <!-- Diagnostic Header -->
+        <div class="flex items-center justify-between">
+          <div>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i class="fas fa-stethoscope text-cyan-400"></i> Diagnostic Engine
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Learning gap analysis for KCSE subjects.</p>
           </div>
-
-          <button id="run-diagnostic-btn" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold text-xs px-5 py-3 rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2">
-            <i class="fas fa-bolt"></i> Run Full Diagnostic Scan
+          <button id="run-diagnostic-btn" class="bg-cyan-700 hover:bg-cyan-600 text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer flex items-center gap-1.5">
+            <i class="fas fa-bolt text-xs"></i> Run Scan
           </button>
         </div>
 
@@ -803,7 +758,7 @@ export function createEduGuardApp(student = null) {
 
         <!-- Detailed Competency Breakdown -->
         <div class="bg-[#152140] border border-white/10 rounded-2xl p-5 space-y-3">
-          <h3 class="text-xs font-bold text-white uppercase tracking-wider">Sub-Topic Competency Matrix (${diagSubject} - ${diagForm})</h3>
+          <h3 class="text-xs font-medium text-slate-400 mb-1">${diagSubject} — ${diagForm} Breakdown</h3>
           
           <div class="space-y-3 text-xs">
             <div>
@@ -859,18 +814,16 @@ export function createEduGuardApp(student = null) {
   function renderKnowledgeMapTab(container) {
     container.innerHTML = `
       <div class="h-full overflow-y-auto p-6 bg-[#0b1329] space-y-6">
-        <div class="bg-gradient-to-r from-purple-950 to-indigo-950 border border-purple-500/30 rounded-3xl p-6 flex items-center justify-between shadow-xl">
+        <div class="flex items-center justify-between">
           <div>
-            <div class="text-xs uppercase tracking-wider text-purple-400 font-bold mb-1">
-              <i class="fas fa-brain mr-1"></i> Cognitive Retention Architecture
-            </div>
-            <h1 class="text-2xl font-extrabold text-white">Student Knowledge Map & Decay Prediction</h1>
-            <p class="text-xs text-slate-300 mt-1">Based on Hermann Ebbinghaus's Spaced Repetition Forgetting Curve.</p>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i class="fas fa-brain text-purple-400"></i> Knowledge Map
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Spaced repetition & retention curves (Ebbinghaus model).</p>
           </div>
-
-          <div class="bg-purple-900/40 border border-purple-500/40 px-4 py-2 rounded-2xl text-xs text-right">
-            <div class="text-purple-300 font-bold">Predicted Class Retention</div>
-            <div class="text-2xl font-black text-white">82.4%</div>
+          <div class="text-right text-xs">
+            <div class="text-slate-500">Avg retention</div>
+            <div class="text-lg font-semibold text-purple-400">82.4%</div>
           </div>
         </div>
 
@@ -932,14 +885,13 @@ export function createEduGuardApp(student = null) {
       <div class="h-full flex flex-col bg-[#0b1329] p-6 space-y-4 overflow-y-auto">
         <div class="border-b border-white/10 pb-3 flex items-center justify-between shrink-0">
           <div>
-            <h1 class="text-lg font-bold text-white flex items-center gap-2">
-              <i class="fas fa-file-waveform text-emerald-400"></i> Smart Notes AI Syllabus Evaluator
-            </h1>
-            <p class="text-xs text-slate-400">Paste your revision notes or homework essay to check syllabus completeness and exam readiness.</p>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i class="fas fa-file-lines text-emerald-400"></i> Notes Analyzer
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Paste notes to check KCSE syllabus coverage.</p>
           </div>
-
-          <button id="analyze-notes-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-5 py-2.5 rounded-xl shadow cursor-pointer transition-all flex items-center gap-2">
-            <i class="fas fa-magnifying-glass-chart"></i> Analyze Notes
+          <button id="analyze-notes-btn" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-medium px-4 py-2 rounded-lg cursor-pointer transition-colors flex items-center gap-1.5">
+            <i class="fas fa-magnifying-glass text-xs"></i> Analyze
           </button>
         </div>
 
@@ -1024,19 +976,16 @@ Photosynthesis takes place in chloroplasts. In the light stage, water is split i
   function renderTeacherTab(container) {
     container.innerHTML = `
       <div class="h-full overflow-y-auto p-6 bg-[#0b1329] space-y-6">
-        <div class="bg-gradient-to-r from-rose-950 to-slate-900 border border-rose-500/30 rounded-3xl p-6 flex items-center justify-between shadow-xl">
+        <div class="flex items-center justify-between">
           <div>
-            <div class="text-xs uppercase tracking-wider text-rose-400 font-bold mb-1">
-              <i class="fas fa-user-shield mr-1"></i> Teacher / Proctor Command Center
-            </div>
-            <h1 class="text-2xl font-extrabold text-white">Dawamu Classroom Proctoring & Integrity Telemetry</h1>
-            <p class="text-xs text-slate-300 mt-1">Real-time status of student computers across the local school network.</p>
+            <h2 class="text-sm font-semibold text-white flex items-center gap-2">
+              <i class="fas fa-chalkboard-user text-rose-400"></i> Teacher & Proctor View
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">Classroom network — Dawamu High School Lab.</p>
           </div>
-
-          <div class="flex items-center gap-3">
-            <span class="text-xs bg-emerald-950/80 text-emerald-300 border border-emerald-500/40 px-3.5 py-2 rounded-xl font-bold flex items-center gap-1.5">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span> 12 Students Active
-            </span>
+          <div class="flex items-center gap-1.5 text-xs text-slate-400">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+            12 Students Active
           </div>
         </div>
 

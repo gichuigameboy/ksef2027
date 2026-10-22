@@ -28,29 +28,17 @@ export function createClassroomApp() {
     });
 
     container.innerHTML = `
-      <!-- Top Banner Stats -->
-      <div class="bg-gradient-to-r from-blue-900/80 to-indigo-950/80 border border-blue-700/50 rounded-3xl p-6 flex items-center justify-between shadow-xl">
-        <div class="space-y-1">
-          <div class="flex items-center gap-2 text-blue-400 font-bold text-xs uppercase tracking-wider">
-            <i class="fas fa-graduation-cap text-base"></i> Classroom Assignment Dashboard
-          </div>
-          <h1 class="text-2xl font-extrabold text-white">Student Study Progress</h1>
-          <p class="text-xs text-slate-300">You have <b class="text-amber-400">${pendingCount} pending assignments</b> due this week.</p>
+      <!-- Header -->
+      <div class="flex items-center justify-between">
+        <div>
+          <h1 class="text-base font-semibold text-white">Assignments</h1>
+          <p class="text-xs text-slate-400">${pendingCount} pending &nbsp;·&nbsp; ${completedCount}/${total} done (${percent}%)</p>
         </div>
-
-        <div class="flex items-center gap-6">
-          <div class="text-right">
-            <div class="text-3xl font-extrabold text-emerald-400">${percent}%</div>
-            <div class="text-[11px] text-slate-400 font-medium">Completed (${completedCount}/${total})</div>
-          </div>
-          <div class="w-14 h-14 rounded-full border-4 border-slate-800 border-t-emerald-400 flex items-center justify-center font-bold text-xs text-emerald-400">
-            ${percent}%
-          </div>
-        </div>
+        <div class="w-2 h-2 rounded-full ${pendingCount > 0 ? 'bg-amber-400' : 'bg-emerald-400'}"></div>
       </div>
 
       <!-- Controls & Filters Bar -->
-      <div class="flex items-center justify-between flex-wrap gap-4 bg-slate-950/60 p-4 rounded-2xl border border-slate-800">
+      <div class="flex items-center justify-between flex-wrap gap-3 bg-slate-950/50 px-3 py-2.5 rounded-xl border border-slate-800/80">
         <!-- Subject Pills -->
         <div class="flex items-center gap-2 overflow-x-auto text-xs">
           <span class="text-slate-400 font-semibold mr-1">Subject:</span>
@@ -73,7 +61,7 @@ export function createClassroomApp() {
             <option value="Completed" ${currentStatus === 'Completed' ? 'selected' : ''}>Completed Only</option>
           </select>
 
-          <button id="add-asg-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-1.5 rounded-xl shadow-lg transition-all flex items-center gap-2">
+          <button id="add-asg-btn" class="bg-emerald-700 hover:bg-emerald-600 text-white text-xs px-3.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
             <i class="fas fa-plus"></i> Add Assignment
           </button>
         </div>

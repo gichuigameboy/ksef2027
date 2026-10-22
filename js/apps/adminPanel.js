@@ -12,26 +12,28 @@ export function createAdminPanelApp() {
 
   const renderPinChallenge = () => {
     container.innerHTML = `
-      <div class="flex-1 flex flex-col items-center justify-center p-6 text-center">
-        <div class="w-16 h-16 bg-amber-500/20 text-amber-400 rounded-full flex items-center justify-center text-3xl mb-4 border border-amber-500/30 shadow-lg">
-          <i class="fas fa-user-shield"></i>
+      <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+        <div class="w-12 h-12 bg-amber-500/15 text-amber-400 rounded-xl flex items-center justify-center text-xl mb-4">
+          <i class="fas fa-lock"></i>
         </div>
-        <h2 class="text-xl font-bold text-white mb-1">Teacher & Parent Controls</h2>
-        <p class="text-xs text-slate-400 mb-6 max-w-xs">Enter your 4-digit Administrator Security PIN to modify student restriction policies.</p>
+        <h2 class="text-sm font-semibold text-white mb-1">Admin Access</h2>
+        <p class="text-xs text-slate-500 mb-5">Enter your PIN to continue.</p>
 
-        <div class="space-y-4 w-64">
-          <input type="password" id="admin-pin-input" maxlength="6" class="w-full bg-slate-950 border border-slate-700 rounded-2xl p-3 text-center text-2xl tracking-widest font-mono text-white outline-none focus:border-amber-500" placeholder="••••" autofocus>
-          
-          <div id="pin-error-msg" class="text-xs text-rose-400 font-semibold min-h-[16px]"></div>
+        <div class="space-y-3 w-56">
+          <input type="password" id="admin-pin-input" maxlength="6"
+            class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-center text-xl tracking-[0.4em] font-mono text-white outline-none focus:border-amber-500 transition-colors"
+            placeholder="••••" autofocus>
 
-          <button id="pin-submit-btn" class="w-full bg-amber-600 hover:bg-amber-500 text-white font-bold text-sm py-3 rounded-2xl transition-colors shadow-lg">
-            Unlock Admin Panel
+          <div id="pin-error-msg" class="text-xs text-rose-400 min-h-[16px]"></div>
+
+          <button id="pin-submit-btn" class="w-full bg-amber-600 hover:bg-amber-500 text-white text-sm font-medium py-2.5 rounded-xl transition-colors">
+            Unlock
           </button>
         </div>
 
-        <div class="mt-8 text-[11px] text-slate-500">
-          Default Demo PIN: <code class="text-amber-400 bg-slate-950 px-2 py-0.5 rounded font-mono">1234</code>
-        </div>
+        <p class="mt-6 text-[11px] text-slate-600">
+          Demo PIN: <code class="text-slate-400 font-mono">1234</code>
+        </p>
       </div>
     `;
 
@@ -62,19 +64,18 @@ export function createAdminPanelApp() {
 
     container.innerHTML = `
       <!-- Admin Header -->
-      <div class="bg-slate-950 border-b border-slate-800 p-4 flex items-center justify-between">
-        <div class="flex items-center gap-3">
-          <div class="w-10 h-10 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center font-bold">
-            <i class="fas fa-shield-alt text-lg"></i>
+      <div class="border-b border-slate-800 px-4 py-3 flex items-center justify-between">
+        <div class="flex items-center gap-2.5">
+          <div class="w-8 h-8 bg-amber-500/15 text-amber-400 rounded-lg flex items-center justify-center">
+            <i class="fas fa-shield-alt text-sm"></i>
           </div>
           <div>
-            <h2 class="font-bold text-white text-base">District & Parental Control Center</h2>
-            <p class="text-xs text-slate-400">Dawamu Chromebook Policy Engine</p>
+            <h2 class="font-semibold text-white text-sm">Parental Controls</h2>
+            <p class="text-xs text-slate-500">Dawamu OS Policy Engine</p>
           </div>
         </div>
-
-        <button id="admin-lock-btn" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs px-3 py-1.5 rounded-xl font-semibold flex items-center gap-1.5">
-          <i class="fas fa-lock text-amber-400"></i> Lock Panel
+        <button id="admin-lock-btn" class="text-xs text-slate-400 hover:text-white px-2.5 py-1.5 rounded-lg border border-slate-800 hover:border-slate-700 transition-colors flex items-center gap-1.5">
+          <i class="fas fa-lock text-xs"></i> Lock
         </button>
       </div>
 
