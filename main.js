@@ -9,79 +9,46 @@ if (!fs.existsSync(OS_STORAGE_DIR)) {
   fs.mkdirSync(OS_STORAGE_DIR, { recursive: true });
 }
 
-// ─── HIGH PERFORMANCE HARDWARE & ANTI-CAPTCHA ENGINE ──────────────────────────
-// Disables automation control flags to prevent Cloudflare/reCAPTCHA bot triggers
-app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
-app.commandLine.appendSwitch('disable-background-networking');
-app.commandLine.appendSwitch('disable-breakpad');
-app.commandLine.appendSwitch('disable-component-update');
-app.commandLine.appendSwitch('disable-domain-reliability');
-app.commandLine.appendSwitch('disable-sync');
-
 let mainWindow;
 
-// ─── Browser User-Agent & Client Hints (Genuine Chrome 131) ───────────────────
-const CHROME_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) ' +
-                  'AppleWebKit/537.36 (KHTML, like Gecko) ' +
-                  'Chrome/131.0.0.0 Safari/537.36';
-
 function configureSessions() {
-  ['default', 'persist:school'].forEach(partition => {
-    const s = partition === 'default'
-      ? session.defaultSession
-      : session.fromPartition(partition);
+  const s = session.fromPartition('persist:school');
 
-    s.setUserAgent(CHROME_UA);
+  // Strict download handler within virtual sandbox directory
+  s.on('will-download', (event, item) => {
+    const rawFileName = item.getFilename();
+    const safeName = path.basename(rawFileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+    const savePath = path.join(OS_STORAGE_DIR, safeName);
 
-    // Realistic browser headers to pass Cloudflare, Google & hCaptcha checks
-    s.webRequest.onBeforeSendHeaders((details, callback) => {
-      details.requestHeaders['User-Agent'] = CHROME_UA;
-      details.requestHeaders['sec-ch-ua'] = '"Google Chrome";v="131", "Chromium";v="131", "Not_A Brand";v="24"';
-      details.requestHeaders['sec-ch-ua-mobile'] = '?0';
-      details.requestHeaders['sec-ch-ua-platform'] = '"macOS"';
-      details.requestHeaders['sec-ch-ua-platform-version'] = '"15.0.0"';
-      details.requestHeaders['Accept-Language'] = 'en-US,en;q=0.9';
-      details.requestHeaders['Upgrade-Insecure-Requests'] = '1';
-      delete details.requestHeaders['X-Forwarded-For'];
-      callback({ requestHeaders: details.requestHeaders });
+    item.setSavePath(savePath);
+
+    item.on('updated', (ev, state) => {
+      if (state === 'progressing' && mainWindow) {
+        mainWindow.webContents.send('download-progress', {
+          fileName: safeName,
+          received: item.getReceivedBytes(),
+          total: item.getTotalBytes()
+        });
+      }
     });
 
-    // Intercept downloads: Store strictly in OS Virtual "This PC" Storage, not on host live device
-    s.on('will-download', (event, item, webContents) => {
-      const fileName = item.getFilename();
-      const savePath = path.join(OS_STORAGE_DIR, fileName);
-      
-      // Auto-save silently into OS virtual drive without prompting native macOS dialogs
-      item.setSavePath(savePath);
+    item.once('done', (ev, state) => {
+      if (state === 'completed' && mainWindow) {
+        let sizeFormatted = 'Unknown';
+        try {
+          const stats = fs.statSync(savePath);
+          sizeFormatted = stats.size > 1024 * 1024
+            ? (stats.size / (1024 * 1024)).toFixed(1) + ' MB'
+            : Math.round(stats.size / 1024) + ' KB';
+        } catch (_) {}
 
-      item.on('updated', (ev, state) => {
-        if (state === 'progressing') {
-          mainWindow?.webContents.send('download-progress', {
-            fileName,
-            received: item.getReceivedBytes(),
-            total: item.getTotalBytes()
-          });
-        }
-      });
-
-      item.once('done', (ev, state) => {
-        if (state === 'completed') {
-          let sizeFormatted = 'Unknown';
-          try {
-            const stats = fs.statSync(savePath);
-            sizeFormatted = stats.size > 1024 * 1024
-              ? (stats.size / (1024 * 1024)).toFixed(1) + ' MB'
-              : Math.round(stats.size / 1024) + ' KB';
-          } catch (_) {}
-
-          mainWindow?.webContents.send('download-complete', {
-            name: fileName,
-            path: savePath,
-            size: sizeFormatted,
-            date: 'Just now'
-          });
-        }
-      });
+        mainWindow.webContents.send('download-complete', {
+          name: safeName,
+          path: savePath,
+          size: sizeFormatted,
+          date: 'Just now'
+        });
+      }
     });
   });
 }
@@ -90,10 +57,10 @@ function createWindow() {
   const isKioskMode = process.argv.includes('--kiosk');
 
   mainWindow = new BrowserWindow({
-    width:    1280,
-    height:   800,
-    minWidth: 900,
-    minHeight:600,
+    width:     1280,
+    height:    800,
+    minWidth:  900,
+    minHeight: 600,
     frame: false,
     titleBarStyle: 'hidden',
     kiosk:      isKioskMode,
@@ -104,9 +71,9 @@ function createWindow() {
       preload:         path.join(__dirname, 'preload.js'),
       contextIsolation:true,
       nodeIntegration: false,
-      webSecurity:     false,
+      webSecurity:     true,
       webviewTag:      true,
-      sandbox:         false,
+      sandbox:         true,
       backgroundThrottling: false
     }
   });
@@ -114,7 +81,26 @@ function createWindow() {
   mainWindow.loadFile('index.html');
   Menu.setApplicationMenu(null);
 
-  // Smooth instant display when first paint is ready
+  // Security: Restrict untrusted navigation and window opening
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // If opening an approved internal or local URL, stay controlled
+    if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
+      return { action: 'allow' };
+    }
+    // Deny arbitrary external child window popups
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
+    const parsedUrl = new URL(navigationUrl);
+    const allowedOrigins = ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://127.0.0.1:8000', 'http://localhost:8000'];
+    if (parsedUrl.protocol === 'file:' || allowedOrigins.includes(parsedUrl.origin)) {
+      return; // Allowed
+    }
+    // Block unexpected top-level navigation to protect OS UI
+    event.preventDefault();
+  });
+
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
   });
@@ -135,7 +121,7 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// ── Native IPC Channels (Live Resource Telemetry, Downloads & Power) ───────────
+// ── Strict & Validated Native IPC Channels ─────────────────────────────
 ipcMain.handle('get-system-info', () => {
   const memUsage = process.memoryUsage();
   return {
@@ -149,7 +135,6 @@ ipcMain.handle('get-system-info', () => {
   };
 });
 
-// Retrieve virtual "This PC > Downloads" file list
 ipcMain.handle('get-downloaded-files', () => {
   try {
     if (!fs.existsSync(OS_STORAGE_DIR)) return [];
@@ -181,18 +166,24 @@ ipcMain.handle('get-downloaded-files', () => {
   }
 });
 
-// Save downloaded or exported file to "This PC > Downloads"
-ipcMain.handle('save-download-file', (_, { filename, content = '' }) => {
+// Securely save a file only within OS_STORAGE_DIR with basename path traversal check
+ipcMain.handle('save-download-file', (_, payload) => {
   try {
-    if (!fs.existsSync(OS_STORAGE_DIR)) {
-      fs.mkdirSync(OS_STORAGE_DIR, { recursive: true });
+    if (!payload || typeof payload !== 'object') {
+      return { success: false, error: 'Invalid payload' };
     }
-    const safeName = path.basename(filename || 'Study_Document.docx');
+    const rawName = String(payload.filename || 'Study_Document.docx');
+    const safeName = path.basename(rawName).replace(/[^a-zA-Z0-9._-]/g, '_');
     const targetPath = path.join(OS_STORAGE_DIR, safeName);
-    const textContent = content || `Dawamu OS - 8-4-4 Senior Secondary Study Guide\nTitle: ${safeName}\nSaved on: ${new Date().toLocaleString()}\nOfficial 8-4-4 KCSE Curriculum Material\n`;
+
+    // Verify resolved path is strictly within OS_STORAGE_DIR
+    if (!targetPath.startsWith(OS_STORAGE_DIR)) {
+      return { success: false, error: 'Access denied: Path traversal attempted.' };
+    }
+
+    const textContent = String(payload.content || `Dawamu OS - Student Study Document\nTitle: ${safeName}\nSaved: ${new Date().toISOString()}\n`);
     fs.writeFileSync(targetPath, textContent, 'utf8');
-    
-    // Broadcast download-complete event so Explorer updates automatically
+
     const stats = fs.statSync(targetPath);
     mainWindow?.webContents.send('download-complete', {
       filename: safeName,
@@ -207,8 +198,8 @@ ipcMain.handle('save-download-file', (_, { filename, content = '' }) => {
 });
 
 ipcMain.on('toggle-kiosk', (_, enable) => {
-  mainWindow?.setKiosk(enable);
-  mainWindow?.setFullScreen(enable);
+  mainWindow?.setKiosk(!!enable);
+  mainWindow?.setFullScreen(!!enable);
 });
 
 ipcMain.on('toggle-fullscreen', () => {

@@ -1,3 +1,5 @@
+import { EduGuardClient } from '../services/eduguardClient.js';
+
 /**
  * Dawamu OS - EduGuard AI Learning Intelligence & Exam Proctoring Application
  *
@@ -22,6 +24,11 @@ export function createEduGuardApp(student = null) {
     admNo: '1001',
     grade: 'Form 1'
   };
+
+  const client = new EduGuardClient(currentStudent);
+  let liveDiagnostic = null;
+  let liveWhyStruggling = null;
+  let liveNextAction = null;
 
   // ─── STATE MANAGEMENT ──────────────────────────────────────────────────────────
   let activeTab = 'tutor'; // 'tutor' | 'proctor' | 'diagnostic' | 'knowledgemap' | 'notes' | 'teacher' | 'hybrid'
@@ -688,7 +695,23 @@ export function createEduGuardApp(student = null) {
   }
 
   // ─── TAB 3: DIAGNOSTIC ENGINE & MASTERY ──────────────────────────────────────
-  function renderDiagnosticTab(container) {
+  async function renderDiagnosticTab(container) {
+    if (!liveDiagnostic) {
+      // Fetch initial diagnosis telemetry from backend
+      try {
+        liveWhyStruggling = await client.getWhyStruggling('quadratic_equations');
+        liveNextAction = await client.getNextAction();
+      } catch (_) {}
+    }
+
+    const masteryScore = liveWhyStruggling ? Math.round(liveWhyStruggling.topic_mastery || 42) : 55;
+    const gapList = (liveWhyStruggling && liveWhyStruggling.prerequisite_gaps && liveWhyStruggling.prerequisite_gaps.length > 0)
+      ? liveWhyStruggling.prerequisite_gaps.map(g => g.replace('_', ' ').toUpperCase()).join(' • ')
+      : 'Algebraic Factorisation • Negative Exponents';
+    
+    const recActionText = liveNextAction 
+      ? `${liveNextAction.actionType}: ${liveNextAction.reason}`
+      : 'Complete prerequisite practice on Algebraic Manipulation.';
     container.innerHTML = `
       <div class="h-full overflow-y-auto p-6 bg-[#0b1329] space-y-6">
         <!-- Diagnostic Header -->
@@ -805,8 +828,19 @@ export function createEduGuardApp(student = null) {
       </div>
     `;
 
-    container.querySelector('#run-diagnostic-btn')?.addEventListener('click', () => {
-      alert('Diagnostic scan completed! All learning gap telemetry synced with student record.');
+    container.querySelector('#run-diagnostic-btn')?.addEventListener('click', async () => {
+      const btn = container.querySelector('#run-diagnostic-btn');
+      if (btn) btn.innerHTML = '<i class="fas fa-spinner fa-spin text-xs"></i> Loading Session...';
+      
+      try {
+        liveDiagnostic = await client.startDiagnostic('quadratic_equations', 'mathematics');
+        activeTab = 'proctor'; // Move directly into the diagnostic assessment
+        render();
+      } catch (err) {
+        alert('Diagnostic started in offline fallback mode.');
+        activeTab = 'proctor';
+        render();
+      }
     });
   }
 

@@ -109,10 +109,63 @@ function startDawamuOS() {
   };
 
   /* ─── LOGIN GATE & QUICK LOGIN ─── */
-  function performLogin(adm, pass) {
+  async function performLogin(adm, pass) {
+    let backendUser = null;
+    let authToken = `token_student_${adm}`;
+
+    try {
+      const res = await fetch('http://127.0.0.1:8000/auth/me', {
+        headers: { 'Authorization': `Bearer ${authToken}` },
+        signal: AbortSignal.timeout(1200)
+      });
+      if (res.ok) {
+        backendUser = await res.json();
+      }
+    } catch (_) {}
+
     const student = STUDENT_DB[adm];
+    const isTeacher = adm.toLowerCase() === 'teacher';
+    const isAdmin = adm.toLowerCase() === 'admin';
+
+    let authenticated = false;
+    let userProfile = null;
+
     if (student && student.password === pass) {
-      currentStudent = { admNo: adm, ...student };
+      authenticated = true;
+      userProfile = {
+        admNo: adm,
+        name: student.name,
+        grade: student.grade,
+        role: 'student',
+        token: authToken,
+        backendConnected: !!backendUser
+      };
+    } else if (isTeacher && pass === 'teacher2026') {
+      authenticated = true;
+      userProfile = {
+        admNo: 'T-101',
+        name: 'Teacher / Proctor Monitor',
+        grade: 'Staff',
+        role: 'teacher',
+        token: 'token_teacher_1',
+        backendConnected: !!backendUser
+      };
+    } else if (isAdmin && pass === 'admin2026') {
+      authenticated = true;
+      userProfile = {
+        admNo: 'ADMIN',
+        name: 'School System Administrator',
+        grade: 'Admin',
+        role: 'admin',
+        token: 'token_admin_1',
+        backendConnected: !!backendUser
+      };
+    }
+
+    if (authenticated) {
+      currentStudent = userProfile;
+      sessionStorage.setItem('dawamu_auth_user', JSON.stringify(userProfile));
+
       loginErr?.classList.add('hidden');
       loginScreen.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
       loginScreen.style.opacity = '0';
@@ -126,7 +179,7 @@ function startDawamuOS() {
       loginErr?.classList.remove('hidden');
       if (loginErr?.querySelector('span')) {
         loginErr.querySelector('span').textContent =
-          STUDENT_DB[adm] ? 'Incorrect password' : 'Admission number not found';
+          (student || isTeacher || isAdmin) ? 'Incorrect password' : 'User account not found';
       }
       if (loginPass) loginPass.value = '';
       loginAdm?.focus();
