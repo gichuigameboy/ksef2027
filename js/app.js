@@ -22,6 +22,7 @@ import { createSettingsApp } from './apps/settings.js';
 import { createWordApp } from './apps/word.js';
 import { createSpreadsheetApp } from './apps/spreadsheet.js';
 import { createDatabaseApp } from './apps/database.js';
+import { createEduGuardApp } from './apps/eduguard.js';
 
 /* ═══════════════════════════════════════════════════
    STUDENT ACCOUNTS DATABASE
@@ -225,6 +226,23 @@ function startDawamuOS() {
           icon: '<i class="fas fa-book-reader text-emerald-400"></i>',
           content: () => createOfflineBrowserApp('dawamu://books-844'),
           width: 1080,
+          height: 680
+        });
+      }
+    },
+    {
+      id: 'eduguard',
+      title: 'EduGuard AI',
+      icon: '<i class="fas fa-shield-halved text-emerald-400"></i>',
+      bgColor: 'bg-emerald-700',
+      keywords: ['eduguard', 'ai', 'tutor', 'exam', 'proctor', 'diagnostic', 'curriculum', 'revision', 'kcse', 'learning', 'integrity'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'eduguard',
+          title: 'EduGuard - AI Learning Intelligence & Exam Guard',
+          icon: '<i class="fas fa-shield-halved text-emerald-400"></i>',
+          content: () => createEduGuardApp(currentStudent),
+          width: 1060,
           height: 680
         });
       }
