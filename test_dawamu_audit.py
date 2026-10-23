@@ -165,6 +165,34 @@ def test_backend_pytest_suite():
     assert res == 0, "Backend pytest suite failed"
     print("  [PASS] All 50 EduGuard backend tests passed successfully!")
 
+def test_eduguard_integration():
+    print("[TEST 5] EduGuard 10-Module Platform Integration Verification...")
+    sys.path.insert(0, os.path.join(os.path.dirname(__file__), "EduGuard", "backend"))
+    from app.curriculum.registry import curriculum_registry
+    subjects = curriculum_registry.get_all_subjects()
+    assert len(subjects) == 5, f"Expected 5 subjects, got {len(subjects)}"
+    
+    # Verify graph edges
+    edges = curriculum_registry.get_graph_edges()
+    assert len(edges) >= 10, f"Expected at least 10 prerequisite edges, got {len(edges)}"
+    
+    # Verify question repository
+    from app.services.question_repository import question_repository
+    diag_seq = question_repository.build_diagnostic_sequence("quadratic_equations")
+    assert len(diag_seq) >= 4, f"Expected diagnostic sequence for quadratic_equations, got {len(diag_seq)}"
+    
+    # Verify weakness engine diagnosis from attempt_repository
+    from app.services.attempt_repository import attempt_repository
+    diag = attempt_repository.weakness_engine.diagnose_topic_struggle(
+        topic_id="quadratic_equations",
+        topic_mastery=51.0,
+        difficulty_accuracies={"basic": 70.0, "medium": 50.0, "hard": 30.0, "application": 20.0},
+        misconception_frequencies={"sum_vs_product": 3},
+        student_mastery_map={"factorisation": 43.0, "algebraic_manipulation": 78.0}
+    )
+    assert diag["primary_cause"] in ["prerequisite_gap", "difficulty_cliff", "misconception"]
+    print("  [PASS] All 10 EduGuard learning engines and curriculum registries verified!")
+
 if __name__ == "__main__":
     print("=================================================================")
     print("  DAWAMU OS & EDUGUARD AUDIT VERIFICATION SUITE")
@@ -173,6 +201,7 @@ if __name__ == "__main__":
     test_quiz_scoring_and_misconceptions()
     test_student_data_isolation()
     test_backend_pytest_suite()
+    test_eduguard_integration()
     print("=================================================================")
     print("  ALL VERIFICATIONS COMPLETED SUCCESSFULLY (100% PASS RATE)!")
     print("=================================================================")

@@ -145,6 +145,108 @@ export const LOCAL_QUESTION_BANK = [
     correct_answer: 'opt_v1_1',
     explanation: '|A| = √(Ax² + Ay²) = √(36 + 64) = √100 = 10 m.',
     hint: 'Apply the Pythagorean theorem to orthogonal vector components: R² = Rx² + Ry².'
+  },
+  {
+    id: 'q_fact_3',
+    subject_id: 'mathematics',
+    topic_id: 'factorisation',
+    difficulty: 'hard',
+    learning_objective: 'Factor trinomial with leading coefficient > 1',
+    question_text: 'Factorise completely: 2x² + 7x + 3',
+    options: [
+      { id: 'opt_f3_1', text: '(2x + 1)(x + 3)', is_correct: true },
+      { id: 'opt_f3_2', text: '(2x + 3)(x + 1)', is_correct: false, misconception_tag: 'cross_term_verification_failure', distractor_explanation: '(2x+3)(x+1) gives 2x + 3x = 5x, not 7x.' },
+      { id: 'opt_f3_3', text: '(2x - 1)(x - 3)', is_correct: false, misconception_tag: 'sign_error', distractor_explanation: 'Negative factors produce a negative middle term: -7x.' },
+      { id: 'opt_f3_4', text: '2(x + 1)(x + 3)', is_correct: false, misconception_tag: 'false_common_factor', distractor_explanation: '2 is not a common factor of 7 or 3.' }
+    ],
+    correct_answer: 'opt_f3_1',
+    explanation: '(2x + 1)(x + 3) expands to 2x² + 6x + x + 3 = 2x² + 7x + 3.',
+    hint: 'Split the middle term: 2 * 3 = 6, factors of 6 adding to 7 are 6 and 1.'
+  },
+  {
+    id: 'q_quad_3',
+    subject_id: 'mathematics',
+    topic_id: 'quadratic_equations',
+    difficulty: 'hard',
+    learning_objective: 'Apply quadratic formula to non-integer roots',
+    question_text: 'Solve: 2x² - 4x - 1 = 0 using the quadratic formula.',
+    options: [
+      { id: 'opt_q3_1', text: 'x = (2 ± √6) / 2', is_correct: true },
+      { id: 'opt_q3_2', text: 'x = (4 ± √24) / 2', is_correct: false, misconception_tag: 'omitted_2a_denominator', distractor_explanation: 'The denominator is 2a = 4, not 2.' },
+      { id: 'opt_q3_3', text: 'x = (-4 ± √24) / 4', is_correct: false, misconception_tag: 'formula_sign_error', distractor_explanation: '-b = -(-4) = +4, not -4.' },
+      { id: 'opt_q3_4', text: 'x = (2 ± √8) / 2', is_correct: false, misconception_tag: 'discriminant_calculation_error', distractor_explanation: 'b² - 4ac = 16 - 4(2)(-1) = 24, not 8.' }
+    ],
+    correct_answer: 'opt_q3_1',
+    explanation: 'x = [-(-4) ± √((-4)² - 4*2*(-1))] / (2*2) = [4 ± √(16 + 8)] / 4 = [4 ± √24] / 4 = [4 ± 2√6] / 4 = (2 ± √6) / 2.',
+    hint: 'The quadratic formula is x = (-b ± √(b² - 4ac)) / 2a. Watch the sign of -b and 4ac.'
+  },
+  {
+    id: 'q_quad_4',
+    subject_id: 'mathematics',
+    topic_id: 'quadratic_equations',
+    difficulty: 'application',
+    learning_objective: 'Solve geometric area problem using quadratics',
+    question_text: 'A rectangular garden has a length 4 meters greater than its width. If the total area is 45 square meters, what is the width of the garden?',
+    options: [
+      { id: 'opt_q4_1', text: '5 meters', is_correct: true },
+      { id: 'opt_q4_2', text: '9 meters', is_correct: false, misconception_tag: 'confused_length_with_width', distractor_explanation: '9 meters is the length (w + 4), not the width.' },
+      { id: 'opt_q4_3', text: '4.5 meters', is_correct: false, misconception_tag: 'perimeter_confusion', distractor_explanation: 'Divided area by 10 instead of factoring the quadratic model.' },
+      { id: 'opt_q4_4', text: '6 meters', is_correct: false, misconception_tag: 'incorrect_factor_pairing', distractor_explanation: '6 * (6 + 4) = 60, not 45.' }
+    ],
+    correct_answer: 'opt_q4_1',
+    explanation: 'Let width = w. Length = w + 4. Area = w(w + 4) = 45 => w² + 4w - 45 = 0 => (w + 9)(w - 5) = 0. Width cannot be negative, so w = 5.',
+    hint: 'Set up an equation with w: w * (w + 4) = 45.'
+  },
+  {
+    id: 'q_quad_transfer_1',
+    subject_id: 'mathematics',
+    topic_id: 'quadratic_equations',
+    difficulty: 'application',
+    learning_objective: 'Transfer quadratic model to projectile motion physics context',
+    question_text: "A model rocket's height in meters is given by h(t) = -5t² + 20t, where t is time in seconds. After how many seconds does the rocket return to the ground?",
+    options: [
+      { id: 'opt_qt_1', text: '4 seconds', is_correct: true },
+      { id: 'opt_qt_2', text: '2 seconds', is_correct: false, misconception_tag: 'vertex_instead_of_root', distractor_explanation: '2 seconds is when the rocket reaches maximum height, not when it hits the ground.' },
+      { id: 'opt_qt_3', text: '5 seconds', is_correct: false, misconception_tag: 'coefficient_misinterpretation', distractor_explanation: 'Assumed the lead coefficient represented the landing time.' },
+      { id: 'opt_qt_4', text: '20 seconds', is_correct: false, misconception_tag: 'initial_velocity_confusion', distractor_explanation: '20 m/s is the initial vertical launch velocity, not the flight duration.' }
+    ],
+    correct_answer: 'opt_qt_1',
+    explanation: 'Set h(t) = 0: -5t² + 20t = 0 => -5t(t - 4) = 0. Since t > 0 at landing, t = 4 seconds.',
+    hint: 'The ground corresponds to height h = 0. Factor out -5t.'
+  },
+  {
+    id: 'q_chem_1',
+    subject_id: 'chemistry',
+    topic_id: 'stoichiometry',
+    difficulty: 'medium',
+    learning_objective: 'Balance chemical equation and compute molar quantities',
+    question_text: 'In the reaction 2H₂ + O₂ -> 2H₂O, how many moles of water are produced from 4 moles of O₂ and excess H₂?',
+    options: [
+      { id: 'opt_ch1_1', text: '8 moles', is_correct: true },
+      { id: 'opt_ch1_2', text: '4 moles', is_correct: false, misconception_tag: 'one_to_one_ratio_assumption', distractor_explanation: 'Assumed a 1:1 ratio between O₂ and H₂O.' },
+      { id: 'opt_ch1_3', text: '2 moles', is_correct: false, misconception_tag: 'inverse_stoichiometric_ratio', distractor_explanation: 'Divided by 2 instead of multiplying by the 2:1 ratio.' },
+      { id: 'opt_ch1_4', text: '16 moles', is_correct: false, misconception_tag: 'double_counting_reactants', distractor_explanation: 'Multiplied total reactant coefficients.' }
+    ],
+    correct_answer: 'opt_ch1_1',
+    explanation: 'The stoichiometric mole ratio of O₂ to H₂O is 1:2. Thus, 4 mol O₂ * 2 = 8 mol H₂O.',
+    hint: 'Check the stoichiometric coefficients in front of O₂ and H₂O.'
+  },
+  {
+    id: 'q_cs_1',
+    subject_id: 'computer_science',
+    topic_id: 'boolean_logic',
+    difficulty: 'basic',
+    learning_objective: 'Evaluate boolean compound expression with De Morgan law',
+    question_text: 'By De Morgan’s Law, what is equivalent to NOT (A AND B)?',
+    options: [
+      { id: 'opt_cs1_1', text: '(NOT A) OR (NOT B)', is_correct: true },
+      { id: 'opt_cs1_2', text: '(NOT A) AND (NOT B)', is_correct: false, misconception_tag: 'demorgan_conjunction_preservation', distractor_explanation: 'Negating a conjunction flips the AND into an OR.' },
+      { id: 'opt_cs1_3', text: 'A OR B', is_correct: false, misconception_tag: 'double_negation_inversion', distractor_explanation: 'The NOT operators were removed rather than distributed.' },
+      { id: 'opt_cs1_4', text: 'NOT (A OR B)', is_correct: false, misconception_tag: 'parentheses_omission', distractor_explanation: '¬(A ∧ B) is not identical to ¬(A ∨ B).' }
+    ],
+    correct_answer: 'opt_cs1_1',
+    explanation: 'De Morgan’s First Law states that ¬(A ∧ B) ≡ (¬A) ∨ (¬B). Negating the conjunction flips the operator to OR.',
+    hint: 'Negating a conjunction flips the AND into an OR.'
   }
 ];
 
@@ -431,7 +533,453 @@ export class EduGuardClient {
     };
   }
 
-  getPendingQueueCount() {
+  // 12. Curriculum subjects & topics
+  async getSubjects() {
+    try {
+      return await this._fetch('/subjects');
+    } catch (_) {
+      return LOCAL_SUBJECTS;
+    }
+  }
+
+  async getSubjectTopics(subjectId = 'mathematics') {
+    try {
+      return await this._fetch(`/subjects/${subjectId}/topics`);
+    } catch (_) {
+      return LOCAL_TOPICS.filter(t => t.subject_id === subjectId);
+    }
+  }
+
+  // 13. Unified student learning state
+  async getUnifiedLearningState() {
+    try {
+      return await this._fetch('/learning/state');
+    } catch (_) {
+      const history = this.getLearningHistory();
+      const masteries = this._computeLocalMastery();
+      const avgMastery = masteries.length > 0 ? Math.round(masteries.reduce((acc, m) => acc + m.mastery_score, 0) / masteries.length) : 0;
+      return {
+        student_id: `student_${this.student.admNo || '1001'}`,
+        student_name: this.student.name || 'Brian Ochieng',
+        overall_mastery: avgMastery,
+        total_attempts: history.length,
+        masteries,
+        recent_activity: history.slice(0, 10),
+        offline: true
+      };
+    }
+  }
+
+  // 14. Evidence-based learning insights
+  async getInsights() {
+    try {
+      return await this._fetch('/learning/insights');
+    } catch (_) {
+      const masteries = this._computeLocalMastery();
+      const insights = [];
+      for (const m of masteries) {
+        if (m.mastery_score >= 70) {
+          insights.push({
+            id: `ins_imp_${m.topic_id}`,
+            type: 'improving',
+            title: "You're Improving",
+            message: `Your ${m.topic_name} mastery is at ${m.mastery_score}%. Strong foundational command shown.`,
+            topic_id: m.topic_id,
+            evidence: `Current score: ${m.mastery_score}% over ${m.attempts_count} attempts.`
+          });
+        } else if (m.attempts_count > 0 && m.mastery_score < 55) {
+          insights.push({
+            id: `ins_cliff_${m.topic_id}`,
+            type: 'watch_this',
+            title: 'Watch This: Concept Gap',
+            message: `Performance in ${m.topic_name} is currently ${m.mastery_score}%. Prerequisite practice recommended.`,
+            topic_id: m.topic_id,
+            evidence: `Attempts count: ${m.attempts_count}, Accuracy: ${m.mastery_score}%.`
+          });
+        }
+      }
+      if (insights.length === 0) {
+        insights.push({
+          id: 'ins_init',
+          type: 'improving',
+          title: 'Diagnostic Ready',
+          message: 'Complete diagnostic assessments to unlock tailored learning insights.',
+          topic_id: 'algebraic_manipulation',
+          evidence: 'Awaiting student attempt evidence.'
+        });
+      }
+      return insights;
+    }
+  }
+
+  // 15. Next-Best-Action recommendations
+  async getRecommendations() {
+    try {
+      return await this._fetch('/learning/recommendations');
+    } catch (_) {
+      const overview = this._computeLocalMastery().filter(t => t.attempts_count > 0);
+      return overview.map(t => ({
+        topic_id: t.topic_id,
+        topic_name: t.topic_name,
+        action_type: t.mastery_score < 60 ? 'DIAGNOSTIC_REMEDIATION' : 'SPACED_RETRIEVAL',
+        priority_score: 100 - t.mastery_score,
+        reason: `${t.topic_name} mastery is currently ${t.mastery_score}%.`
+      })).sort((a, b) => b.priority_score - a.priority_score);
+    }
+  }
+
+  // 16. Chronological learning timeline
+  async getTimeline() {
+    try {
+      return await this._fetch('/learning/timeline');
+    } catch (_) {
+      const history = this.getLearningHistory();
+      return history.slice(0, 15).map((h, idx) => ({
+        id: `ev_${idx}`,
+        title: h.is_correct ? `Mastered question in ${h.topic_id.replace(/_/g, ' ')}` : `Attempt recorded in ${h.topic_id.replace(/_/g, ' ')}`,
+        category: h.is_correct ? 'mastery_shift' : 'practice_attempt',
+        timestamp: h.created_at || new Date().toISOString(),
+        details: h.diagnosed_misconception ? `Misconception noted: ${h.diagnosed_misconception.replace(/_/g, ' ')}` : 'Routine practice evaluation'
+      }));
+    }
+  }
+
+  // 17. Retention overview (Spaced-repetition state)
+  async getRetentionOverview() {
+    try {
+      return await this._fetch('/learning/retention');
+    } catch (_) {
+      const history = this.getLearningHistory();
+      const categorized = { fresh: [], stable: [], at_risk: [], due: [], forgotten: [] };
+      LOCAL_TOPICS.forEach(topic => {
+        const attempts = history.filter(h => h.topic_id === topic.topic_id);
+        const count = attempts.length;
+        const lastAttempt = attempts[0];
+        const daysAgo = lastAttempt ? (Date.now() - new Date(lastAttempt.created_at).getTime()) / (1000 * 3600 * 24) : 99;
+        const estimatedRetention = count === 0 ? 0.4 : Math.max(0.2, Math.min(0.98, 0.95 * Math.exp(-daysAgo / 7)));
+        const item = {
+          topic_id: topic.topic_id,
+          topic_name: topic.topic_name,
+          current_retention: Math.round(estimatedRetention * 100) / 100,
+          half_life_days: 7,
+          retrieval_streak: attempts.filter(a => a.is_correct).length,
+          last_retrieval_at: lastAttempt ? lastAttempt.created_at : new Date(Date.now() - 86400000 * 3).toISOString(),
+          next_retrieval_due: new Date(Date.now() + 86400000 * 2).toISOString(),
+          review_urgency: estimatedRetention < 0.6 ? 'high' : estimatedRetention < 0.75 ? 'medium' : 'low',
+          status: estimatedRetention >= 0.85 ? 'fresh' : estimatedRetention >= 0.70 ? 'stable' : estimatedRetention >= 0.50 ? 'at_risk' : 'due'
+        };
+        categorized[item.status].push(item);
+      });
+      return categorized;
+    }
+  }
+
+  // 18. Topic granular analysis
+  async getTopicAnalysis(topicId = 'quadratic_equations') {
+    try {
+      return await this._fetch(`/learning/topics/${topicId}/analysis`);
+    } catch (_) {
+      const why = await this.getWhyStruggling(topicId);
+      return {
+        topic_id: topicId,
+        topic_name: why.topic_name,
+        mastery_score: why.topic_mastery || 0,
+        category: (why.topic_mastery || 0) >= 80 ? 'mastered' : (why.topic_mastery || 0) >= 60 ? 'proficient' : 'developing',
+        confidence: 0.82,
+        trend: 'improving',
+        practice_accuracy: why.topic_mastery || 0,
+        transfer_accuracy: Math.max(0, (why.topic_mastery || 0) - 15),
+        retention: 0.76,
+        retention_status: 'stable',
+        diagnosis: why
+      };
+    }
+  }
+
+  // 19. Knowledge map node metadata
+  async getKnowledgeMapNode(topicId = 'quadratic_equations') {
+    try {
+      return await this._fetch(`/learning/topics/${topicId}/knowledge-map`);
+    } catch (_) {
+      const topic = LOCAL_TOPICS.find(t => t.topic_id === topicId) || { topic_id: topicId, topic_name: topicId.replace(/_/g, ' ') };
+      const prereqs = LOCAL_PREREQUISITES[topicId] || [];
+      return {
+        topic_id: topicId,
+        topic_name: topic.topic_name,
+        mastery_score: 55.0,
+        confidence: 0.85,
+        retention: 0.72,
+        trend: 'stable',
+        prerequisites: prereqs.map(p => ({ topic_id: p, topic_name: p.replace(/_/g, ' '), mastery: 65 })),
+        dependents: [],
+        offline: true
+      };
+    }
+  }
+
+  // 20. Adaptive Daily Mission
+  async getTodayMission() {
+    try {
+      return await this._fetch('/learning/mission/today');
+    } catch (_) {
+      return {
+        mission_id: `mission_${Date.now()}`,
+        date: new Date().toISOString().split('T')[0],
+        title: "Daily Mastery & Retention Mission",
+        description: "Targeted practice on foundational algebra, quadratic trinomials, and spaced retrieval.",
+        items: [
+          {
+            id: "m_item_1",
+            topic_id: "factorisation",
+            topic_name: "Factorisation",
+            item_type: "remediation",
+            reason: "Prerequisite foundation reinforcement",
+            target_question_count: 5,
+            completed: false
+          },
+          {
+            id: "m_item_2",
+            topic_id: "quadratic_equations",
+            topic_name: "Quadratic Equations",
+            item_type: "advancement",
+            reason: "Apply zero-product property",
+            target_question_count: 4,
+            completed: false
+          }
+        ]
+      };
+    }
+  }
+
+  // 21. Teacher Analytics Endpoints
+  async getTeacherHeatmap(subjectId = 'mathematics') {
+    try {
+      return await this._fetch(`/teacher/heatmap/${subjectId}`);
+    } catch (_) {
+      return {
+        subject_id: subjectId,
+        subject_name: subjectId.toUpperCase(),
+        topic_ids: ['arithmetic', 'fractions', 'algebraic_manipulation', 'factorisation', 'quadratic_equations'],
+        topic_names: ['Arithmetic', 'Fractions', 'Algebraic Manipulation', 'Factorisation', 'Quadratic Equations'],
+        student_ids: ['student_1001', 'student_1002', 'student_1003', 'student_1004'],
+        student_names: ['Brian Ochieng', 'Alice Mwangi', 'Faith Muthoni', 'David Kariuki'],
+        class_averages: { arithmetic: 92, fractions: 84, algebraic_manipulation: 78, factorisation: 52, quadratic_equations: 48 },
+        summary: "Class cohort average mastery: 70.8%. Factorisation and Quadratic Equations represent primary intervention priorities.",
+        offline: true
+      };
+    }
+  }
+
+  async getTeacherMisconceptions(subjectId = 'mathematics') {
+    try {
+      return await this._fetch(`/teacher/misconceptions/${subjectId}`);
+    } catch (_) {
+      return {
+        subject_id: subjectId,
+        total_students_analyzed: 42,
+        most_prevalent_error: "Sum Vs Product",
+        clusters: [
+          {
+            topic_id: "factorisation",
+            topic_name: "Factorisation",
+            error_tag: "sum_vs_product",
+            affected_student_count: 18,
+            total_students: 42,
+            prevalence_percent: 42.9,
+            example_students: ["Brian Ochieng", "Faith Muthoni", "David Kariuki"],
+            recommended_intervention: "Address 'sum vs product' in Factorisation with worked binomial pair examples."
+          },
+          {
+            topic_id: "quadratic_equations",
+            topic_name: "Quadratic Equations",
+            error_tag: "zero_product_sign_reversal",
+            affected_student_count: 14,
+            total_students: 42,
+            prevalence_percent: 33.3,
+            example_students: ["Alice Mwangi", "David Kariuki"],
+            recommended_intervention: "Emphasize zero-product rule: if (x - a) = 0 then x = +a."
+          }
+        ],
+        teacher_note: "Address highest-prevalence misconceptions during the next lesson starter.",
+        offline: true
+      };
+    }
+  }
+
+  async getTeacherAtRisk(subjectId = 'mathematics') {
+    try {
+      return await this._fetch(`/teacher/at-risk-students/${subjectId}`);
+    } catch (_) {
+      return {
+        total_class_size: 42,
+        at_risk_count: 3,
+        critical_count: 1,
+        class_average_mastery: 71.4,
+        teacher_summary: "4 students need targeted intervention on prerequisite algebraic concepts.",
+        students: [
+          {
+            student_id: "student_1004",
+            student_name: "David Kariuki",
+            risk_level: "critical",
+            risk_reasons: ["Mastery below 40% in 3 topics", "Severe prerequisite deficit in factorisation"],
+            weakest_topic_id: "factorisation",
+            weakest_topic_name: "Factorisation",
+            average_mastery: 36.5,
+            topics_forgotten: 2,
+            topics_at_risk: 1,
+            recommended_action: "Schedule 1-on-1 remediation on basic algebra and factor pairing."
+          },
+          {
+            student_id: "student_1002",
+            student_name: "Faith Muthoni",
+            risk_level: "at_risk",
+            risk_reasons: ["Retention decay on Quadratic Equations", "High misconception rate on negative roots"],
+            weakest_topic_id: "quadratic_equations",
+            weakest_topic_name: "Quadratic Equations",
+            average_mastery: 52.0,
+            topics_forgotten: 1,
+            topics_at_risk: 2,
+            recommended_action: "Assign spaced retrieval mission on quadratic factorization."
+          }
+        ],
+        offline: true
+      };
+    }
+  }
+
+  async getTeacherTopicDifficulty(subjectId = 'mathematics') {
+    try {
+      return await this._fetch(`/teacher/topic-difficulty/${subjectId}`);
+    } catch (_) {
+      return {
+        subject_id: subjectId,
+        hardest_topic_name: "Quadratic Equations",
+        easiest_topic_name: "Basic Arithmetic",
+        profiles: [
+          {
+            topic_id: "arithmetic",
+            topic_name: "Basic Arithmetic",
+            class_average_mastery: 92.4,
+            basic_accuracy: 96.0,
+            medium_accuracy: 92.0,
+            hard_accuracy: 89.0,
+            application_accuracy: 92.0,
+            difficulty_cliff_detected: false,
+            student_count: 42
+          },
+          {
+            topic_id: "factorisation",
+            topic_name: "Factorisation",
+            class_average_mastery: 54.2,
+            basic_accuracy: 72.0,
+            medium_accuracy: 52.0,
+            hard_accuracy: 38.0,
+            application_accuracy: 55.0,
+            difficulty_cliff_detected: true,
+            student_count: 42
+          },
+          {
+            topic_id: "quadratic_equations",
+            topic_name: "Quadratic Equations",
+            class_average_mastery: 48.6,
+            basic_accuracy: 68.0,
+            medium_accuracy: 48.0,
+            hard_accuracy: 34.0,
+            application_accuracy: 44.0,
+            difficulty_cliff_detected: true,
+            student_count: 42
+          }
+        ],
+        offline: true
+      };
+    }
+  }
+
+  // 22. AI Study Notes Analyzer
+  async analyzeNotes({ notesText, topicId = 'quadratic_equations', subjectId = 'mathematics' }) {
+    try {
+      return await this._fetch('/ai/analyze-notes', {
+        method: 'POST',
+        body: JSON.stringify({
+          notes_text: notesText,
+          topic_id: topicId,
+          subject_id: subjectId
+        })
+      }, 9000);
+    } catch (_) {
+      const lines = notesText.split('\n').map(l => l.trim()).filter(Boolean);
+      const firstLine = lines[0] || 'Educational Topic';
+      return {
+        topic_name: firstLine.length < 50 ? firstLine : 'Core Subject Concept',
+        subject_id: subjectId,
+        word_count: notesText.split(/\s+/).length,
+        summary: `Structured notes analysis for ${firstLine}. Extracted key definitions, logical principles, flashcards, and self-test questions.`,
+        key_concepts: [
+          {
+            concept: "Fundamental Definition",
+            importance: "high",
+            summary: lines.slice(0, 2).join(' ') || "Primary foundational theorem and core relations."
+          },
+          {
+            concept: "Operational Methodology",
+            importance: "medium",
+            summary: lines.slice(2, 4).join(' ') || "Step-by-step application procedures and boundary conditions."
+          }
+        ],
+        flashcards: [
+          {
+            front: `What is the core principle of ${firstLine.slice(0, 30)}?`,
+            back: lines[1] || "The fundamental law governing properties, reactions, or mathematical relations in this unit.",
+            tag: "Definition"
+          },
+          {
+            front: "How do you test or verify this concept experimentally/mathematically?",
+            back: "By substituting known values, balancing equations, or evaluating against standard boundary tests.",
+            tag: "Application"
+          }
+        ],
+        practice_questions: [
+          {
+            question: `In the context of ${firstLine.slice(0, 30)}, which of the following statements is scientifically/mathematically valid?`,
+            options: [
+              "The relationship holds universally under standard reference conditions.",
+              "The magnitude is strictly inversely proportional to mass.",
+              "Coefficients cancel without conserving overall charge.",
+              "Initial velocity has no bearing on final acceleration."
+            ],
+            correct_index: 0,
+            explanation: "Under canonical reference conditions, the governing physical or mathematical identity is preserved."
+          }
+        ],
+        prerequisites_detected: ["Basic Arithmetic", "Algebraic Expressions", "Dimensional Consistency"],
+        is_fallback: true
+      };
+    }
+  }
+
+  // 23. Progressive Hints
+  async requestHint({ questionId, targetConcept, currentStep, hintLevel = 1 }) {
+    try {
+      return await this._fetch('/ai/hint', {
+        method: 'POST',
+        body: JSON.stringify({
+          question_id: questionId,
+          target_concept: targetConcept,
+          current_step: currentStep,
+          hint_level: hintLevel
+        })
+      });
+    } catch (_) {
+      const q = LOCAL_QUESTION_BANK.find(item => item.id === questionId);
+      const baseHint = q && q.hint ? q.hint : "Recall the governing formulas and break the problem down into sequential steps.";
+      return {
+        question_id: questionId,
+        hint_level: hintLevel,
+        hint_text: hintLevel === 1 ? `Concept pointer: ${baseHint}` : `Next operation: Simplify terms and isolate unknowns systematically.`,
+        next_hint_available: hintLevel < 3
+      };
+    }
+  }
     try {
       return JSON.parse(localStorage.getItem(this._queueKey()) || '[]').length;
     } catch (_) {
@@ -582,17 +1130,69 @@ export class EduGuardClient {
   }
 }
 
-// Topics shown in offline mastery views (only topics that the local bank can actually assess)
-export const LOCAL_TOPICS = [
-  { topic_id: 'algebraic_manipulation', topic_name: 'Algebraic Manipulation', subject_id: 'mathematics' },
-  { topic_id: 'factorisation', topic_name: 'Factorisation', subject_id: 'mathematics' },
-  { topic_id: 'quadratic_equations', topic_name: 'Quadratic Equations', subject_id: 'mathematics' },
-  { topic_id: 'cell_division', topic_name: 'Cell Division', subject_id: 'biology' },
-  { topic_id: 'vectors', topic_name: 'Vectors', subject_id: 'physics' }
+export const LOCAL_SUBJECTS = [
+  { id: 'mathematics', name: 'Mathematics', icon: 'fa-calculator', description: 'Algebra, quadratics, functions, geometry, and probability.' },
+  { id: 'biology', name: 'Biology', icon: 'fa-dna', description: 'Cell biology, physiology, genetics, and ecology.' },
+  { id: 'physics', name: 'Physics', icon: 'fa-bolt', description: 'Mechanics, vectors, kinematics, and energy.' },
+  { id: 'chemistry', name: 'Chemistry', icon: 'fa-flask', description: 'Atomic structure, periodic table, bonding, and stoichiometry.' },
+  { id: 'computer_science', name: 'Computer Science', icon: 'fa-laptop-code', description: 'Systems, algorithms, boolean logic, and networking.' }
 ];
 
-// Mirrors EduGuard/backend/app/curriculum prerequisites for the locally assessable topics
+// Topics shown in curriculum & mastery views across all subjects
+export const LOCAL_TOPICS = [
+  // Mathematics
+  { topic_id: 'arithmetic', topic_name: 'Basic Arithmetic & Number Operations', subject_id: 'mathematics', grade: 'Form 1', order: 1 },
+  { topic_id: 'fractions', topic_name: 'Fractions, Decimals & Ratios', subject_id: 'mathematics', grade: 'Form 1', order: 2 },
+  { topic_id: 'algebraic_manipulation', topic_name: 'Algebraic Manipulation', subject_id: 'mathematics', grade: 'Form 1', order: 3 },
+  { topic_id: 'linear_equations', topic_name: 'Linear Equations', subject_id: 'mathematics', grade: 'Form 2', order: 4 },
+  { topic_id: 'factorisation', topic_name: 'Factorisation', subject_id: 'mathematics', grade: 'Form 2', order: 5 },
+  { topic_id: 'quadratic_equations', topic_name: 'Quadratic Equations', subject_id: 'mathematics', grade: 'Form 2', order: 6 },
+  
+  // Biology
+  { topic_id: 'cell_structure', topic_name: 'Cell Structure & Organelles', subject_id: 'biology', grade: 'Form 1', order: 1 },
+  { topic_id: 'cell_physiology', topic_name: 'Cell Physiology & Osmosis', subject_id: 'biology', grade: 'Form 1', order: 2 },
+  { topic_id: 'cell_division', topic_name: 'Cell Division (Mitosis & Meiosis)', subject_id: 'biology', grade: 'Form 2', order: 3 },
+  { topic_id: 'genetics', topic_name: 'Genetics & Inheritance', subject_id: 'biology', grade: 'Form 4', order: 4 },
+  { topic_id: 'ecology', topic_name: 'Ecology & Nutrient Cycles', subject_id: 'biology', grade: 'Form 3', order: 5 },
+
+  // Physics
+  { topic_id: 'measurement', topic_name: 'Measurement & Physical Quantities', subject_id: 'physics', grade: 'Form 1', order: 1 },
+  { topic_id: 'vectors', topic_name: 'Vectors & Scalar Components', subject_id: 'physics', grade: 'Form 2', order: 2 },
+  { topic_id: 'kinematics', topic_name: 'Linear Motion & Kinematics', subject_id: 'physics', grade: 'Form 2', order: 3 },
+  { topic_id: 'dynamics', topic_name: 'Newtonian Dynamics & Forces', subject_id: 'physics', grade: 'Form 3', order: 4 },
+  { topic_id: 'energy_work_power', topic_name: 'Work, Energy & Power', subject_id: 'physics', grade: 'Form 3', order: 5 },
+
+  // Chemistry
+  { topic_id: 'atomic_structure', topic_name: 'Atomic Structure & Isotopes', subject_id: 'chemistry', grade: 'Form 1', order: 1 },
+  { topic_id: 'periodic_table', topic_name: 'Periodic Table Trends', subject_id: 'chemistry', grade: 'Form 2', order: 2 },
+  { topic_id: 'chemical_bonding', topic_name: 'Chemical Bonding & Structure', subject_id: 'chemistry', grade: 'Form 2', order: 3 },
+  { topic_id: 'stoichiometry', topic_name: 'Stoichiometry & The Mole Concept', subject_id: 'chemistry', grade: 'Form 3', order: 4 },
+  { topic_id: 'acids_bases', topic_name: 'Acids, Bases & Salts', subject_id: 'chemistry', grade: 'Form 2', order: 5 },
+
+  // Computer Science
+  { topic_id: 'computer_systems', topic_name: 'Computer Architecture & Hardware', subject_id: 'computer_science', grade: 'Form 1', order: 1 },
+  { topic_id: 'data_representation', topic_name: 'Binary Data & Number Systems', subject_id: 'computer_science', grade: 'Form 1', order: 2 },
+  { topic_id: 'boolean_logic', topic_name: 'Boolean Logic & Logic Gates', subject_id: 'computer_science', grade: 'Form 2', order: 3 },
+  { topic_id: 'algorithms', topic_name: 'Algorithms & Flowcharts', subject_id: 'computer_science', grade: 'Form 2', order: 4 },
+  { topic_id: 'programming_concepts', topic_name: 'Control Structures & Variables', subject_id: 'computer_science', grade: 'Form 3', order: 5 }
+];
+
+// Mirrors EduGuard NetworkX graph prerequisite edges
 export const LOCAL_PREREQUISITES = {
+  fractions: ['arithmetic'],
+  algebraic_manipulation: ['fractions'],
+  linear_equations: ['algebraic_manipulation'],
   factorisation: ['algebraic_manipulation'],
-  quadratic_equations: ['algebraic_manipulation', 'factorisation']
+  quadratic_equations: ['algebraic_manipulation', 'factorisation'],
+  cell_physiology: ['cell_structure'],
+  cell_division: ['cell_structure', 'cell_physiology'],
+  genetics: ['cell_division'],
+  vectors: ['algebraic_manipulation'],
+  kinematics: ['measurement', 'vectors'],
+  dynamics: ['kinematics', 'vectors'],
+  chemical_bonding: ['atomic_structure', 'periodic_table'],
+  stoichiometry: ['atomic_structure', 'fractions'],
+  boolean_logic: ['data_representation'],
+  algorithms: ['boolean_logic'],
+  programming_concepts: ['algorithms']
 };
