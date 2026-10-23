@@ -256,6 +256,17 @@ class WindowManager {
     this.notify();
   }
 
+  closeAllWindows() {
+    this.windows.forEach((win) => {
+      try {
+        win.element.remove();
+      } catch (_) {}
+    });
+    this.windows.clear();
+    this.activeWindowId = null;
+    this.notify();
+  }
+
   showFocusRestrictionAlert(appTitle) {
     const toast = document.createElement('div');
     toast.className = 'fixed top-6 left-1/2 -translate-x-1/2 bg-amber-600 text-white px-6 py-3 rounded-2xl shadow-2xl z-[99999] flex items-center gap-3 animate-bounce';

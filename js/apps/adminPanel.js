@@ -31,8 +31,8 @@ export function createAdminPanelApp() {
           </button>
         </div>
 
-        <p class="mt-6 text-[11px] text-slate-600">
-          Demo PIN: <code class="text-slate-400 font-mono">1234</code>
+        <p class="mt-6 text-[11px] text-slate-500">
+          Local Offline Demo PIN: <code class="text-slate-400 font-mono">1234</code>
         </p>
       </div>
     `;

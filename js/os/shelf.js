@@ -191,7 +191,7 @@ class Shelf {
 
   setupBattery() {
     const batteryEl = this.shelfEl.querySelector('#tray-battery');
-    if ('getBattery' in navigator) {
+    if ('getBattery' in navigator && typeof navigator.getBattery === 'function') {
       navigator.getBattery().then((battery) => {
         const updateBatt = () => {
           const pct = Math.round(battery.level * 100);
@@ -203,7 +203,11 @@ class Shelf {
         updateBatt();
         battery.addEventListener('levelchange', updateBatt);
         battery.addEventListener('chargingchange', updateBatt);
+      }).catch(() => {
+        if (batteryEl) batteryEl.innerHTML = `<i class="fas fa-plug text-xs text-emerald-400"></i> AC`;
       });
+    } else {
+      if (batteryEl) batteryEl.innerHTML = `<i class="fas fa-plug text-xs text-emerald-400"></i> AC`;
     }
   }
 }

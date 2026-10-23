@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base href="$FLUTTER_BASE_HREF">
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="description" content="EduGuard — Educational Intelligence & Mastery Platform">
+
+  <!-- iOS meta tags & icons -->
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="EduGuard">
+  <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="favicon.png"/>
+
+  <title>EduGuard — Learning Intelligence</title>
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Firebase SDK — Auth + Google provider exposed for Flutter web interop -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-analytics.js";
+    import { getAuth, GoogleAuthProvider } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+    import { getFirestore } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyABnASkg15jc5wxF5PRDwLhVrEeS5SyZzQ",
+      authDomain: "ksef-project-dylan.firebaseapp.com",
+      databaseURL: "https://ksef-project-dylan-default-rtdb.firebaseio.com",
+      projectId: "ksef-project-dylan",
+      storageBucket: "ksef-project-dylan.firebasestorage.app",
+      messagingSenderId: "1045853328419",
+      appId: "1:1045853328419:web:0d5e8d51a2ce8a64f00d96",
+      measurementId: "G-QXYBP0T2SN"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const auth = getAuth(app);
+    // Expose so flutter/firebase_auth can find the pre-initialised app.
+    window.firebaseApp = app;
+    window.firebaseAuth = auth;
+    window.firebaseAnalytics = analytics;
+    window.GoogleAuthProvider = GoogleAuthProvider;
+  </script>
+</head>
+<body>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

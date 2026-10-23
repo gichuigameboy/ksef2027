@@ -45,8 +45,8 @@ class QuickSettings {
         <button id="toggle-wifi" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.wifiConnected ? 'bg-blue-600/30 text-blue-300 border border-blue-500/40' : 'bg-gray-800 text-gray-400'} transition-all">
           <i class="fas ${settings.wifiConnected ? 'fa-wifi' : 'fa-wifi-slash'} text-base"></i>
           <div class="text-left">
-            <div class="text-xs font-semibold">Wi-Fi</div>
-            <div class="text-[10px] opacity-75">${settings.wifiConnected ? 'School_5G' : 'Off'}</div>
+            <div class="text-xs font-semibold">Network</div>
+            <div class="text-[10px] opacity-75">${settings.wifiConnected ? (navigator.onLine ? 'Connected' : 'Offline Mode') : 'Disconnected'}</div>
           </div>
         </button>
 

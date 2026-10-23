@@ -307,9 +307,24 @@ function wireWebview(root, tabId, wv) {
   });
 
   wv.addEventListener('will-navigate', e => {
-    if (!restrictionManager.checkUrlAccess(e.url).allowed) {
+    const access = restrictionManager.checkUrlAccess(e.url);
+    if (!access.allowed) {
       try { wv.stop(); } catch (_) {}
-      showBlock(root, tabId, e.url, restrictionManager.checkUrlAccess(e.url).reason);
+      showBlock(root, tabId, e.url, access.reason);
+    }
+  });
+
+  // Security: Intercept popup/new-window attempts inside the webview
+  wv.addEventListener('new-window', e => {
+    e.preventDefault();
+    const targetUrl = e.url;
+    if (targetUrl) {
+      const access = restrictionManager.checkUrlAccess(targetUrl);
+      if (access.allowed) {
+        openTab(root, targetUrl);
+      } else {
+        showBlock(root, tabId, targetUrl, access.reason);
+      }
     }
   });
 }

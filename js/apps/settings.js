@@ -21,7 +21,9 @@ export function createSettingsApp() {
   ];
 
   function render() {
-    const settings = stateStore.getState().systemSettings;
+    const state = stateStore.getState();
+    const settings = state.systemSettings;
+    const user = state.currentUser || { name: 'Student Account', admNo: '1001', grade: 'Form 1', isOfflineDemo: true };
 
     root.innerHTML = `
       <!-- Header -->
@@ -43,11 +45,11 @@ export function createSettingsApp() {
           <!-- Student Mini Card -->
           <div class="p-3 bg-[#242424] rounded-xl mb-3 flex items-center gap-3 border border-[#333]">
             <div class="w-9 h-9 rounded-full bg-[#389e3c] flex items-center justify-center text-white font-bold text-sm">
-              <i class="fas fa-user-graduate"></i>
+              <i class="fas ${user.role === 'admin' ? 'fa-user-shield' : (user.role === 'teacher' ? 'fa-chalkboard-user' : 'fa-user-graduate')}"></i>
             </div>
-            <div>
-              <div class="font-bold text-white text-xs">Brian Ochieng</div>
-              <div class="text-[10px] text-slate-400">Adm: 1001 • Form 1</div>
+            <div class="truncate">
+              <div class="font-bold text-white text-xs truncate">${user.name}</div>
+              <div class="text-[10px] text-slate-400">${user.admNo} • ${user.grade || user.role}</div>
             </div>
           </div>
 
@@ -145,28 +147,48 @@ export function createSettingsApp() {
         `;
 
       case 'about':
-      default:
+      default: {
+        const isElectron = !!(window.electronAPI && window.electronAPI.isElectron);
         return `
           <div class="max-w-2xl space-y-6">
             <div class="flex items-center gap-4">
               <img src="assets/dawamu-logo.png" alt="Dawamu" class="h-16 w-auto object-contain">
               <div>
-                <h2 class="text-2xl font-bold text-white">Dawamu OS 11</h2>
+                <h2 class="text-2xl font-bold text-white">Dawamu OS (KSEF 2027)</h2>
                 <p class="text-xs text-emerald-400 font-semibold uppercase tracking-wider">Transforming Boys Into Leaders</p>
-                <p class="text-[11px] text-slate-500 mt-0.5">Edition: K-12 Student Educational Chromebook & PC Kiosk</p>
+                <p class="text-[11px] text-slate-400 mt-0.5">Dawamu High School Student Educational Environment</p>
               </div>
             </div>
 
             <div class="bg-[#262626] border border-[#333] rounded-2xl p-5 space-y-2.5 text-xs">
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">OS Architecture:</span> <b class="text-white">Dawamu Ultra-Lightweight Core (x86_64)</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Active RAM Footprint:</span> <b class="text-emerald-400" id="set-live-ram"><i class="fas fa-circle-notch fa-spin"></i> Reading RAM...</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Total System Memory:</span> <b class="text-white" id="set-total-ram">8 GB System RAM</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Rendering Engine:</span> <b class="text-white">GPU Zero-Copy Hardware Acceleration</b></div>
-              <div class="flex justify-between py-1 border-b border-[#333]"><span class="text-slate-400">Background Resource Caps:</span> <b class="text-emerald-400">V8 Throttled (256 MB Max)</b></div>
-              <div class="flex justify-between py-1"><span class="text-slate-400">Security Mode:</span> <b class="text-emerald-400">Dawamu Kiosk Lock Active</b></div>
+              <div class="flex justify-between py-1 border-b border-[#333]">
+                <span class="text-slate-400">Runtime Platform:</span>
+                <b class="text-white">${isElectron ? 'Electron Native Desktop (IPC Sandboxed)' : 'Browser Standalone Kiosk (Chrome/Edge)'}</b>
+              </div>
+              <div class="flex justify-between py-1 border-b border-[#333]">
+                <span class="text-slate-400">Memory Usage:</span>
+                <b class="text-emerald-400" id="set-live-ram">${isElectron ? '<i class="fas fa-circle-notch fa-spin"></i> Reading...' : (navigator.deviceMemory ? `${navigator.deviceMemory} GB Device Memory` : 'Standard Browser Sandbox')}</b>
+              </div>
+              <div class="flex justify-between py-1 border-b border-[#333]">
+                <span class="text-slate-400">System Memory:</span>
+                <b class="text-white" id="set-total-ram">${isElectron ? 'Reading system info...' : (navigator.hardwareConcurrency ? `${navigator.hardwareConcurrency} Logical CPU Cores` : 'Client Hardware')}</b>
+              </div>
+              <div class="flex justify-between py-1 border-b border-[#333]">
+                <span class="text-slate-400">EduGuard Backend (Port 8000):</span>
+                <b id="set-backend-status" class="text-slate-400"><i class="fas fa-circle-notch fa-spin"></i> Checking backend...</b>
+              </div>
+              <div class="flex justify-between py-1 border-b border-[#333]">
+                <span class="text-slate-400">Internet Connectivity:</span>
+                <b class="${navigator.onLine ? 'text-emerald-400' : 'text-amber-400'}">${navigator.onLine ? 'Online (Connected)' : 'Offline (Local Fallback Active)'}</b>
+              </div>
+              <div class="flex justify-between py-1">
+                <span class="text-slate-400">Virtual OS Storage:</span>
+                <b id="set-storage-status" class="text-white"><i class="fas fa-circle-notch fa-spin"></i> Checking disk...</b>
+              </div>
             </div>
           </div>
         `;
+      }
     }
   }
 
@@ -192,19 +214,52 @@ export function createSettingsApp() {
       render();
     });
 
-    // Read live lightweight memory telemetry
+    // Real system info via electronAPI
     if (window.electronAPI?.getSystemInfo) {
       window.electronAPI.getSystemInfo().then(info => {
         const liveRamEl = root.querySelector('#set-live-ram');
         const totalRamEl = root.querySelector('#set-total-ram');
-        if (liveRamEl && info.usedMemMB) {
-          liveRamEl.textContent = `${info.usedMemMB} (Ultra-Low Footprint)`;
+        if (liveRamEl && info?.usedMemMB) {
+          liveRamEl.textContent = `${info.usedMemMB} RSS Used`;
         }
-        if (totalRamEl && info.totalMem) {
-          totalRamEl.textContent = `${info.totalMem} (${info.freeMem} Free)`;
+        if (totalRamEl && info?.totalMem) {
+          totalRamEl.textContent = `${info.totalMem} (${info.freeMem || '0 GB'} Free) • ${info.cpus || ''}`;
         }
       }).catch(() => {});
     }
+
+    // Real backend health check
+    fetch('http://127.0.0.1:8000/health', { signal: AbortSignal.timeout(1000) })
+      .then(res => res.json())
+      .then(data => {
+        const bEl = root.querySelector('#set-backend-status');
+        if (bEl) {
+          bEl.className = 'text-emerald-400 font-bold';
+          bEl.textContent = 'Active (FastAPI v2.0)';
+        }
+      })
+      .catch(() => {
+        const bEl = root.querySelector('#set-backend-status');
+        if (bEl) {
+          bEl.className = 'text-amber-400 font-bold';
+          bEl.textContent = 'Offline (Local Curriculum Mode)';
+        }
+      });
+
+    // Real storage check
+    if (window.electronAPI?.getDownloadedFiles) {
+      window.electronAPI.getDownloadedFiles().then(files => {
+        const sEl = root.querySelector('#set-storage-status');
+        if (sEl) {
+          sEl.className = 'text-emerald-400 font-bold';
+          sEl.textContent = `${files.length} documents saved (os_storage/downloads)`;
+        }
+      }).catch(() => {});
+    } else {
+      const sEl = root.querySelector('#set-storage-status');
+      if (sEl) sEl.textContent = 'Browser Virtual Storage Active';
+    }
+  }
   }
 
   render();

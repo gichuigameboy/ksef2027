@@ -1,9 +1,9 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://127.0.0.1:8080 http://localhost:8080; frame-src 'self' http://127.0.0.1:8000 http://localhost:8000;">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://127.0.0.1:8080 http://localhost:8080 http://127.0.0.1:3000 http://localhost:3000; frame-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://127.0.0.1:3000 http://localhost:3000;">
   <title>Dawamu OS</title>
 
   <!-- Local Custom Stylesheet (Instant Native Rendering - 0ms Delay) -->
@@ -54,17 +54,20 @@
         <i class="fas fa-exclamation-circle"></i> <span>Invalid Credentials</span>
       </div>
       
-      <!-- 1-Click Quick Login Student Accounts -->
+      <!-- 1-Click Quick Login Student Accounts (Offline Demo) -->
       <div class="mt-5 text-[11px] text-slate-400 border-t border-slate-700/50 pt-4 w-full text-center">
-        <div class="mb-2.5 font-semibold text-slate-300">Quick 1-Click Sign In:</div>
+        <div class="mb-2 font-semibold text-slate-300 flex items-center justify-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span>Offline Demo Accounts (Evaluation Simulation):</span>
+        </div>
         <div class="flex justify-center gap-2">
-          <button data-quick-login data-adm="1001" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3.5 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 text-xs">
+          <button type="button" data-quick-login data-adm="1001" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3.5 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 text-xs">
             <i class="fas fa-user-circle text-emerald-400"></i>
-            <span>Brian O. (1001)</span>
+            <span>Demo 1001 (Brian O.)</span>
           </button>
-          <button data-quick-login data-adm="1002" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3.5 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 text-xs">
+          <button type="button" data-quick-login data-adm="1002" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3.5 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 text-xs">
             <i class="fas fa-user-circle text-emerald-400"></i>
-            <span>Kevin M. (1002)</span>
+            <span>Demo 1002 (Kevin M.)</span>
           </button>
         </div>
       </div>

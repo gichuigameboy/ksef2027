@@ -81,22 +81,43 @@ function createWindow() {
   mainWindow.loadFile('index.html');
   Menu.setApplicationMenu(null);
 
-  // Security: Restrict untrusted navigation and window opening
-  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    // If opening an approved internal or local URL, stay controlled
-    if (url.startsWith('http://localhost') || url.startsWith('http://127.0.0.1')) {
-      return { action: 'allow' };
+  // Security: Restrict untrusted navigation and window opening.
+  // Exact origin matching — a prefix check like startsWith('http://localhost')
+  // would also accept attacker hosts such as http://localhost.evil.com.
+  const allowedOrigins = [
+    'http://localhost:8080',
+    'http://127.0.0.1:8080',
+    'http://127.0.0.1:8000',
+    'http://localhost:8000',
+    'http://127.0.0.1:3000',
+    'http://localhost:3000'
+  ];
+  const appIndexPath = path.resolve(__dirname, 'index.html').toLowerCase();
+  const isAllowedUrl = (rawUrl) => {
+    try {
+      const u = new URL(rawUrl);
+      if (u.protocol === 'file:') {
+        // Only the OS shell itself may be loaded from disk
+        let p = decodeURIComponent(u.pathname);
+        if (process.platform === 'win32' && p.startsWith('/')) p = p.slice(1);
+        return path.resolve(p).toLowerCase() === appIndexPath;
+      }
+      return allowedOrigins.includes(u.origin);
+    } catch (_) {
+      return false;
     }
+  };
+
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      if (allowedOrigins.includes(new URL(url).origin)) return { action: 'allow' };
+    } catch (_) {}
     // Deny arbitrary external child window popups
     return { action: 'deny' };
   });
 
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
-    const parsedUrl = new URL(navigationUrl);
-    const allowedOrigins = ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://127.0.0.1:8000', 'http://localhost:8000'];
-    if (parsedUrl.protocol === 'file:' || allowedOrigins.includes(parsedUrl.origin)) {
-      return; // Allowed
-    }
+    if (isAllowedUrl(navigationUrl)) return;
     // Block unexpected top-level navigation to protect OS UI
     event.preventDefault();
   });
@@ -107,6 +128,26 @@ function createWindow() {
 
   mainWindow.on('closed', () => { mainWindow = null; });
 }
+
+// Security: Enforce strict child window policies on all webviews created in the renderer
+app.on('web-contents-created', (_, contents) => {
+  if (contents.getType() === 'webview') {
+    // Deny arbitrary child window popups from within webviews
+    contents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+    // Prevent untrusted webviews from navigating to file:// URLs or privileged internal schemes
+    contents.on('will-navigate', (event, navigationUrl) => {
+      try {
+        const u = new URL(navigationUrl);
+        if (u.protocol === 'file:' || u.protocol === 'javascript:') {
+          event.preventDefault();
+        }
+      } catch (_) {
+        event.preventDefault();
+      }
+    });
+  }
+});
 
 app.whenReady().then(() => {
   configureSessions();
@@ -121,8 +162,14 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
+// Helper for validating IPC callers
+function isAuthorizedSender(event) {
+  return mainWindow && event.sender === mainWindow.webContents;
+}
+
 // ── Strict & Validated Native IPC Channels ─────────────────────────────
-ipcMain.handle('get-system-info', () => {
+ipcMain.handle('get-system-info', (event) => {
+  if (!isAuthorizedSender(event)) return null;
   const memUsage = process.memoryUsage();
   return {
     platform: process.platform,
@@ -135,7 +182,8 @@ ipcMain.handle('get-system-info', () => {
   };
 });
 
-ipcMain.handle('get-downloaded-files', () => {
+ipcMain.handle('get-downloaded-files', (event) => {
+  if (!isAuthorizedSender(event)) return [];
   try {
     if (!fs.existsSync(OS_STORAGE_DIR)) return [];
     const files = fs.readdirSync(OS_STORAGE_DIR);
@@ -167,7 +215,10 @@ ipcMain.handle('get-downloaded-files', () => {
 });
 
 // Securely save a file only within OS_STORAGE_DIR with basename path traversal check
-ipcMain.handle('save-download-file', (_, payload) => {
+ipcMain.handle('save-download-file', (event, payload) => {
+  if (!isAuthorizedSender(event)) {
+    return { success: false, error: 'Unauthorized IPC sender' };
+  }
   try {
     if (!payload || typeof payload !== 'object') {
       return { success: false, error: 'Invalid payload' };
@@ -197,14 +248,23 @@ ipcMain.handle('save-download-file', (_, payload) => {
   }
 });
 
-ipcMain.on('toggle-kiosk', (_, enable) => {
+ipcMain.on('toggle-kiosk', (event, enable) => {
+  if (!isAuthorizedSender(event)) return;
   mainWindow?.setKiosk(!!enable);
   mainWindow?.setFullScreen(!!enable);
 });
 
-ipcMain.on('toggle-fullscreen', () => {
+ipcMain.on('toggle-fullscreen', (event) => {
+  if (!isAuthorizedSender(event)) return;
   if (mainWindow) mainWindow.setFullScreen(!mainWindow.isFullScreen());
 });
 
-ipcMain.on('minimize-app', () => mainWindow?.minimize());
-ipcMain.on('exit-app',     () => app.quit());
+ipcMain.on('minimize-app', (event) => {
+  if (!isAuthorizedSender(event)) return;
+  mainWindow?.minimize();
+});
+
+ipcMain.on('exit-app', (event) => {
+  if (!isAuthorizedSender(event)) return;
+  app.quit();
+});

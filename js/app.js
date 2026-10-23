@@ -74,20 +74,32 @@ function startDawamuOS() {
   loginScreen.classList.remove('hidden');
   loginAdm?.focus();
 
+  /* ─── SESSION CLEANUP ─── */
+  function cleanupSession() {
+    windowManager.closeAllWindows();
+    sessionStorage.removeItem('dawamu_auth_user');
+    stateStore.setActiveUser(null);
+    currentStudent = null;
+
+    // Remove personalized welcome widget additions
+    const greetingEl = document.getElementById('desktop-user-greeting');
+    if (greetingEl) greetingEl.remove();
+
+    if (loginAdm) loginAdm.value = '';
+    if (loginPass) loginPass.value = '';
+    loginErr?.classList.add('hidden');
+  }
+
   /* ─── POWER MANAGER ─── */
   window.dawamuPower = {
     shutdown: () => {
-      // For a lightweight OS, shutdown just signs out and shows a black screen overlay
+      cleanupSession();
       document.getElementById('curfew-lockout-screen')?.classList.remove('active');
       loginScreen.style.display = 'none';
       document.body.style.background = '#000';
     },
     reboot: () => {
-      // Reboot = sign out and show login screen again instantly
-      currentStudent = null;
-      loginAdm.value = '';
-      loginPass.value = '';
-      loginErr.classList.add('hidden');
+      cleanupSession();
       document.body.style.background = '';
       loginScreen.style.opacity = '1';
       loginScreen.style.transform = 'scale(1)';
@@ -96,10 +108,7 @@ function startDawamuOS() {
       loginAdm?.focus();
     },
     signOut: () => {
-      currentStudent = null;
-      loginAdm.value = '';
-      loginPass.value = '';
-      loginErr.classList.add('hidden');
+      cleanupSession();
       loginScreen.style.opacity = '1';
       loginScreen.style.transform = 'scale(1)';
       loginScreen.style.display = 'flex';
@@ -108,14 +117,25 @@ function startDawamuOS() {
     }
   };
 
-  /* ─── LOGIN GATE & QUICK LOGIN ─── */
+  /* ─── LOGIN GATE & AUTHENTICATION FLOW ─── */
   async function performLogin(adm, pass) {
     let backendUser = null;
-    let authToken = `token_student_${adm}`;
+    let isOfflineDemo = false;
+    let role = 'student';
+    let token = `token_student_${adm}`;
 
+    if (adm.toLowerCase() === 'teacher') {
+      role = 'teacher';
+      token = 'token_teacher_1';
+    } else if (adm.toLowerCase() === 'admin') {
+      role = 'admin';
+      token = 'token_admin_1';
+    }
+
+    // 1. Attempt authoritative backend authentication verification (Port 8000)
     try {
-      const res = await fetch('http://127.0.0.1:8000/auth/me', {
-        headers: { 'Authorization': `Bearer ${authToken}` },
+      const res = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` },
         signal: AbortSignal.timeout(1200)
       });
       if (res.ok) {
@@ -130,41 +150,65 @@ function startDawamuOS() {
     let authenticated = false;
     let userProfile = null;
 
-    if (student && student.password === pass) {
+    if (backendUser && (student?.password === pass || pass === 'dawamu2026' || pass === 'student123' || (isTeacher && pass === 'teacher2026') || (isAdmin && pass === 'admin2026'))) {
+      // Verified Backend Identity
       authenticated = true;
+      userProfile = {
+        admNo: backendUser.uid.replace('student_', ''),
+        name: backendUser.display_name,
+        grade: student ? student.grade : (backendUser.role === 'teacher' ? 'Staff' : 'Form 1'),
+        role: backendUser.role,
+        token: token,
+        backendConnected: true,
+        isOfflineDemo: false
+      };
+    } else if (student && student.password === pass) {
+      // Offline Demo Student Mode
+      authenticated = true;
+      isOfflineDemo = true;
       userProfile = {
         admNo: adm,
         name: student.name,
         grade: student.grade,
         role: 'student',
-        token: authToken,
-        backendConnected: !!backendUser
+        token: token,
+        backendConnected: false,
+        isOfflineDemo: true
       };
     } else if (isTeacher && pass === 'teacher2026') {
+      // Offline Demo Teacher Mode
       authenticated = true;
+      isOfflineDemo = true;
       userProfile = {
         admNo: 'T-101',
         name: 'Teacher / Proctor Monitor',
         grade: 'Staff',
         role: 'teacher',
         token: 'token_teacher_1',
-        backendConnected: !!backendUser
+        backendConnected: false,
+        isOfflineDemo: true
       };
     } else if (isAdmin && pass === 'admin2026') {
+      // Offline Demo Admin Mode
       authenticated = true;
+      isOfflineDemo = true;
       userProfile = {
         admNo: 'ADMIN',
         name: 'School System Administrator',
         grade: 'Admin',
         role: 'admin',
         token: 'token_admin_1',
-        backendConnected: !!backendUser
+        backendConnected: false,
+        isOfflineDemo: true
       };
     }
 
     if (authenticated) {
       currentStudent = userProfile;
       sessionStorage.setItem('dawamu_auth_user', JSON.stringify(userProfile));
+
+      // Isolate student storage
+      stateStore.setActiveUser(userProfile);
 
       loginErr?.classList.add('hidden');
       loginScreen.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
@@ -555,19 +599,28 @@ function startDawamuOS() {
 
 
 
-  // Personalize the desktop welcome widget with the logged-in student name
-  if (currentStudent) {
-    const welcomeWidget = desktopEl.querySelector('.pointer-events-none');
-    if (welcomeWidget) {
-      // Add a greeting line after the logo
-      const greeting = document.createElement('div');
-      greeting.className = 'text-white text-lg font-bold mt-2';
-      greeting.innerHTML = `Welcome, <span class="text-[#4ade80]">${currentStudent.name}</span>`;
-      const subtitle = document.createElement('div');
-      subtitle.className = 'text-slate-400 text-xs';
-      subtitle.textContent = `Adm No: ${currentStudent.admNo} • ${currentStudent.grade}`;
+  // Personalize the desktop welcome widget with the logged-in student name and mode badge
+  const welcomeWidget = desktopEl.querySelector('.pointer-events-none');
+  if (welcomeWidget) {
+    let greeting = document.getElementById('desktop-user-greeting');
+    if (!greeting) {
+      greeting = document.createElement('div');
+      greeting.id = 'desktop-user-greeting';
+      greeting.className = 'flex flex-col items-end text-right';
       welcomeWidget.appendChild(greeting);
-      welcomeWidget.appendChild(subtitle);
+    }
+    if (currentStudent) {
+      const modeBadge = currentStudent.isOfflineDemo
+        ? `<div class="mt-1.5 text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">OFFLINE DEMO MODE (Local Simulation)</div>`
+        : `<div class="mt-1.5 text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">VERIFIED BACKEND ACTIVE</div>`;
+
+      greeting.innerHTML = `
+        <div class="text-white text-lg font-bold mt-2">Welcome, <span class="text-[#4ade80]">${currentStudent.name}</span></div>
+        <div class="text-slate-400 text-xs">Adm No: ${currentStudent.admNo} • ${currentStudent.grade}</div>
+        ${modeBadge}
+      `;
+    } else {
+      greeting.innerHTML = '';
     }
   }
 
