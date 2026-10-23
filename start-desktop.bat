@@ -16,15 +16,14 @@ if not exist "%PY_EXE%" (
     set "PY_EXE=python"
 )
 
-:: 2. Check if Electron native engine is installed and working
-where npx >nul 2>nul
-if %errorlevel% equ 0 (
+:: 2. Check if Electron native engine is installed locally
+if exist "%ROOT_DIR%\node_modules\.bin\electron.cmd" (
     echo [1/2] Starting EduGuard FastAPI Backend on port 8000...
     if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
         start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%ROOT_DIR%\EduGuard\backend"
     )
     echo [2/2] Launching with Electron native engine...
-    npx electron . %*
+    call "%ROOT_DIR%\node_modules\.bin\electron.cmd" . %*
     goto :eof
 )
 

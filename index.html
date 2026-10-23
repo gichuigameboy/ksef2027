@@ -31,7 +31,7 @@
       <h2 class="text-white text-2xl font-bold tracking-tight mb-0.5">Student Sign In</h2>
       <p class="text-emerald-400 font-semibold text-[11px] uppercase tracking-[0.2em] mb-6">Dawamu OS • Student Edition</p>
 
-      <form id="os-login-form" class="w-full flex flex-col gap-4">
+      <form id="os-login-form" class="w-full flex flex-col gap-4" onsubmit="return false;">
         <div class="flex flex-col gap-1.5">
           <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Admission Number / Username</label>
           <div class="relative">
@@ -252,6 +252,8 @@
   </div>
 
   <!-- App Entry Script -->
+  <!-- App Entry Script (Universal Bundle for file://, http://, and Electron) -->
+  <script src="js/dawamu-bundle.js"></script>
   <script type="module" src="js/app.js"></script>
 </body>
 </html>

@@ -57,6 +57,9 @@ const STUDENT_DB = {
 let currentStudent = null;
 
 function startDawamuOS() {
+  if (window.__DAWAMU_OS_BOOTED__) return;
+  window.__DAWAMU_OS_BOOTED__ = true;
+
   const desktopEl = document.getElementById('desktop');
   const shelfEl = document.getElementById('shelf');
   const launcherEl = document.getElementById('launcher-overlay');
@@ -118,8 +121,8 @@ function startDawamuOS() {
     }
   };
 
-  /* ─── LOGIN GATE & AUTHENTICATION FLOW ─── */
-  async function performLogin(adm, pass) {
+  /* ─── LOGIN GATE & AUTHENTICATION FLOW (INSTANT 0ms LOGIN) ─── */
+  function performLogin(adm, pass) {
     const cleanAdm = (adm || '').trim();
     const cleanPass = (pass || '').trim();
     const effectiveAdm = cleanAdm || '1001';
@@ -135,31 +138,14 @@ function startDawamuOS() {
     }
     const student = studentKey ? STUDENT_DB[studentKey] : null;
 
-    let role = 'student';
     let token = `token_student_${studentKey || effectiveAdm}`;
-
     if (isTeacher) {
-      role = 'teacher';
       token = 'token_teacher_1';
     } else if (isAdmin) {
-      role = 'admin';
       token = 'token_admin_1';
     }
 
-    // 1. Attempt authoritative backend authentication verification (Port 8000)
-    let backendUser = null;
-    try {
-      const res = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
-        headers: { 'Authorization': `Bearer ${token}` },
-        signal: AbortSignal.timeout(1200)
-      });
-      if (res.ok) {
-        backendUser = await res.json();
-      }
-    } catch (_) {}
-
     let userProfile = null;
-
     if (isAdmin) {
       userProfile = {
         admNo: 'ADMIN',
@@ -167,8 +153,8 @@ function startDawamuOS() {
         grade: 'Admin',
         role: 'admin',
         token: 'token_admin_1',
-        backendConnected: !!backendUser,
-        isOfflineDemo: !backendUser
+        backendConnected: false,
+        isOfflineDemo: true
       };
     } else if (isTeacher) {
       userProfile = {
@@ -177,8 +163,8 @@ function startDawamuOS() {
         grade: 'Staff',
         role: 'teacher',
         token: 'token_teacher_1',
-        backendConnected: !!backendUser,
-        isOfflineDemo: !backendUser
+        backendConnected: false,
+        isOfflineDemo: true
       };
     } else if (student) {
       userProfile = {
@@ -187,8 +173,8 @@ function startDawamuOS() {
         grade: student.grade,
         role: 'student',
         token: `token_student_${studentKey}`,
-        backendConnected: !!backendUser,
-        isOfflineDemo: !backendUser
+        backendConnected: false,
+        isOfflineDemo: true
       };
     } else {
       userProfile = {
@@ -197,27 +183,50 @@ function startDawamuOS() {
         grade: 'Form 1',
         role: 'student',
         token: `token_student_${effectiveAdm}`,
-        backendConnected: !!backendUser,
-        isOfflineDemo: !backendUser
+        backendConnected: false,
+        isOfflineDemo: true
       };
     }
 
     currentStudent = userProfile;
-    sessionStorage.setItem('dawamu_auth_user', JSON.stringify(userProfile));
+    try {
+      sessionStorage.setItem('dawamu_auth_user', JSON.stringify(userProfile));
+    } catch (_) {}
 
-    // Isolate student storage
+    // Isolate student storage immediately
     stateStore.setActiveUser(userProfile);
 
+    // Hide login screen and boot desktop immediately (0ms delay)
     loginErr?.classList.add('hidden');
-    loginScreen.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
     loginScreen.style.opacity = '0';
-    loginScreen.style.transform = 'scale(1.03)';
-    setTimeout(() => {
-      loginScreen.style.display = 'none';
-      loginScreen.classList.add('hidden');
-      bootDesktop();
-    }, 250);
+    loginScreen.style.display = 'none';
+    loginScreen.classList.add('hidden');
+    bootDesktop();
+
+    // Non-blocking background probe for local EduGuard FastAPI backend (Port 8000)
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timerId = controller ? setTimeout(() => controller.abort(), 1000) : null;
+      fetch('http://127.0.0.1:8000/api/v1/auth/me', {
+        headers: { 'Authorization': `Bearer ${token}` },
+        signal: controller ? controller.signal : undefined
+      })
+        .then(res => {
+          if (timerId) clearTimeout(timerId);
+          return res.ok ? res.json() : null;
+        })
+        .then(backendUser => {
+          if (backendUser && currentStudent && currentStudent.admNo === userProfile.admNo) {
+            currentStudent.backendConnected = true;
+            currentStudent.isOfflineDemo = false;
+            try { sessionStorage.setItem('dawamu_auth_user', JSON.stringify(currentStudent)); } catch (_) {}
+          }
+        })
+        .catch(() => {});
+    } catch (_) {}
   }
+
+  window.dawamuPerformLogin = performLogin;
 
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
@@ -240,6 +249,7 @@ function startDawamuOS() {
   });
 
   let desktopInitialized = false;
+  let desktopShellListenersBound = false;
   function bootDesktop() {
     if (!desktopInitialized) {
       windowManager.init(desktopEl);
@@ -530,41 +540,75 @@ function startDawamuOS() {
     }
   ];
 
-  // Desktop Icons Click Handler (Windows Style)
-  const desktopIconsContainer = document.getElementById('desktop-icons');
-  if (desktopIconsContainer) {
-    desktopIconsContainer.addEventListener('click', (e) => {
-      const iconEl = e.target.closest('.desktop-icon');
-      if (!iconEl) return;
-      const appId = iconEl.dataset.appId;
-      const app = appRegistry.find(a => a.id === appId);
-      if (app) app.launch();
-    });
-  }
+  if (!desktopShellListenersBound) {
+    desktopShellListenersBound = true;
 
-  // Cross-App Dawamu URL Navigation (from File Explorer or Web to Offline Browser)
-  window.addEventListener('open-dawamu-url', (e) => {
-    const url = e.detail?.url;
-    if (!url) return;
-    const existing = windowManager.windows.get('offlineBrowser');
-    if (existing) {
-      windowManager.focusWindow('offlineBrowser');
-      const input = existing.element.querySelector('#omnibox');
-      if (input) {
-        input.value = url;
-        input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
-      }
-    } else {
-      windowManager.createWindow({
-        id: 'offlineBrowser',
-        title: 'Dawamu Offline Web Encyclopedia & Library',
-        icon: '<i class="fas fa-globe-africa text-emerald-400"></i>',
-        content: () => createOfflineBrowserApp(url),
-        width: 1050,
-        height: 660
+    // Desktop Icons Click Handler (Windows Style)
+    const desktopIconsContainer = document.getElementById('desktop-icons');
+    if (desktopIconsContainer) {
+      desktopIconsContainer.addEventListener('click', (e) => {
+        const iconEl = e.target.closest('.desktop-icon');
+        if (!iconEl) return;
+        const appId = iconEl.dataset.appId;
+        const app = appRegistry.find(a => a.id === appId);
+        if (app) app.launch();
       });
     }
-  });
+
+    // Cross-App Dawamu URL Navigation (from File Explorer or Web to Offline Browser)
+    window.addEventListener('open-dawamu-url', (e) => {
+      const url = e.detail?.url;
+      if (!url) return;
+      const existing = windowManager.windows.get('offlineBrowser');
+      if (existing) {
+        windowManager.focusWindow('offlineBrowser');
+        const input = existing.element.querySelector('#omnibox');
+        if (input) {
+          input.value = url;
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }));
+        }
+      } else {
+        windowManager.createWindow({
+          id: 'offlineBrowser',
+          title: 'Dawamu Offline Web Encyclopedia & Library',
+          icon: '<i class="fas fa-globe-africa text-emerald-400"></i>',
+          content: () => createOfflineBrowserApp(url),
+          width: 1050,
+          height: 660
+        });
+      }
+    });
+
+    // Initialize OS Shell Modules
+    shelf.init(shelfEl, appRegistry);
+    launcher.init(launcherEl, appRegistry);
+    quickSettings.init(quickSettingsEl, () => {
+      // Open Admin Panel callback
+      const adminApp = appRegistry.find((a) => a.id === 'adminPanel');
+      if (adminApp) adminApp.launch();
+    });
+
+    // App Install Lock Close Listener
+    document.getElementById('close-app-lock-modal')?.addEventListener('click', () => {
+      document.getElementById('app-store-lock-modal')?.classList.add('hidden');
+    });
+
+    // Curfew Lockout Bypass Listener
+    const curfewBypassBtn = document.getElementById('curfew-bypass-btn');
+    const curfewBypassPin = document.getElementById('curfew-bypass-pin');
+    const curfewBypassErr = document.getElementById('curfew-bypass-err');
+
+    curfewBypassBtn?.addEventListener('click', () => {
+      const pin = curfewBypassPin.value.trim();
+      if (stateStore.verifyAdminPin(pin)) {
+        document.getElementById('curfew-lockout-screen')?.classList.remove('active');
+        curfewBypassPin.value = '';
+        curfewBypassErr.textContent = '';
+      } else {
+        curfewBypassErr.textContent = 'Incorrect Admin PIN.';
+      }
+    });
+  }
 
   // Global Dawamu OS API for cross-app launches & file opening
   window.dawamuOS = {
@@ -614,36 +658,6 @@ function startDawamuOS() {
       }
     }
   };
-
-  // Initialize OS Shell Modules
-  shelf.init(shelfEl, appRegistry);
-  launcher.init(launcherEl, appRegistry);
-  quickSettings.init(quickSettingsEl, () => {
-    // Open Admin Panel callback
-    const adminApp = appRegistry.find((a) => a.id === 'adminPanel');
-    if (adminApp) adminApp.launch();
-  });
-
-  // App Install Lock Close Listener
-  document.getElementById('close-app-lock-modal')?.addEventListener('click', () => {
-    document.getElementById('app-store-lock-modal')?.classList.add('hidden');
-  });
-
-  // Curfew Lockout Bypass Listener
-  const curfewBypassBtn = document.getElementById('curfew-bypass-btn');
-  const curfewBypassPin = document.getElementById('curfew-bypass-pin');
-  const curfewBypassErr = document.getElementById('curfew-bypass-err');
-
-  curfewBypassBtn?.addEventListener('click', () => {
-    const pin = curfewBypassPin.value.trim();
-    if (stateStore.verifyAdminPin(pin)) {
-      document.getElementById('curfew-lockout-screen')?.classList.remove('active');
-      curfewBypassPin.value = '';
-      curfewBypassErr.textContent = '';
-    } else {
-      curfewBypassErr.textContent = 'Incorrect Admin PIN.';
-    }
-  });
 
   // Check initial curfew rules
   restrictionManager.evaluateSecurityRules();
