@@ -165,6 +165,20 @@
         <span class="desktop-icon-label">Database</span>
       </div>
 
+      <div class="desktop-icon" data-app-id="calculator">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff;">
+          <i class="fas fa-calculator"></i>
+        </div>
+        <span class="desktop-icon-label">Calculator</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="settings">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #475569 0%, #334155 100%); color: #ffffff;">
+          <i class="fas fa-cog"></i>
+        </div>
+        <span class="desktop-icon-label">Settings</span>
+      </div>
+
       <div class="desktop-icon" data-app-id="installer">
         <div class="desktop-icon-box" style="background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); color: #ffffff;">
           <i class="fas fa-download"></i>
@@ -174,10 +188,14 @@
     </div>
 
     <!-- Desktop Welcome Widget (Positioned Top-Right) -->
-    <div class="absolute top-8 right-8 text-white space-y-2 max-w-sm pointer-events-none drop-shadow-lg flex flex-col items-end text-right">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-16 w-auto object-contain">
-      <div class="flex items-center gap-2 text-[#389e3c] font-semibold text-[10px] uppercase tracking-[0.2em] bg-emerald-950/70 backdrop-blur border border-[#389e3c]/30 px-3 py-1.5 rounded-full w-fit">
-        <i class="fas fa-shield-alt text-xs"></i> Transforming Boys Into Leaders
+    <div class="absolute top-6 right-6 text-white space-y-2 max-w-xs pointer-events-none drop-shadow-xl flex flex-col items-end text-right select-none">
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-16 w-auto object-contain drop-shadow-md">
+      <div class="flex items-center gap-2 text-emerald-300 font-bold text-[10px] uppercase tracking-[0.18em] bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 px-3.5 py-1.5 rounded-full w-fit shadow-lg shadow-black/40">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Transforming Boys Into Leaders</span>
+      </div>
+      <div class="text-[11px] text-slate-300 bg-slate-900/60 backdrop-blur-md border border-slate-700/60 px-3 py-1 rounded-xl shadow-md">
+        KCSE Candidate Edition &bull; 2027
       </div>
     </div>
   </main>

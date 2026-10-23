@@ -39,7 +39,7 @@ let isOnline = navigator.onLine;
 
 function newTab(url = null) {
   const id = ++tabCounter;
-  tabs.push({ id, url, title: 'New Tab', loading: false });
+  tabs.push({ id, url, title: 'New Tab', loading: false, history: url ? [url] : [], historyIdx: url ? 0 : -1 });
   return id;
 }
 
@@ -259,6 +259,12 @@ function buildTabDOM(root, tabId) {
   wireStartPage(root, tabId, overlay);
   wrap.appendChild(overlay);
 
+  // External website sandbox diagnostic banner
+  const banner = document.createElement('div');
+  banner.id = `ext-banner-${tabId}`;
+  banner.className = 'hidden shrink-0 z-20';
+  wrap.appendChild(banner);
+
   canvas.appendChild(wrap);
 }
 
@@ -381,7 +387,7 @@ function renderTabStrip(root) {
 /* ═══════════════════════════════════════════════════
    NAVIGATION
 ═══════════════════════════════════════════════════ */
-function loadUrl(root, tabId, url) {
+function loadUrl(root, tabId, url, pushHistory = true) {
   // Handle internal dawamu:// URLs (always offline)
   if (isOfflineTool(url)) {
     showOfflineTool(root, tabId, url);
@@ -405,7 +411,49 @@ function loadUrl(root, tabId, url) {
   if (view) view.src = url;
 
   const tab = tabs.find(t => t.id === tabId);
-  if (tab) { tab.url = url; tab.title = urlTitle(url); }
+  if (tab) {
+    tab.url = url;
+    tab.title = urlTitle(url);
+    if (!tab.history) { tab.history = []; tab.historyIdx = -1; }
+    if (pushHistory) {
+      tab.history = tab.history.slice(0, tab.historyIdx + 1);
+      tab.history.push(url);
+      tab.historyIdx = tab.history.length - 1;
+    }
+  }
+
+  // If outside Electron and accessing external web, show sandbox notice banner
+  const banner = root.querySelector(`#ext-banner-${tabId}`);
+  if (banner) {
+    const isLocal = url.includes('127.0.0.1') || url.includes('localhost') || url.startsWith('dawamu://');
+    if (!IS_ELECTRON && !isLocal) {
+      try {
+        const parsed = new URL(url);
+        banner.innerHTML = `
+          <div class="flex items-center justify-between text-xs py-1.5 px-3 bg-slate-900/95 border-b border-white/10 text-slate-300">
+            <span class="flex items-center gap-2 truncate">
+              <i class="fas fa-info-circle text-sky-400"></i>
+              <span><b>${parsed.hostname}</b> (Web Sandbox Mode)</span>
+            </span>
+            <div class="flex items-center gap-2 shrink-0">
+              <button class="ext-open-btn px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer">
+                <i class="fas fa-external-link-alt"></i> Open in External Window
+              </button>
+            </div>
+          </div>
+        `;
+        banner.classList.remove('hidden');
+        banner.querySelector('.ext-open-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          window.open(url, '_blank');
+        });
+      } catch (_) {
+        banner.classList.add('hidden');
+      }
+    } else {
+      banner.classList.add('hidden');
+    }
+  }
 
   if (tabId === activeTabId) root.querySelector('#omnibox').value = url;
   progress(root, tabId, true);
@@ -680,15 +728,29 @@ function wireChrome(root) {
   omni.addEventListener('focus', () => omni.select());
 
   root.querySelector('#btn-back').addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
     const v = root.querySelector(`#wv-${activeTabId}`);
-    if (IS_ELECTRON && v?.canGoBack?.()) v.goBack();
-    else if (v?.contentWindow) try { v.contentWindow.history.back(); } catch (_) {}
+    if (IS_ELECTRON && v?.canGoBack?.()) {
+      v.goBack();
+    } else if (tab && tab.history && tab.historyIdx > 0) {
+      tab.historyIdx--;
+      loadUrl(root, activeTabId, tab.history[tab.historyIdx], false);
+    } else if (v?.contentWindow) {
+      try { v.contentWindow.history.back(); } catch (_) {}
+    }
   });
 
   root.querySelector('#btn-forward').addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
     const v = root.querySelector(`#wv-${activeTabId}`);
-    if (IS_ELECTRON && v?.canGoForward?.()) v.goForward();
-    else if (v?.contentWindow) try { v.contentWindow.history.forward(); } catch (_) {}
+    if (IS_ELECTRON && v?.canGoForward?.()) {
+      v.goForward();
+    } else if (tab && tab.history && tab.historyIdx < tab.history.length - 1) {
+      tab.historyIdx++;
+      loadUrl(root, activeTabId, tab.history[tab.historyIdx], false);
+    } else if (v?.contentWindow) {
+      try { v.contentWindow.history.forward(); } catch (_) {}
+    }
   });
 
   root.querySelector('#btn-reload').addEventListener('click', () => {

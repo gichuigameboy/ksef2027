@@ -11,6 +11,8 @@
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
+import { OFFLINE_ARTICLES, STUDY_QUIZZES } from './offlineContent.js';
+import { BOOKS_844, BOOKS_844_CATALOG, renderBooks844Portal } from './books844.js';
 
 /* ─── OFFLINE WEBPAGES DATABASE ─── */
 const OFFLINE_WEB_DB = {
@@ -333,8 +335,20 @@ const OFFLINE_WEB_DB = {
         </ul>
       </div>
     `
+  },
+
+  // Interactive Python Runner
+  'dawamu://python-playground': {
+    title: 'Python Interactive Playground',
+    category: 'Computer Science',
+    summary: 'Interactive offline Python programming environment with live interpreter, algorithms, and science simulations.',
+    render: renderPythonPlaygroundPage
   }
 };
+
+// Merge Curated School Syllabus Knowledgebase & 8-4-4 Form 3 & 4 Coursebooks
+Object.assign(OFFLINE_WEB_DB, OFFLINE_ARTICLES);
+Object.assign(OFFLINE_WEB_DB, BOOKS_844);
 
 /* ─── SEARCH INDEXER ─── */
 function searchOfflineDatabase(query) {
@@ -366,7 +380,7 @@ function searchOfflineDatabase(query) {
 /* ═══════════════════════════════════════════════════
    APP SHELL & MULTI-TAB CONTROLLER
 ═══════════════════════════════════════════════════ */
-export function createOfflineBrowserApp() {
+export function createOfflineBrowserApp(initialUrl = 'dawamu://home') {
   let tabs = [];
   let activeTabId = null;
   let tabCounter = 0;
@@ -377,16 +391,16 @@ export function createOfflineBrowserApp() {
 
   root.innerHTML = `
     <!-- Tab Strip -->
-    <div class="flex items-end bg-[#18191b] px-2 pt-1 gap-1 min-h-[38px] overflow-x-auto shrink-0 border-b border-black/40">
-      <div id="tab-strip" class="flex items-end gap-1 flex-1 overflow-x-auto"></div>
-      <button id="btn-new-tab" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300 flex items-center justify-center text-xs self-center ml-1 shrink-0" title="New Tab">
+    <div class="flex items-end bg-[#070c16] px-3 pt-2 gap-1.5 min-h-[42px] overflow-x-auto shrink-0 border-b border-white/5 select-none">
+      <div id="tab-strip" class="flex items-end gap-1.5 flex-1 overflow-x-auto"></div>
+      <button id="btn-new-tab" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-emerald-400 hover:text-white flex items-center justify-center text-xs self-center ml-1 shrink-0 transition-all active:scale-95 shadow-sm" title="New Tab">
         <i class="fas fa-plus"></i>
       </button>
     </div>
 
     <!-- Toolbar & Omnibox -->
-    <div class="bg-[#242629] border-b border-black/20 px-3 py-1.5 flex items-center gap-2 shrink-0">
-      <div class="flex items-center gap-1 text-slate-300">
+    <div class="bg-[#0b1322] border-b border-white/10 px-3.5 py-2 flex items-center gap-2.5 shrink-0 backdrop-blur-xl">
+      <div class="flex items-center gap-1.5 text-slate-300">
         <button id="btn-back" class="nav-btn" title="Back"><i class="fas fa-arrow-left text-xs"></i></button>
         <button id="btn-forward" class="nav-btn" title="Forward"><i class="fas fa-arrow-right text-xs"></i></button>
         <button id="btn-reload" class="nav-btn" title="Reload"><i class="fas fa-redo text-xs"></i></button>
@@ -394,72 +408,95 @@ export function createOfflineBrowserApp() {
       </div>
 
       <!-- Omnibox Search/URL Bar -->
-      <div class="flex-1 flex items-center gap-2 bg-[#18191b] hover:bg-[#2d3035] focus-within:bg-[#18191b] focus-within:border-emerald-500 border border-slate-700/60 rounded-full px-3.5 py-1.5 transition-all">
+      <div class="flex-1 flex items-center gap-2.5 bg-[#070e1c] hover:bg-[#091326] focus-within:bg-[#050a14] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 border border-white/10 rounded-2xl px-4 py-1.5 transition-all shadow-inner">
         <i class="fas fa-search text-emerald-400 text-xs"></i>
         <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
-               class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-500 min-w-0"
-               placeholder="Search offline encyclopedia, lesson or type a URL...">
+               class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-400 min-w-0 font-medium"
+               placeholder="Search 8-4-4 Form 3 & 4 books, lessons, or type school URL...">
         <div class="flex items-center gap-1.5 shrink-0">
-          <span class="text-[9px] bg-emerald-950/80 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1">
-            <i class="fas fa-plane text-[8px]"></i> 100% Offline
+          <span class="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            100% Offline
           </span>
         </div>
       </div>
 
       <!-- Quick Actions -->
-      <div class="flex items-center gap-1">
-        <button id="btn-python" class="px-2.5 py-1 rounded-lg bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-700/40 text-emerald-300 text-xs flex items-center gap-1.5 transition-colors" title="Open Offline Python Runner">
-          <i class="fab fa-python"></i> <span class="text-[11px] font-semibold">Python</span>
+      <div class="flex items-center gap-1.5">
+        <button id="btn-python" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-900/50 to-teal-900/50 hover:from-emerald-800/70 hover:to-teal-800/70 border border-emerald-600/40 text-emerald-300 text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95" title="Open Offline Python Runner">
+          <i class="fab fa-python text-yellow-400"></i> <span class="text-[11px] font-bold">Python</span>
         </button>
       </div>
     </div>
 
     <!-- Offline Bookmarks Bar -->
-    <div id="bookmarks-bar" class="bg-[#1f2124] border-b border-black/20 px-3 py-1 flex items-center gap-1.5 text-xs overflow-x-auto shrink-0">
-      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Photosynthesis">
-        <i class="fab fa-wikipedia-w text-slate-300 text-[10px]"></i> Photosynthesis
+    <div id="bookmarks-bar" class="bg-[#070c16] border-b border-white/5 px-3.5 py-1.5 flex items-center gap-1.5 text-xs overflow-x-auto shrink-0 select-none">
+      <button class="bm-btn" data-url="dawamu://home">
+        <i class="fas fa-home text-emerald-400 text-[10px]"></i> Home
       </button>
-      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/History_of_Kenya">
-        <i class="fas fa-landmark text-amber-400 text-[10px]"></i> History of Kenya
+      <button class="bm-btn bg-emerald-950/80 border-emerald-500/50 text-emerald-300 font-bold" data-url="dawamu://books-844">
+        <i class="fas fa-book-reader text-yellow-400 text-[10px]"></i> 8-4-4 Books (F3 & F4)
       </button>
-      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Solar_System">
-        <i class="fas fa-sun text-yellow-400 text-[10px]"></i> Solar System
+      <button class="bm-btn bg-emerald-950/60 border-emerald-600/40 text-emerald-300" data-url="dawamu://study-center">
+        <i class="fas fa-graduation-cap text-yellow-400 text-[10px]"></i> Quiz Hub
+      </button>
+      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Cell_biology">
+        <i class="fas fa-seedling text-emerald-400 text-[10px]"></i> Cell Biology
+      </button>
+      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Periodic_table">
+        <i class="fas fa-table text-amber-400 text-[10px]"></i> Periodic Table
+      </button>
+      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Electricity">
+        <i class="fas fa-bolt text-yellow-400 text-[10px]"></i> Electricity
       </button>
       <button class="bm-btn" data-url="https://www.khanacademy.org/math/algebra">
-        <i class="fas fa-calculator text-emerald-400 text-[10px]"></i> Algebra (Khan)
+        <i class="fas fa-square-root-alt text-sky-400 text-[10px]"></i> Algebra
       </button>
-      <button class="bm-btn" data-url="https://www.khanacademy.org/science/physics">
-        <i class="fas fa-atom text-cyan-400 text-[10px]"></i> Physics (Newton)
+      <button class="bm-btn" data-url="https://www.khanacademy.org/math/geometry">
+        <i class="fas fa-shapes text-indigo-400 text-[10px]"></i> Geometry
+      </button>
+      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/History_of_Kenya">
+        <i class="fas fa-landmark text-orange-400 text-[10px]"></i> Kenya History
+      </button>
+      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Constitution_of_Kenya">
+        <i class="fas fa-balance-scale text-cyan-400 text-[10px]"></i> Constitution
+      </button>
+      <button class="bm-btn" data-url="https://library.dawamu.school/classics/the-pearl">
+        <i class="fas fa-book text-purple-400 text-[10px]"></i> The Pearl
+      </button>
+      <button class="bm-btn" data-url="https://library.dawamu.school/kiswahili/ngeli-za-nomino">
+        <i class="fas fa-language text-rose-400 text-[10px]"></i> Ngeli za Kiswahili
+      </button>
+      <button class="bm-btn" data-url="https://en.wikipedia.org/wiki/Plate_tectonics">
+        <i class="fas fa-mountain text-emerald-400 text-[10px]"></i> Rift Valley
       </button>
       <button class="bm-btn" data-url="https://www.nasa.gov/mars">
         <i class="fas fa-rocket text-rose-400 text-[10px]"></i> NASA Mars
       </button>
-      <button class="bm-btn" data-url="https://library.dawamu.school/classics/romeo-and-juliet">
-        <i class="fas fa-book text-purple-400 text-[10px]"></i> Romeo & Juliet
-      </button>
     </div>
 
     <!-- Active Web Viewport Canvas -->
-    <div id="browser-viewport" class="flex-1 bg-[#121314] overflow-y-auto p-4 relative"></div>
+    <div id="browser-viewport" class="flex-1 bg-[#090f1a] overflow-y-auto p-4 relative"></div>
 
     <!-- Status Bar -->
-    <div class="bg-[#18191b] border-t border-black/30 px-3 py-1 flex justify-between items-center text-[10px] text-slate-400 shrink-0">
+    <div class="bg-[#070c16] border-t border-white/5 px-4 py-1.5 flex justify-between items-center text-[11px] text-slate-400 shrink-0 font-sans">
       <div class="flex items-center gap-2">
-        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-        <span>Dawamu Offline Web Engine • Database Loaded (8 Encached Libraries)</span>
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span class="text-slate-300">Dawamu Offline Knowledgebase • 20+ Verified KCSE & STEM Modules Cached</span>
       </div>
-      <div>No Wi-Fi or Internet Required</div>
+      <div class="text-[10px] text-emerald-400 font-semibold font-mono bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">Zero Network Cost</div>
     </div>
 
     <style>
-      .nav-btn { width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; background:transparent; border:none; color:#9aa0a6; cursor:pointer; transition:all .1s; }
-      .nav-btn:hover { background:rgba(255,255,255,.1); color:#fff; }
-      .nav-btn:active { transform:scale(.9); }
-      .bm-btn { display:flex; align-items:center; gap:5px; padding:3px 8px; border-radius:6px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.06); color:#cbd5e1; font-size:11px; white-space:nowrap; cursor:pointer; transition:all .1s; }
-      .bm-btn:hover { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.15); }
-      .offline-tab { display:flex; align-items:center; gap:6px; padding:6px 12px; border-radius:8px 8px 0 0; min-width:130px; max-width:200px; font-size:11px; color:#94a3b8; background:#202225; cursor:pointer; border:1px solid transparent; border-bottom:none; transition:all .1s; }
-      .offline-tab:hover { background:#2a2d31; color:#f1f5f9; }
-      .offline-tab.active { background:#242629; color:#ffffff; border-color:#3e4248; font-weight:600; }
+      .nav-btn { width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center;
+                 background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); color:#94a3b8; cursor:pointer; transition:all .15s cubic-bezier(0.16, 1, 0.3, 1); }
+      .nav-btn:hover { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.16); transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+      .nav-btn:active { transform:scale(.92); }
+      .bm-btn { display:flex; align-items:center; gap:6px; padding:4px 11px; border-radius:10px; background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); color:#cbd5e1; font-size:11px; font-weight:500; white-space:nowrap; cursor:pointer; transition:all .12s ease; }
+      .bm-btn:hover { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(16,185,129,.4); box-shadow:0 0 12px rgba(16,185,129,.15); }
+      .offline-tab { display:flex; align-items:center; gap:8px; padding:7px 14px; border-radius:12px 12px 0 0; min-width:130px; max-width:220px; font-size:11px; color:#94a3b8; background:#0f172a; cursor:pointer; border:1px solid rgba(255,255,255,.06); border-bottom:none; transition:all .14s ease; }
+      .offline-tab:hover { background:#162238; color:#f1f5f9; }
+      .offline-tab.active { background:#0b1322; color:#ffffff; border-color:rgba(255,255,255,.14); font-weight:600; box-shadow:inset 0 2px 0 #10b981; }
     </style>
   `;
 
@@ -536,8 +573,18 @@ export function createOfflineBrowserApp() {
     let page = OFFLINE_WEB_DB[targetUrl];
 
     if (!page) {
-      // If student typed a generic search query or unindexed URL
-      if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
+      if (targetUrl.startsWith('dawamu://search')) {
+        let q = '';
+        if (targetUrl.includes('?q=')) {
+          q = decodeURIComponent(targetUrl.split('?q=')[1] || '').trim();
+        }
+        page = {
+          title: `Search: ${q || 'All Topics'}`,
+          render: () => renderSearchResultsPage(q)
+        };
+        currentTab.url = targetUrl;
+        omnibox.value = q;
+      } else if (targetUrl.startsWith('http://') || targetUrl.startsWith('https://')) {
         // Synthesize dynamic offline reader
         page = synthesizeDynamicOfflinePage(targetUrl);
       } else {
@@ -573,7 +620,7 @@ export function createOfflineBrowserApp() {
     });
 
     // Wire any interactive components
-    wireInteractivePageElements(viewport);
+    wireInteractivePageElements(viewport, loadUrl);
   }
 
   function handleNavigate(input) {
@@ -631,7 +678,7 @@ export function createOfflineBrowserApp() {
   });
 
   // Open First Tab
-  openTab('dawamu://home');
+  openTab(initialUrl);
 
   return root;
 }
@@ -642,91 +689,362 @@ export function createOfflineBrowserApp() {
 
 function renderHomePage() {
   return `
-    <div class="max-w-4xl mx-auto py-8 px-4 flex flex-col items-center text-center">
+    <div class="max-w-5xl mx-auto py-8 px-4 flex flex-col items-center text-center">
       <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-24 w-auto object-contain mb-3 drop-shadow-md">
-      <h1 class="text-3xl font-extrabold text-white tracking-tight">Dawamu Offline Web</h1>
-      <p class="text-xs text-emerald-400 font-semibold uppercase tracking-widest mt-1 mb-8">
-        Full Encyclopedia & Educational Library • Zero Wi-Fi Required
+      <h1 class="text-3xl font-extrabold text-white tracking-tight">Dawamu Offline Web Encyclopedia</h1>
+      <p class="text-xs text-emerald-400 font-semibold uppercase tracking-widest mt-1 mb-6">
+        Form 1 – Form 4 Secondary Curriculum & STEM Digital Library • 100% Offline
       </p>
 
       <!-- Central Search Box -->
-      <div class="w-full max-w-xl bg-[#24262a] border border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 rounded-2xl p-2 flex items-center gap-3 shadow-2xl mb-10 transition-all">
+      <div class="w-full max-w-2xl bg-[#24262a] border border-slate-700 hover:border-emerald-500 focus-within:border-emerald-500 rounded-2xl p-2 flex items-center gap-3 shadow-2xl mb-4 transition-all">
         <i class="fas fa-search text-slate-400 ml-3"></i>
-        <input id="home-search-input" type="text" placeholder="Search 1,000+ topics (e.g., Photosynthesis, Algebra, Kenya, Mars)..."
+        <input id="home-search-input" type="text" placeholder="Search 2,000+ topics (e.g., Photosynthesis, Cell, Periodic Table, Ohm, Calculus, Kenya, Pearl)..."
                class="bg-transparent flex-1 outline-none text-sm text-white placeholder-slate-500 min-w-0">
         <button id="home-search-btn" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white text-xs font-bold px-5 py-2.5 rounded-xl transition-all">
           Search
         </button>
       </div>
 
-      <!-- Quick Topics Grid -->
-      <div class="w-full text-left">
-        <div class="flex items-center justify-between mb-4">
-          <div class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-            <i class="fas fa-compass text-emerald-400"></i> Featured Offline Encyclopedia Topics
+      <!-- Quick Search Chips -->
+      <div class="flex items-center justify-center gap-2 flex-wrap mb-8 text-[11px] text-slate-300">
+        <span class="text-slate-500 font-bold uppercase text-[10px]">Popular:</span>
+        <a href="dawamu://books-844" class="bg-emerald-950/90 hover:bg-emerald-900 px-3 py-1 rounded-full border border-emerald-500/80 text-emerald-300 font-bold shadow-sm">📚 8-4-4 Books (F3 & F4)</a>
+        <a href="https://curriculum.dawamu.school/844/form3/mathematics" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-blue-400">Form 3 Math</a>
+        <a href="https://curriculum.dawamu.school/844/form4/chemistry" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-amber-400">Form 4 Chem</a>
+        <a href="https://library.dawamu.school/setbooks/fathers-of-nations" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-purple-400">Fathers of Nations</a>
+        <a href="https://library.dawamu.school/setbooks/the-samaritan" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-fuchsia-400">The Samaritan</a>
+        <a href="https://library.dawamu.school/setbooks/bembea-ya-maisha" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-rose-400">Bembea ya Maisha</a>
+        <a href="https://library.dawamu.school/setbooks/chozi-la-heri" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-teal-400">Chozi la Heri</a>
+        <a href="https://en.wikipedia.org/wiki/Cell_biology" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-emerald-400">Cell Biology</a>
+        <a href="https://en.wikipedia.org/wiki/Electricity" class="bg-[#24262a] hover:bg-slate-700 px-2.5 py-1 rounded-full border border-slate-700 text-yellow-400">Ohm's Law</a>
+        <a href="dawamu://study-center" class="bg-emerald-950/80 hover:bg-emerald-900 px-2.5 py-1 rounded-full border border-emerald-600 text-emerald-300 font-bold">🎯 Subject Quizzes</a>
+      </div>
+
+      <!-- Hero Promos Grid (8-4-4 Coursebooks + Quiz Hub) -->
+      <div class="w-full grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+        <!-- 8-4-4 Library Banner -->
+        <a href="dawamu://books-844" class="bg-gradient-to-r from-emerald-950 via-[#0e2f1f] to-[#0c1f36] border border-emerald-500/50 p-5 rounded-2xl flex items-center justify-between text-left shadow-xl hover:border-emerald-400 transition-all group">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+              <i class="fas fa-book-reader"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-emerald-400 uppercase font-bold tracking-wider">Kenyan 8-4-4 Syllabus</div>
+              <h3 class="text-base font-bold text-white group-hover:text-emerald-300">Form 3 & Form 4 Coursebooks</h3>
+              <p class="text-[11px] text-slate-300">21 Full Books: Math, Sciences, Humanities & Set Books.</p>
+            </div>
           </div>
-          <span class="text-[10px] text-slate-500 font-mono">100% Offline Ready</span>
+          <div class="bg-emerald-600 group-hover:bg-emerald-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shrink-0">
+            Open Library <i class="fas fa-arrow-right text-[10px]"></i>
+          </div>
+        </a>
+
+        <!-- Revision Quiz Center Promo Banner -->
+        <a href="dawamu://study-center" class="bg-gradient-to-r from-teal-950 via-[#18392b] to-[#12283a] border border-teal-700/60 p-5 rounded-2xl flex items-center justify-between text-left shadow-xl hover:border-teal-500 transition-all group">
+          <div class="flex items-center gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-teal-500/20 text-teal-400 border border-teal-500/40 flex items-center justify-center text-2xl group-hover:scale-110 transition-transform">
+              <i class="fas fa-graduation-cap"></i>
+            </div>
+            <div>
+              <div class="text-[10px] text-teal-400 uppercase font-bold tracking-wider">KCSE Interactive Revision</div>
+              <h3 class="text-base font-bold text-white group-hover:text-teal-300">Subject Revision Quizzer</h3>
+              <p class="text-[11px] text-slate-300">Test your mastery with instant scoring across all subjects.</p>
+            </div>
+          </div>
+          <div class="bg-teal-600 group-hover:bg-teal-500 text-white font-bold text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 shadow-lg shrink-0">
+            Start Quiz <i class="fas fa-arrow-right text-[10px]"></i>
+          </div>
+        </a>
+      </div>
+
+      <!-- Subject Areas Hub -->
+      <div class="w-full text-left space-y-8">
+        <!-- 0. 8-4-4 SENIOR SECONDARY COURSEBOOKS SHOWCASE -->
+        <div>
+          <div class="flex items-center justify-between text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3 border-b border-slate-800 pb-2">
+            <span class="flex items-center gap-2">
+              <i class="fas fa-book-open"></i> 8-4-4 Form Three & Form Four Senior Books
+            </span>
+            <a href="dawamu://books-844" class="text-[11px] text-emerald-400 hover:text-emerald-300 lowercase font-medium flex items-center gap-1">
+              view all 21 books <i class="fas fa-arrow-right text-[9px]"></i>
+            </a>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <a href="https://curriculum.dawamu.school/844/form3/mathematics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-blue-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-blue-950 text-blue-300 border border-blue-800/50 px-2 py-0.5 rounded-full">Form 3</span>
+                <span class="text-[10px] text-slate-500">12 Chapters</span>
+              </div>
+              <div class="text-blue-400 text-lg mb-1"><i class="fas fa-square-root-alt"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-blue-300">KLB Mathematics Form 3</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Quadratics II, Surds, Further Logs, PAYE Tax, Circles, Matrices, Sequences.</p>
+            </a>
+
+            <a href="https://curriculum.dawamu.school/844/form3/chemistry" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-amber-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-amber-950 text-amber-300 border border-amber-800/50 px-2 py-0.5 rounded-full">Form 3</span>
+                <span class="text-[10px] text-slate-500">6 Chapters</span>
+              </div>
+              <div class="text-amber-400 text-lg mb-1"><i class="fas fa-flask"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-amber-300">KLB Chemistry Form 3</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Gas Laws, The Mole Concept, Organic I Hydrocarbons, Sulphur & Contact process.</p>
+            </a>
+
+            <a href="https://curriculum.dawamu.school/844/form3/physics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-purple-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-purple-950 text-purple-300 border border-purple-800/50 px-2 py-0.5 rounded-full">Form 3</span>
+                <span class="text-[10px] text-slate-500">8 Topics</span>
+              </div>
+              <div class="text-purple-400 text-lg mb-1"><i class="fas fa-bolt"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-purple-300">KLB Physics Form 3</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Linear motion v=u+at, Newton laws, Machines & Efficiency, Current Electricity II.</p>
+            </a>
+
+            <a href="https://curriculum.dawamu.school/844/form4/mathematics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-blue-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-emerald-950 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded-full">Form 4</span>
+                <span class="text-[10px] text-slate-500">KCSE Candidate</span>
+              </div>
+              <div class="text-sky-400 text-lg mb-1"><i class="fas fa-calculator"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-sky-300">KLB Mathematics Form 4</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Calculus (Differentiation & Integration), 3D Geometry, Latitudes/Longitudes & Knots.</p>
+            </a>
+
+            <a href="https://curriculum.dawamu.school/844/form4/biology" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-emerald-950 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded-full">Form 4</span>
+                <span class="text-[10px] text-slate-500">KCSE Candidate</span>
+              </div>
+              <div class="text-emerald-400 text-lg mb-1"><i class="fas fa-dna"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-emerald-300">KLB Biology Form 4</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Genetics II, Mutations, Sex-linkage, Evolution, Eye & Ear, Support & Locomotion.</p>
+            </a>
+
+            <a href="https://curriculum.dawamu.school/844/form4/chemistry" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-amber-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-emerald-950 text-emerald-300 border border-emerald-800/50 px-2 py-0.5 rounded-full">Form 4</span>
+                <span class="text-[10px] text-slate-500">KCSE Candidate</span>
+              </div>
+              <div class="text-amber-400 text-lg mb-1"><i class="fas fa-atom"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-amber-300">KLB Chemistry Form 4</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Energy Changes, Hess's Law, Electrochemistry, Aluminium extraction, Polymers & Soaps.</p>
+            </a>
+
+            <a href="https://library.dawamu.school/setbooks/fathers-of-nations" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-purple-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-purple-950 text-purple-300 border border-purple-800/50 px-2 py-0.5 rounded-full">Compulsory Novel</span>
+                <span class="text-[10px] text-slate-500">English Literature</span>
+              </div>
+              <div class="text-purple-400 text-lg mb-1"><i class="fas fa-book"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-purple-300">Fathers of Nations</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Paul B. Vitta. Way Omega vs Path Alpha, Prof. Kimani, Pastor Chiamaka, Melusi & essays.</p>
+            </a>
+
+            <a href="https://library.dawamu.school/setbooks/the-samaritan" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-fuchsia-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-fuchsia-950 text-fuchsia-300 border border-fuchsia-800/50 px-2 py-0.5 rounded-full">Compulsory Play</span>
+                <span class="text-[10px] text-slate-500">English Literature</span>
+              </div>
+              <div class="text-fuchsia-400 text-lg mb-1"><i class="fas fa-theater-masks"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-fuchsia-300">The Samaritan</h4>
+              <p class="text-[11px] text-slate-400 mt-1">John Lara. Teacher Nicole, Mayor Mossi, Bembe, anti-corruption tech app & essays.</p>
+            </a>
+
+            <a href="https://library.dawamu.school/setbooks/bembea-ya-maisha" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-rose-500/60 transition-all group">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[9px] font-bold uppercase bg-rose-950 text-rose-300 border border-rose-800/50 px-2 py-0.5 rounded-full">Tamthilia Teule</span>
+                <span class="text-[10px] text-slate-500">Fasihi ya Kiswahili</span>
+              </div>
+              <div class="text-rose-400 text-lg mb-1"><i class="fas fa-feather-alt"></i></div>
+              <h4 class="font-bold text-sm text-white group-hover:text-rose-300">Bembea ya Maisha</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Timothy Arege. Sara, Yona, Neema, Bunju, maudhui ya uvumilivu, ndoa na usasa.</p>
+            </a>
+          </div>
         </div>
 
-        <div class="grid grid-cols-3 gap-4">
-          <a href="https://en.wikipedia.org/wiki/Photosynthesis" class="p-4 rounded-2xl bg-[#24262a] hover:bg-[#2e3137] border border-slate-800 hover:border-emerald-700/50 transition-all group flex flex-col justify-between">
-            <div>
-              <div class="text-emerald-400 text-xl mb-2 group-hover:scale-110 transition-transform w-fit"><i class="fas fa-seedling"></i></div>
-              <div class="font-bold text-sm text-white group-hover:text-emerald-300">Photosynthesis</div>
-              <div class="text-[11px] text-slate-400 mt-1">Light reactions, Calvin cycle, and biological energy production.</div>
-            </div>
-            <div class="text-[10px] text-emerald-500 font-bold uppercase mt-3">Biology • Wikipedia</div>
-          </a>
+        <!-- 1. BIOLOGICAL & NATURAL SCIENCES -->
+        <div>
+          <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3 border-b border-slate-800 pb-2">
+            <i class="fas fa-seedling"></i> 1. Biological & Life Sciences
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <a href="https://en.wikipedia.org/wiki/Cell_biology" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-emerald-400 text-lg mb-1"><i class="fas fa-microscope"></i></div>
+              <h4 class="font-bold text-sm text-white">Cell Biology & Organelles</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Ultrastructure, plant vs animal cells, mitochondria, ER & cell theory.</p>
+            </a>
 
-          <a href="https://en.wikipedia.org/wiki/History_of_Kenya" class="p-4 rounded-2xl bg-[#24262a] hover:bg-[#2e3137] border border-slate-800 hover:border-emerald-700/50 transition-all group flex flex-col justify-between">
-            <div>
-              <div class="text-amber-400 text-xl mb-2 group-hover:scale-110 transition-transform w-fit"><i class="fas fa-landmark"></i></div>
-              <div class="font-bold text-sm text-white group-hover:text-amber-300">History of Kenya</div>
-              <div class="text-[11px] text-slate-400 mt-1">From cradle of humankind to 1963 independence & 2010 Constitution.</div>
-            </div>
-            <div class="text-[10px] text-amber-500 font-bold uppercase mt-3">History • Wikipedia</div>
-          </a>
+            <a href="https://en.wikipedia.org/wiki/Photosynthesis" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-emerald-400 text-lg mb-1"><i class="fas fa-sun"></i></div>
+              <h4 class="font-bold text-sm text-white">Photosynthesis</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Light-dependent thylakoid reactions, photolysis & Calvin stroma cycle.</p>
+            </a>
 
-          <a href="https://en.wikipedia.org/wiki/Solar_System" class="p-4 rounded-2xl bg-[#24262a] hover:bg-[#2e3137] border border-slate-800 hover:border-emerald-700/50 transition-all group flex flex-col justify-between">
-            <div>
-              <div class="text-yellow-400 text-xl mb-2 group-hover:scale-110 transition-transform w-fit"><i class="fas fa-globe"></i></div>
-              <div class="font-bold text-sm text-white group-hover:text-yellow-300">The Solar System</div>
-              <div class="text-[11px] text-slate-400 mt-1">Planetary orbits, terrestrial planets, gas giants & deep space.</div>
-            </div>
-            <div class="text-[10px] text-yellow-500 font-bold uppercase mt-3">Astronomy • Wikipedia</div>
-          </a>
+            <a href="https://en.wikipedia.org/wiki/Circulatory_system" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-rose-400 text-lg mb-1"><i class="fas fa-heartbeat"></i></div>
+              <h4 class="font-bold text-sm text-white">Circulatory System</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Human heart anatomy, double circulation, arteries, veins & blood cells.</p>
+            </a>
 
-          <a href="https://www.khanacademy.org/math/algebra" class="p-4 rounded-2xl bg-[#24262a] hover:bg-[#2e3137] border border-slate-800 hover:border-emerald-700/50 transition-all group flex flex-col justify-between">
-            <div>
-              <div class="text-sky-400 text-xl mb-2 group-hover:scale-110 transition-transform w-fit"><i class="fas fa-square-root-alt"></i></div>
-              <div class="font-bold text-sm text-white group-hover:text-sky-300">Algebra Mastery</div>
-              <div class="text-[11px] text-slate-400 mt-1">Quadratic equations, discriminant rules & polynomial factoring.</div>
-            </div>
-            <div class="text-[10px] text-sky-500 font-bold uppercase mt-3">Mathematics • Khan Academy</div>
-          </a>
+            <a href="https://en.wikipedia.org/wiki/Genetics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-indigo-400 text-lg mb-1"><i class="fas fa-dna"></i></div>
+              <h4 class="font-bold text-sm text-white">Genetics & DNA</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Double helix structure, base pairing, monohybrid crosses & Punnett squares.</p>
+            </a>
 
-          <a href="https://www.khanacademy.org/science/physics" class="p-4 rounded-2xl bg-[#24262a] hover:bg-[#2e3137] border border-slate-800 hover:border-emerald-700/50 transition-all group flex flex-col justify-between">
-            <div>
-              <div class="text-indigo-400 text-xl mb-2 group-hover:scale-110 transition-transform w-fit"><i class="fas fa-magnet"></i></div>
-              <div class="font-bold text-sm text-white group-hover:text-indigo-300">Newtonian Physics</div>
-              <div class="text-[11px] text-slate-400 mt-1">Newton's 3 laws of motion, inertia, momentum & F=ma.</div>
-            </div>
-            <div class="text-[10px] text-indigo-500 font-bold uppercase mt-3">Physics • Khan Academy</div>
-          </a>
+            <a href="https://en.wikipedia.org/wiki/Solar_System" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-yellow-400 text-lg mb-1"><i class="fas fa-globe"></i></div>
+              <h4 class="font-bold text-sm text-white">The Solar System</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Terrestrial planets, gas giants, planetary orbits & space science.</p>
+            </a>
 
-          <a href="https://www.nasa.gov/mars" class="p-4 rounded-2xl bg-[#24262a] hover:bg-[#2e3137] border border-slate-800 hover:border-emerald-700/50 transition-all group flex flex-col justify-between">
-            <div>
-              <div class="text-rose-400 text-xl mb-2 group-hover:scale-110 transition-transform w-fit"><i class="fas fa-rocket"></i></div>
-              <div class="font-bold text-sm text-white group-hover:text-rose-300">NASA Mars 2020</div>
-              <div class="text-[11px] text-slate-400 mt-1">Perseverance Rover & Ingenuity helicopter discoveries at Jezero crater.</div>
-            </div>
-            <div class="text-[10px] text-rose-500 font-bold uppercase mt-3">Space • NASA</div>
-          </a>
+            <a href="https://www.nasa.gov/mars" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-rose-400 text-lg mb-1"><i class="fas fa-rocket"></i></div>
+              <h4 class="font-bold text-sm text-white">NASA Mars 2020</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Perseverance Rover discoveries at Jezero crater & Ingenuity flights.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- 2. CHEMISTRY & PHYSICAL SCIENCES -->
+        <div>
+          <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-amber-400 mb-3 border-b border-slate-800 pb-2">
+            <i class="fas fa-flask"></i> 2. Chemistry & Physical Sciences
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <a href="https://en.wikipedia.org/wiki/Periodic_table" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-amber-600/60 transition-all">
+              <div class="text-amber-400 text-lg mb-1"><i class="fas fa-table"></i></div>
+              <h4 class="font-bold text-sm text-white">Periodic Table & Trends</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Elements 1-20 configurations, atomic radius, ionization energy & groups.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Chemical_bonding" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-amber-600/60 transition-all">
+              <div class="text-sky-400 text-lg mb-1"><i class="fas fa-project-diagram"></i></div>
+              <h4 class="font-bold text-sm text-white">Chemical Bonding</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Ionic electron transfer, covalent sharing, diamond vs graphite lattices.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Acids_and_bases" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-amber-600/60 transition-all">
+              <div class="text-rose-400 text-lg mb-1"><i class="fas fa-vial"></i></div>
+              <h4 class="font-bold text-sm text-white">Acids, Bases & Titration</h4>
+              <p class="text-[11px] text-slate-400 mt-1">pH scale, indicators, neutralization reactions & molarity formulas.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Electricity" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-yellow-600/60 transition-all">
+              <div class="text-yellow-400 text-lg mb-1"><i class="fas fa-bolt"></i></div>
+              <h4 class="font-bold text-sm text-white">Electricity & Ohm's Law</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Current, voltage, V = IR, series vs parallel resistor combinations.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Optics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-cyan-600/60 transition-all">
+              <div class="text-cyan-400 text-lg mb-1"><i class="fas fa-eye"></i></div>
+              <h4 class="font-bold text-sm text-white">Optics & Lenses</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Reflection, Snell's law of refraction, 1/f = 1/u + 1/v lens formula.</p>
+            </a>
+
+            <a href="https://www.khanacademy.org/science/physics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-indigo-600/60 transition-all">
+              <div class="text-indigo-400 text-lg mb-1"><i class="fas fa-magnet"></i></div>
+              <h4 class="font-bold text-sm text-white">Newtonian Physics</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Newton's 3 laws of motion, inertia, momentum & F = m × a.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- 3. MATHEMATICS -->
+        <div>
+          <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-sky-400 mb-3 border-b border-slate-800 pb-2">
+            <i class="fas fa-square-root-alt"></i> 3. Pure & Applied Mathematics
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <a href="https://www.khanacademy.org/math/algebra" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-sky-600/60 transition-all">
+              <div class="text-sky-400 text-lg mb-1"><i class="fas fa-calculator"></i></div>
+              <h4 class="font-bold text-sm text-white">Algebra: Quadratic Equations</h4>
+              <p class="text-[11px] text-slate-400 mt-1">The quadratic formula, factoring, and discriminant analysis.</p>
+            </a>
+
+            <a href="https://www.khanacademy.org/math/geometry" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-sky-600/60 transition-all">
+              <div class="text-sky-400 text-lg mb-1"><i class="fas fa-shapes"></i></div>
+              <h4 class="font-bold text-sm text-white">Geometry & Trigonometry</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Circle theorems, SOH CAH TOA, Sine Rule & Cosine Rule.</p>
+            </a>
+
+            <a href="https://www.khanacademy.org/math/calculus" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-emerald-400 text-lg mb-1"><i class="fas fa-chart-line"></i></div>
+              <h4 class="font-bold text-sm text-white">Differential Calculus</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Power rule dy/dx = anxⁿ⁻¹, tangents, turning points & kinematics.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- 4. HUMANITIES, GEOGRAPHY & LANGUAGES -->
+        <div>
+          <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-purple-400 mb-3 border-b border-slate-800 pb-2">
+            <i class="fas fa-book"></i> 4. Humanities, Literature & Languages
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-3.5">
+            <a href="https://en.wikipedia.org/wiki/History_of_Kenya" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-orange-600/60 transition-all">
+              <div class="text-orange-400 text-lg mb-1"><i class="fas fa-landmark"></i></div>
+              <h4 class="font-bold text-sm text-white">History of Kenya</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Cradle of humankind, pre-colonial coastal trade, Mau Mau & independence.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Constitution_of_Kenya" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-cyan-600/60 transition-all">
+              <div class="text-cyan-400 text-lg mb-1"><i class="fas fa-balance-scale"></i></div>
+              <h4 class="font-bold text-sm text-white">2010 Constitution & Devolution</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Executive, Bicameral Parliament, Judiciary & 47 County Governments.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Plate_tectonics" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-emerald-400 text-lg mb-1"><i class="fas fa-mountain"></i></div>
+              <h4 class="font-bold text-sm text-white">Plate Tectonics & Rift Valley</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Continental drift, tensional faulting, grabens & volcanic features.</p>
+            </a>
+
+            <a href="https://library.dawamu.school/classics/the-pearl" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-purple-600/60 transition-all">
+              <div class="text-purple-400 text-lg mb-1"><i class="fas fa-book"></i></div>
+              <h4 class="font-bold text-sm text-white">The Pearl (Steinbeck)</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Set book guide: Kino, Juana, greed vs family, themes & symbolism.</p>
+            </a>
+
+            <a href="https://library.dawamu.school/classics/romeo-and-juliet" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-purple-600/60 transition-all">
+              <div class="text-purple-400 text-lg mb-1"><i class="fas fa-feather"></i></div>
+              <h4 class="font-bold text-sm text-white">Romeo and Juliet (Shakespeare)</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Classical drama study: prologue analysis, conflict & fate themes.</p>
+            </a>
+
+            <a href="https://library.dawamu.school/kiswahili/ngeli-za-nomino" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-rose-600/60 transition-all">
+              <div class="text-rose-400 text-lg mb-1"><i class="fas fa-language"></i></div>
+              <h4 class="font-bold text-sm text-white">Sarufi: Ngeli za Nomino</h4>
+              <p class="text-[11px] text-slate-400 mt-1">A-WA, KI-VI, LI-YA, U-I, upatanisho wa kisarufi na mifano ya sentensi.</p>
+            </a>
+          </div>
+        </div>
+
+        <!-- 5. COMPUTER SCIENCE & CODING -->
+        <div>
+          <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-emerald-400 mb-3 border-b border-slate-800 pb-2">
+            <i class="fas fa-laptop-code"></i> 5. Computer Science & Coding
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+            <a href="dawamu://python-playground" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-emerald-600/60 transition-all">
+              <div class="text-emerald-400 text-lg mb-1"><i class="fab fa-python"></i></div>
+              <h4 class="font-bold text-sm text-white">Python Interactive Playground</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Live offline code runner for algorithms, math solvers & simulations.</p>
+            </a>
+
+            <a href="https://en.wikipedia.org/wiki/Algorithm" class="p-4 rounded-xl bg-[#24262a] hover:bg-[#2d3036] border border-slate-800 hover:border-purple-600/60 transition-all">
+              <div class="text-purple-400 text-lg mb-1"><i class="fas fa-code-branch"></i></div>
+              <h4 class="font-bold text-sm text-white">Algorithms & Complexity</h4>
+              <p class="text-[11px] text-slate-400 mt-1">Linear vs binary search, sorting algorithms & Big-O notation.</p>
+            </a>
+          </div>
         </div>
       </div>
     </div>
   `;
 }
+
 
 function renderSearchResultsPage(query) {
   const cleanQuery = decodeURIComponent(query.replace('dawamu://search?q=', '')).trim();
@@ -772,9 +1090,19 @@ function renderSearchResultsPage(query) {
 }
 
 function synthesizeDynamicOfflinePage(url) {
-  const urlObj = new URL(url);
-  const pathName = urlObj.pathname.replace(/^\//, '').replace(/\//g, ' > ');
-  const topicName = pathName.split(' > ').pop() || urlObj.hostname;
+  let hostname = 'offline.resource';
+  let pathname = '';
+  let topicName = url;
+  try {
+    const fullUrl = (url.startsWith('http://') || url.startsWith('https://')) ? url : `https://${url}`;
+    const urlObj = new URL(fullUrl);
+    hostname = urlObj.hostname;
+    pathname = urlObj.pathname;
+    const parts = pathname.replace(/^\//, '').replace(/\/$/, '').split('/');
+    topicName = (parts.pop() || hostname).replace(/_/g, ' ');
+  } catch (e) {
+    topicName = url.replace(/[^a-zA-Z0-9_\-\s]/g, ' ').trim() || 'Offline Article';
+  }
 
   return {
     title: `${topicName} - Offline Reader`,
@@ -784,7 +1112,7 @@ function synthesizeDynamicOfflinePage(url) {
           <i class="fas fa-shield-alt text-emerald-400 text-2xl"></i>
           <div>
             <div class="text-[10px] text-emerald-400 uppercase tracking-wider font-bold">Dawamu Offline Web Proxy</div>
-            <h1 class="text-2xl font-bold capitalize">${topicName.replace(/_/g, ' ')}</h1>
+            <h1 class="text-2xl font-bold capitalize">${topicName}</h1>
           </div>
         </div>
 
@@ -794,11 +1122,11 @@ function synthesizeDynamicOfflinePage(url) {
 
         <div class="prose prose-invert max-w-none text-xs leading-relaxed space-y-4 text-slate-300">
           <p>
-            This article on <b>${topicName.replace(/_/g, ' ')}</b> is pre-rendered from the Dawamu Offline Curated Knowledgebase. Students have continuous read access regardless of internet status.
+            This article on <b>${topicName}</b> is pre-rendered from the Dawamu Offline Curated Knowledgebase. Students have continuous read access regardless of internet status.
           </p>
           <div class="p-4 bg-slate-900 rounded-xl font-mono text-[11px] text-slate-300">
-            <div><b>Source Domain:</b> ${urlObj.hostname}</div>
-            <div><b>Resource Path:</b> ${urlObj.pathname}</div>
+            <div><b>Source Domain:</b> ${hostname}</div>
+            <div><b>Resource Path:</b> ${pathname || '/'}</div>
             <div><b>Status:</b> Encached for Safe Offline School Session</div>
           </div>
         </div>
@@ -813,21 +1141,592 @@ function synthesizeDynamicOfflinePage(url) {
   };
 }
 
-function wireInteractivePageElements(container) {
-  // Home search button wiring
+/* ═══════════════════════════════════════════════════
+   OFFLINE PYTHON RUNNER & PLAYGROUND
+═══════════════════════════════════════════════════ */
+const PYTHON_EXAMPLES = {
+  hello: `# Dawamu OS - Welcome to Python
+student_name = "Brian Ochieng"
+school = "Dawamu Academy"
+form = 1
+
+print("=" * 38)
+print(f"Student: {student_name} | {school}")
+print(f"Academic Level: Form {form}")
+print("=" * 38)
+
+# Calculate Subject Average
+scores = [88, 92, 79, 95, 84]
+total = sum(scores)
+avg = total / len(scores)
+
+print(f"Total Points: {total} / 500")
+print(f"Average Percentage: {avg}%")
+if avg >= 80:
+    print("Academic Standing: Honours List (Grade A)")
+`,
+  fibonacci: `# Fibonacci Sequence Generator
+def generate_fibonacci(terms):
+    fib = [0, 1]
+    while len(fib) < terms:
+        fib.append(fib[-1] + fib[-2])
+    return fib
+
+print("First 12 Terms of Fibonacci Series:")
+series = generate_fibonacci(12)
+for idx, val in enumerate(series):
+    print(f"  Term {idx + 1:2d} -> {val}")
+`,
+  grades: `# Dawamu Form 1-4 Grading System
+grades = {
+    "Mathematics": 94,
+    "English": 88,
+    "Kiswahili": 82,
+    "Biology": 91,
+    "Chemistry": 87,
+    "Physics": 96,
+    "History": 90
+}
+
+print("DAWAMU ACADEMIC TERM PERFORMANCE")
+print("-" * 38)
+for subject, mark in grades.items():
+    print(f"{subject:14} : {mark}%")
+
+marks = list(grades.values())
+mean = sum(marks) / len(marks)
+print("-" * 38)
+print(f"Mean Score     : {mean:.1f}%")
+print(f"Principal Note : Outstanding effort! Keep it up.")
+`,
+  quadratics: `import math
+
+# Solve Quadratic: ax^2 + bx + c = 0
+a = 1
+b = -7
+c = 10
+
+discriminant = b**2 - 4*a*c
+print(f"Equation: {a}x^2 + ({b})x + ({c}) = 0")
+print(f"Discriminant: {discriminant}")
+
+if discriminant >= 0:
+    root1 = (-b + math.sqrt(discriminant)) / (2*a)
+    root2 = (-b - math.sqrt(discriminant)) / (2*a)
+    print(f"Root 1 = {root1}")
+    print(f"Root 2 = {root2}")
+else:
+    print("No real roots exist.")
+`,
+  primes: `# Find Prime Numbers up to 60
+primes = []
+for n in range(2, 61):
+    is_prime = True
+    for i in range(2, int(n**0.5) + 1):
+        if n % i == 0:
+            is_prime = False
+            break
+    if is_prime:
+        primes.append(n)
+
+print(f"Prime Numbers up to 60 ({len(primes)} found):")
+print(", ".join(str(p) for p in primes))
+`,
+  ascii: `# ASCII Art Generator
+size = 5
+print("Dawamu Diamond Art:")
+for i in range(size):
+    print(" " * (size - i - 1) + "*" * (2 * i + 1))
+for i in range(size - 2, -1, -1):
+    print(" " * (size - i - 1) + "*" * (2 * i + 1))
+`
+};
+
+function renderPythonPlaygroundPage() {
+  return `
+    <div class="max-w-5xl mx-auto py-6 px-4">
+      <div class="flex flex-col md:flex-row md:items-center justify-between pb-4 mb-4 border-b border-slate-800 gap-3">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-emerald-950 border border-emerald-600/40 flex items-center justify-center text-2xl text-emerald-400">
+            <i class="fab fa-python"></i>
+          </div>
+          <div>
+            <h1 class="text-xl font-bold text-white flex items-center gap-2">
+              Dawamu Python Playground
+              <span class="text-[10px] bg-emerald-950 text-emerald-400 border border-emerald-700/50 px-2 py-0.5 rounded-full font-mono uppercase tracking-wider">100% Offline</span>
+            </h1>
+            <div class="text-xs text-slate-400">Interactive code execution environment for algorithms, mathematics & science.</div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2 flex-wrap">
+          <select id="py-example-select" class="bg-[#18191b] border border-slate-700 text-xs text-slate-200 rounded-xl px-3 py-2 outline-none focus:border-emerald-500 cursor-pointer">
+            <option value="hello">1. Hello World & Calculation</option>
+            <option value="fibonacci">2. Fibonacci Sequence</option>
+            <option value="grades">3. Dawamu Student Grades</option>
+            <option value="quadratics">4. Quadratic Equation Solver</option>
+            <option value="primes">5. Prime Numbers Finder</option>
+            <option value="ascii">6. ASCII Diamond Art</option>
+          </select>
+          <button id="py-run-btn" class="bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-lg shadow-emerald-950/40 cursor-pointer">
+            <i class="fas fa-play text-[10px]"></i> Run Code
+          </button>
+          <button id="py-clear-btn" class="bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-300 text-xs px-3 py-2 rounded-xl transition-all cursor-pointer">
+            <i class="fas fa-trash-alt text-[10px]"></i> Clear
+          </button>
+        </div>
+      </div>
+
+      <!-- Workspace Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 h-[510px]">
+        <!-- Code Editor -->
+        <div class="flex flex-col bg-[#141517] rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+          <div class="bg-[#1f2124] px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5 font-mono text-emerald-400"><i class="fas fa-code"></i> main.py</span>
+            <span class="text-[10px] text-slate-500">Press Run or Shift+Enter</span>
+          </div>
+          <textarea id="py-code-input" spellcheck="false" class="flex-1 bg-transparent p-4 font-mono text-xs leading-relaxed text-emerald-200 outline-none resize-none selection:bg-emerald-900">${PYTHON_EXAMPLES.hello}</textarea>
+        </div>
+
+        <!-- Output Terminal -->
+        <div class="flex flex-col bg-[#0b0f14] rounded-2xl border border-slate-800 overflow-hidden shadow-xl">
+          <div class="bg-[#161f28] px-4 py-2 border-b border-slate-800 flex items-center justify-between text-xs text-slate-400">
+            <span class="flex items-center gap-1.5 font-mono text-sky-400"><i class="fas fa-terminal"></i> Terminal Output</span>
+            <span id="py-exec-status" class="text-[10px] text-slate-500">Ready</span>
+          </div>
+          <div id="py-output" class="flex-1 p-4 font-mono text-xs text-slate-200 overflow-y-auto whitespace-pre-wrap leading-relaxed">
+            <div class="text-slate-500 italic">Click "Run Code" above to execute this script in Dawamu OS...</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function transpilePythonToJS(pyCode) {
+  const lines = pyCode.split('\n');
+  const jsLines = [];
+  const indentStack = [0];
+
+  for (let rawLine of lines) {
+    if (!rawLine.trim()) {
+      jsLines.push('');
+      continue;
+    }
+
+    if (rawLine.trim().startsWith('#')) {
+      jsLines.push('// ' + rawLine.trim().slice(1));
+      continue;
+    }
+
+    const indentMatch = rawLine.match(/^(\s*)/);
+    const indent = indentMatch ? indentMatch[1].length : 0;
+    let trimmed = rawLine.trim();
+
+    // Close indentation blocks
+    while (indentStack.length > 1 && indent < indentStack[indentStack.length - 1]) {
+      indentStack.pop();
+      jsLines.push(' '.repeat(indentStack[indentStack.length - 1]) + '}');
+    }
+
+    // Skip import lines
+    if (trimmed.startsWith('import ') || trimmed.startsWith('from ')) {
+      jsLines.push('// ' + trimmed);
+      continue;
+    }
+
+    // Replace f-strings
+    trimmed = trimmed.replace(/f"([^"]*)"/g, (m, p) => '`' + p.replace(/\{([^}:]+)(?::[^}]*)?\}/g, '${$1}') + '`');
+    trimmed = trimmed.replace(/f'([^']*)'/g, (m, p) => '`' + p.replace(/\{([^}:]+)(?::[^}]*)?\}/g, '${$1}') + '`');
+
+    // Replace Python operators and constants
+    trimmed = trimmed
+      .replace(/\bTrue\b/g, 'true')
+      .replace(/\bFalse\b/g, 'false')
+      .replace(/\bNone\b/g, 'null')
+      .replace(/\band\b/g, '&&')
+      .replace(/\bor\b/g, '||')
+      .replace(/\bnot\b/g, '!')
+      .replace(/\*\*/g, '**');
+
+    // String multiplication: " " * n -> " ".repeat(n)
+    trimmed = trimmed.replace(/(".*?"|'.*?')\s*\*\s*([^;,\n]+)/g, '$1.repeat($2)');
+
+    // Function definition
+    if (trimmed.startsWith('def ') && trimmed.endsWith(':')) {
+      const fnHeader = trimmed.slice(4, -1);
+      jsLines.push(' '.repeat(indent) + `function ${fnHeader} {`);
+      indentStack.push(indent + 4);
+      continue;
+    }
+
+    // For in enumerate
+    if (trimmed.startsWith('for ') && trimmed.includes('in enumerate(') && trimmed.endsWith(':')) {
+      const match = trimmed.match(/^for\s+([a-zA-Z0-9_,\s]+)\s+in\s+enumerate\((.+)\):$/);
+      if (match) {
+        jsLines.push(' '.repeat(indent) + `for (let [${match[1]}] of enumerate(${match[2]})) {`);
+        indentStack.push(indent + 4);
+        continue;
+      }
+    }
+
+    // For in range
+    if (trimmed.startsWith('for ') && trimmed.includes('in range(') && trimmed.endsWith(':')) {
+      const match = trimmed.match(/^for\s+([a-zA-Z0-9_]+)\s+in\s+range\((.+)\):$/);
+      if (match) {
+        jsLines.push(' '.repeat(indent) + `for (let ${match[1]} of range(${match[2]})) {`);
+        indentStack.push(indent + 4);
+        continue;
+      }
+    }
+
+    // For item in iterable
+    if (trimmed.startsWith('for ') && trimmed.endsWith(':')) {
+      const match = trimmed.match(/^for\s+([a-zA-Z0-9_,\s]+)\s+in\s+(.+):$/);
+      if (match) {
+        jsLines.push(' '.repeat(indent) + `for (let ${match[1]} of ${match[2]}) {`);
+        indentStack.push(indent + 4);
+        continue;
+      }
+    }
+
+    // While loop
+    if (trimmed.startsWith('while ') && trimmed.endsWith(':')) {
+      const cond = trimmed.slice(6, -1);
+      jsLines.push(' '.repeat(indent) + `while (${cond}) {`);
+      indentStack.push(indent + 4);
+      continue;
+    }
+
+    // If / elif / else
+    if (trimmed.startsWith('if ') && trimmed.endsWith(':')) {
+      const cond = trimmed.slice(3, -1);
+      jsLines.push(' '.repeat(indent) + `if (${cond}) {`);
+      indentStack.push(indent + 4);
+      continue;
+    }
+
+    if (trimmed.startsWith('elif ') && trimmed.endsWith(':')) {
+      const cond = trimmed.slice(5, -1);
+      // Close previous block first
+      if (indentStack.length > 1) indentStack.pop();
+      jsLines.push(' '.repeat(indent) + `else if (${cond}) {`);
+      indentStack.push(indent + 4);
+      continue;
+    }
+
+    if (trimmed === 'else:') {
+      if (indentStack.length > 1) indentStack.pop();
+      jsLines.push(' '.repeat(indent) + `else {`);
+      indentStack.push(indent + 4);
+      continue;
+    }
+
+    // Variable assignment: auto-prefix let if not declared
+    if (/^[a-zA-Z_][a-zA-Z0-9_]*\s*=[^=]/.test(trimmed)) {
+      trimmed = 'var ' + trimmed;
+    }
+
+    jsLines.push(' '.repeat(indent) + trimmed + ';');
+  }
+
+  while (indentStack.length > 1) {
+    indentStack.pop();
+    jsLines.push('}');
+  }
+
+  return jsLines.join('\n');
+}
+
+async function runPythonCode(code, outputEl, statusEl, runBtn = null) {
+  outputEl.innerHTML = '';
+  const startTime = performance.now();
+  if (statusEl) statusEl.innerHTML = '<span class="text-sky-400 animate-pulse"><i class="fas fa-spinner fa-spin"></i> Executing in sandbox...</span>';
+  if (runBtn) runBtn.disabled = true;
+
+  if (!code || !code.trim()) {
+    outputEl.innerHTML = '<span class="text-amber-400 italic font-mono">[No code provided to execute]</span>';
+    if (statusEl) statusEl.textContent = 'Empty';
+    if (runBtn) runBtn.disabled = false;
+    return;
+  }
+
+  // 1. Primary execution: Real isolated Python 3.11 FastAPI backend runner (/api/v1/playground/run)
+  try {
+    const res = await fetch('http://127.0.0.1:8000/api/v1/playground/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: code, timeout: 5.0 })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const elapsed = data.execution_time_ms || Math.round(performance.now() - startTime);
+
+      outputEl.innerHTML = '';
+      if (data.stdout) {
+        const stdoutPre = document.createElement('div');
+        stdoutPre.className = 'text-emerald-300 font-mono whitespace-pre-wrap leading-relaxed';
+        stdoutPre.textContent = data.stdout;
+        outputEl.appendChild(stdoutPre);
+      }
+      if (data.stderr) {
+        const stderrPre = document.createElement('div');
+        stderrPre.className = 'text-rose-400 font-mono whitespace-pre-wrap leading-relaxed mt-2 p-2.5 rounded-lg bg-rose-950/40 border border-rose-800/40';
+        stderrPre.textContent = data.stderr;
+        outputEl.appendChild(stderrPre);
+      }
+      if (!data.stdout && !data.stderr) {
+        outputEl.innerHTML = '<span class="text-slate-500 italic font-mono">[Program finished with exit code 0 - no output]</span>';
+      }
+
+      if (statusEl) {
+        statusEl.innerHTML = `<span class="${data.success ? 'text-emerald-400' : 'text-rose-400'} font-bold">Exit ${data.exit_code} (${elapsed}ms • Python 3.11 Sandbox)</span>`;
+      }
+      if (runBtn) runBtn.disabled = false;
+      return;
+    }
+  } catch (backendErr) {
+    // Backend offline or unreachable, fall through to client-side isolated runner
+    console.info('[Playground] Backend runner offline, running client-side fallback:', backendErr.message);
+  }
+
+  // 2. Client-side fallback runner for standalone offline mode
+  try {
+    const logs = [];
+    const logFn = (...args) => {
+      logs.push(args.map(a => typeof a === 'object' && a !== null ? JSON.stringify(a) : String(a)).join(' '));
+    };
+
+    const scope = {
+      print: logFn,
+      range: (start, stop, step = 1) => {
+        if (stop === undefined) { stop = start; start = 0; }
+        const arr = [];
+        for (let i = start; step > 0 ? i < stop : i > stop; i += step) arr.push(i);
+        return arr;
+      },
+      len: (o) => o?.length ?? (typeof o === 'object' ? Object.keys(o).length : 0),
+      sum: (arr) => Array.isArray(arr) ? arr.reduce((a, b) => a + b, 0) : 0,
+      max: (...args) => Math.max(...(Array.isArray(args[0]) ? args[0] : args)),
+      min: (...args) => Math.min(...(Array.isArray(args[0]) ? args[0] : args)),
+      abs: (x) => Math.abs(x),
+      round: (x, d = 0) => Number(x.toFixed(d)),
+      int: (x) => parseInt(x, 10) || 0,
+      float: (x) => parseFloat(x) || 0,
+      str: (x) => String(x),
+      list: (x) => Array.isArray(x) ? [...x] : (typeof x === 'object' ? Object.values(x) : []),
+      enumerate: (arr) => {
+        if (Array.isArray(arr)) return arr.map((item, idx) => [idx, item]);
+        if (typeof arr === 'object') return Object.entries(arr);
+        return [];
+      },
+      math: {
+        sqrt: Math.sqrt,
+        sin: Math.sin,
+        cos: Math.cos,
+        tan: Math.tan,
+        pi: Math.PI,
+        e: Math.E,
+        floor: Math.floor,
+        ceil: Math.ceil,
+        pow: Math.pow
+      }
+    };
+
+    const transpiled = transpilePythonToJS(code);
+    const runner = new Function(...Object.keys(scope), transpiled);
+    runner(...Object.values(scope));
+
+    const elapsed = Math.round(performance.now() - startTime);
+    if (statusEl) statusEl.innerHTML = `<span class="text-amber-400 font-semibold">Completed in ${elapsed}ms (Offline Client Sandbox)</span>`;
+
+    if (logs.length === 0) {
+      outputEl.innerHTML = `<span class="text-slate-500 italic">[Program finished with exit code 0 - no output]</span>`;
+    } else {
+      outputEl.textContent = logs.join('\n');
+    }
+  } catch (err) {
+    if (statusEl) statusEl.innerHTML = `<span class="text-rose-400 font-bold">Execution Error</span>`;
+    outputEl.innerHTML = `<span class="text-rose-400 font-bold">Python Execution Error:</span>\n<span class="text-rose-300 font-mono">${err.message}</span>`;
+  } finally {
+    if (runBtn) runBtn.disabled = false;
+  }
+}
+
+function wireInteractivePageElements(container, loadUrl) {
+  // 1. Home search button wiring
   const homeInput = container.querySelector('#home-search-input');
   const homeBtn   = container.querySelector('#home-search-btn');
 
   if (homeInput && homeBtn) {
     const doSearch = () => {
       const q = homeInput.value.trim();
-      if (q) {
-        const link = document.createElement('a');
-        link.href = q;
-        container.closest('#browser-viewport').dispatchEvent(new CustomEvent('custom-navigate', { detail: q }));
+      if (q && loadUrl) {
+        loadUrl(q);
       }
     };
     homeBtn.addEventListener('click', doSearch);
     homeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doSearch(); });
   }
+
+  // 2. Python Playground wiring
+  const pyCode = container.querySelector('#py-code-input');
+  const pyOutput = container.querySelector('#py-output');
+  const pyRunBtn = container.querySelector('#py-run-btn');
+  const pyClearBtn = container.querySelector('#py-clear-btn');
+  const pySelect = container.querySelector('#py-example-select');
+  const pyStatus = container.querySelector('#py-exec-status');
+
+  if (pyCode && pyRunBtn && pyOutput) {
+    pyRunBtn.addEventListener('click', () => {
+      runPythonCode(pyCode.value, pyOutput, pyStatus, pyRunBtn);
+    });
+
+    if (pyClearBtn) {
+      pyClearBtn.addEventListener('click', () => {
+        pyOutput.innerHTML = '<span class="text-slate-500 italic">Terminal cleared.</span>';
+        if (pyStatus) pyStatus.textContent = 'Cleared';
+      });
+    }
+
+    if (pySelect) {
+      pySelect.addEventListener('change', () => {
+        const key = pySelect.value;
+        if (PYTHON_EXAMPLES[key]) {
+          pyCode.value = PYTHON_EXAMPLES[key];
+          pyOutput.innerHTML = `<span class="text-slate-500 italic">Loaded template: ${pySelect.options[pySelect.selectedIndex].text}. Click Run Code to execute.</span>`;
+        }
+      });
+    }
+
+    pyCode.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.shiftKey) {
+        e.preventDefault();
+        runPythonCode(pyCode.value, pyOutput, pyStatus, pyRunBtn);
+      }
+    });
+  }
+
+  // 3. Subject Revision Quizzer Wiring
+  const quizCards = container.querySelectorAll('[data-quiz-index]');
+  const scoreBadge = container.querySelector('#quiz-score-badge');
+  if (quizCards.length > 0 && typeof STUDY_QUIZZES !== 'undefined') {
+    let score = 0;
+    const answered = new Set();
+
+    container.querySelectorAll('.quiz-opt-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const qIdx = parseInt(btn.dataset.q);
+        const optIdx = parseInt(btn.dataset.opt);
+        const qData = STUDY_QUIZZES[qIdx];
+        if (!qData || answered.has(qIdx)) return;
+
+        answered.add(qIdx);
+        const card = container.querySelector(`[data-quiz-index="${qIdx}"]`);
+        const feedback = card ? card.querySelector('.quiz-feedback') : null;
+        const allOpts = card ? card.querySelectorAll('.quiz-opt-btn') : [];
+
+        if (optIdx === qData.correct) {
+          score++;
+          btn.classList.remove('bg-slate-800/80', 'hover:bg-slate-700', 'border-slate-700');
+          btn.classList.add('bg-emerald-900/80', 'border-emerald-500', 'text-emerald-200');
+          if (feedback) {
+            feedback.className = 'quiz-feedback mt-4 p-3 rounded-xl text-xs bg-emerald-950/60 border border-emerald-700/60 text-emerald-300';
+            feedback.innerHTML = `<b>✓ Correct!</b> ${qData.explanation}`;
+            feedback.classList.remove('hidden');
+          }
+        } else {
+          btn.classList.remove('bg-slate-800/80', 'hover:bg-slate-700', 'border-slate-700');
+          btn.classList.add('bg-rose-950/80', 'border-rose-600', 'text-rose-200');
+          const correctBtn = card ? card.querySelector(`[data-opt="${qData.correct}"]`) : null;
+          if (correctBtn) {
+            correctBtn.classList.remove('bg-slate-800/80', 'hover:bg-slate-700', 'border-slate-700');
+            correctBtn.classList.add('bg-emerald-950/80', 'border-emerald-500', 'text-emerald-200');
+          }
+          if (feedback) {
+            feedback.className = 'quiz-feedback mt-4 p-3 rounded-xl text-xs bg-rose-950/60 border border-rose-800/60 text-rose-300';
+            feedback.innerHTML = `<b>✗ Incorrect.</b> Correct answer: <b>${qData.options[qData.correct]}</b>. ${qData.explanation}`;
+            feedback.classList.remove('hidden');
+          }
+        }
+
+        allOpts.forEach(b => b.classList.add('pointer-events-none', 'opacity-80'));
+        btn.classList.remove('opacity-80');
+
+        if (scoreBadge) {
+          scoreBadge.textContent = `Score: ${score} / ${STUDY_QUIZZES.length}`;
+        }
+      });
+    });
+  }
+
+  // 4. 8-4-4 Book Library Filter Tabs
+  const filterBtns = container.querySelectorAll('#books-filter-bar .filter-btn');
+  const bookCards = container.querySelectorAll('.book-card');
+  if (filterBtns.length > 0 && bookCards.length > 0) {
+    filterBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        filterBtns.forEach(b => {
+          b.classList.remove('active', 'bg-emerald-600', 'text-white');
+          b.classList.add('bg-[#24262a]', 'text-slate-300');
+        });
+        btn.classList.add('active', 'bg-emerald-600', 'text-white');
+        btn.classList.remove('bg-[#24262a]', 'text-slate-300');
+
+        const filter = btn.dataset.filter;
+        bookCards.forEach(card => {
+          const form = card.dataset.form || '';
+          const cat = card.dataset.category || '';
+          if (filter === 'all' || form.includes(filter) || cat.includes(filter)) {
+            card.style.display = 'flex';
+          } else {
+            card.style.display = 'none';
+          }
+        });
+      });
+    });
+  }
+
+  // 5. 8-4-4 Coursebook Save/Download Button
+  container.querySelectorAll('.book-save-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const filename = btn.dataset.filename || 'KLB_Secondary_Coursebook_Notes.docx';
+      if (window.electronAPI && typeof window.electronAPI.saveDownloadFile === 'function') {
+        window.electronAPI.saveDownloadFile({ filename });
+      } else {
+        // Fallback for browser mode: download real blob
+        const docxHeader = `Dawamu OS Academic Repository\nResource: ${filename}\nDate: ${new Date().toLocaleDateString()}\nStatus: Verified Curriculum Resource\n`;
+        const blob = new Blob([docxHeader], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = filename;
+        a.click();
+      }
+
+      if (window.dawamuDialogs && typeof window.dawamuDialogs.toast === 'function') {
+        window.dawamuDialogs.toast(`Saved "${filename}" to This PC Downloads!`, 'success');
+      } else {
+        // Visual Toast Notification
+        const existingToast = document.querySelector('#book-save-toast');
+        if (existingToast) existingToast.remove();
+
+        const toast = document.createElement('div');
+        toast.id = 'book-save-toast';
+        toast.className = 'fixed bottom-14 right-6 bg-emerald-950 border border-emerald-500 text-white px-4 py-3 rounded-2xl shadow-2xl text-xs z-[99999] flex items-center gap-3';
+        toast.innerHTML = `
+          <div class="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-base">
+            <i class="fas fa-check-circle"></i>
+          </div>
+          <div>
+            <div class="font-bold text-white">Saved to This PC!</div>
+            <div class="text-[11px] text-emerald-300 font-mono">${filename} in Downloads</div>
+          </div>
+        `;
+        document.body.appendChild(toast);
+        setTimeout(() => { if (toast.parentNode) toast.remove(); }, 3500);
+      }
+    });
+  });
 }

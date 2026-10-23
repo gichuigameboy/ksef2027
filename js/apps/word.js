@@ -13,7 +13,7 @@
  * - Zoom controls (50% to 150%) & Fullscreen focus mode
  */
 
-export function createWordApp() {
+export function createWordApp(options = {}) {
   const root = document.createElement('div');
   root.className = 'flex flex-col h-full bg-[#eef1f5] font-sans text-slate-800 select-none overflow-hidden';
 
@@ -22,7 +22,7 @@ export function createWordApp() {
   let zoomLevel = 1.0;
   let showRuler = true;
   let currentDocId = 'doc_' + Date.now();
-  let currentDocTitle = 'Term 3 Academic Essay.docx';
+  let currentDocTitle = options.fileName || options.title || 'Term 3 Academic Essay.docx';
   let autoSaveTimeout = null;
   let findMatches = [];
   let currentMatchIndex = -1;
@@ -378,9 +378,17 @@ export function createWordApp() {
   const zoomText = root.querySelector('#zoom-text');
   const findReplaceBar = root.querySelector('#find-replace-bar');
 
-  // Load default template (Academic Essay)
-  paper.innerHTML = TEMPLATES.essay.content;
-  currentDocTitle = TEMPLATES.essay.title;
+  // Load initial content (passed file or default template)
+  if (options.fileData) {
+    paper.innerHTML = options.fileData;
+    currentDocTitle = options.fileName || 'Document.docx';
+  } else if (options.fileName) {
+    currentDocTitle = options.fileName;
+    paper.innerHTML = TEMPLATES.blank.content;
+  } else {
+    paper.innerHTML = TEMPLATES.essay.content;
+    currentDocTitle = TEMPLATES.essay.title;
+  }
   titleInput.value = currentDocTitle;
 
   /* ═══════════════════════════════════════════════════
@@ -891,7 +899,11 @@ export function createWordApp() {
         utter.pitch = 1.0;
         window.speechSynthesis.speak(utter);
       } else {
-        alert('Speech Synthesis is not supported in this runtime.');
+        if (window.dawamuDialogs && window.dawamuDialogs.toast) {
+          window.dawamuDialogs.toast('Speech Synthesis is not supported in this runtime.', 'warning');
+        } else {
+          alert('Speech Synthesis is not supported in this runtime.');
+        }
       }
     });
 
@@ -1105,12 +1117,23 @@ export function createWordApp() {
 
   function saveDocument() {
     saveDocumentSilently();
-    alert('Document "' + titleInput.value + '" saved to Dawamu OS Storage.');
+    if (window.dawamuDialogs && window.dawamuDialogs.toast) {
+      window.dawamuDialogs.toast(`Document "${titleInput.value}" saved to Dawamu OS Storage`, 'success');
+    } else {
+      alert('Document "' + titleInput.value + '" saved to Dawamu OS Storage.');
+    }
   }
 
-  function loadTemplate(tplKey) {
+  async function loadTemplate(tplKey) {
     const tpl = TEMPLATES[tplKey];
-    if (tpl && confirm(`Load template "${tpl.title}"? Current unsaved edits will be replaced.`)) {
+    if (!tpl) return;
+    let ok = false;
+    if (window.dawamuDialogs && window.dawamuDialogs.confirm) {
+      ok = await window.dawamuDialogs.confirm(`Load template "${tpl.title}"? Current unsaved edits will be replaced.`);
+    } else {
+      ok = confirm(`Load template "${tpl.title}"? Current unsaved edits will be replaced.`);
+    }
+    if (ok) {
       currentDocId = 'doc_' + Date.now();
       paper.innerHTML = tpl.content;
       titleInput.value = tpl.title;
@@ -1137,7 +1160,7 @@ export function createWordApp() {
               <div class="text-[10px] text-slate-500">${new Date(d.lastModified).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
             </div>
           </div>
-          <button class="text-rose-500 hover:text-rose-700 p-2" data-del-id="${d.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
+          <button class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer" data-del-id="${d.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
         </div>
       `).join('');
 
@@ -1155,12 +1178,21 @@ export function createWordApp() {
       });
 
       listEl.querySelectorAll('[data-del-id]').forEach(btn => {
-        btn.addEventListener('click', (e) => {
+        btn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          if (confirm('Delete this saved document?')) {
+          let ok = false;
+          if (window.dawamuDialogs && window.dawamuDialogs.confirm) {
+            ok = await window.dawamuDialogs.confirm('Delete this saved document from Dawamu OS?');
+          } else {
+            ok = confirm('Delete this saved document?');
+          }
+          if (ok) {
             docs = docs.filter(d => d.id !== btn.dataset.delId);
             localStorage.setItem('dawamu_word_library', JSON.stringify(docs));
             openSavedDocsModal();
+            if (window.dawamuDialogs && window.dawamuDialogs.toast) {
+              window.dawamuDialogs.toast('Document deleted', 'info');
+            }
           }
         });
       });

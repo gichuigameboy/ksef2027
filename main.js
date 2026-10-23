@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, session } = require('electron');
 const path = require('path');
 const os   = require('os');
 const fs   = require('fs');
+const { execSync } = require('child_process');
 
 // Ensure OS virtual storage folder exists for internal "This PC / Downloads"
 const OS_STORAGE_DIR = path.join(__dirname, 'os_storage', 'downloads');
@@ -177,6 +178,48 @@ ipcMain.handle('get-system-info', (event) => {
     cpus:     os.cpus().length + ' Cores',
     uptime:   Math.round(os.uptime() / 60) + ' Mins'
   };
+});
+
+ipcMain.handle('get-network-info', (event) => {
+  if (!isAuthorizedSender(event)) return null;
+  try {
+    const interfaces = os.networkInterfaces();
+    let ip = '';
+    let adapter = '';
+    for (const name of Object.keys(interfaces)) {
+      for (const iface of interfaces[name]) {
+        if (!iface.internal && iface.family === 'IPv4') {
+          ip = iface.address;
+          adapter = name;
+          break;
+        }
+      }
+      if (ip) break;
+    }
+
+    let ssid = '';
+    let signal = '';
+    if (process.platform === 'win32') {
+      try {
+        const out = execSync('netsh wlan show interfaces', { encoding: 'utf8', timeout: 2500 });
+        const ssidMatch = out.match(/^\s*SSID\s*:\s*(.+)$/m);
+        const signalMatch = out.match(/^\s*Signal\s*:\s*(.+)$/m);
+        if (ssidMatch) ssid = ssidMatch[1].trim();
+        if (signalMatch) signal = signalMatch[1].trim();
+      } catch (_) {}
+    }
+
+    return {
+      connected: !!ip,
+      ssid: ssid || (adapter ? `${adapter} (Local Network)` : 'Ethernet / Wi-Fi'),
+      ip: ip || '127.0.0.1',
+      adapter: adapter || 'Network Adapter',
+      signal: signal || (ip ? '98%' : '0%'),
+      isNative: true
+    };
+  } catch (err) {
+    return { connected: false, error: err.message, isNative: true };
+  }
 });
 
 ipcMain.handle('get-downloaded-files', (event) => {

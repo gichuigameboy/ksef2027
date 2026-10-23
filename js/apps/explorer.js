@@ -1,14 +1,27 @@
 /**
  * Dawamu OS - Windows-Style File Explorer ("This PC / My Files")
+ * Complete Implementation:
+ * - Navigable folders and drive hierarchies
+ * - Working file-type associations with DawamuOS applications (Word, Sheets, Docs, Offline Library)
+ * - History stack (Back, Forward, Up, Refresh)
+ * - Breadcrumb navigation
+ * - Document creation, cut, copy, paste, delete
+ * - Real download synchronization & virtual storage
  */
 
 import { stateStore } from '../os/state.js';
+import { dawamuDialogs } from '../os/dialogs.js';
 
 export function createExplorerApp() {
   const root = document.createElement('div');
   root.className = 'flex flex-col h-full bg-[#191919] text-white font-sans select-none overflow-hidden';
 
   let currentFolder = 'documents';
+  const historyStack = ['documents'];
+  let historyIndex = 0;
+  let selectedFile = null;
+  let clipboard = null; // { action: 'cut'|'copy', file, sourceFolder }
+  let searchQuery = '';
 
   const fileSystem = {
     quickAccess: [
@@ -81,8 +94,6 @@ export function createExplorerApp() {
     }
   };
 
-  let searchQuery = '';
-
   async function loadRealDownloads() {
     if (window.electronAPI && typeof window.electronAPI.getDownloadedFiles === 'function') {
       try {
@@ -107,26 +118,96 @@ export function createExplorerApp() {
     });
   }
 
+  function navigateTo(folderKey) {
+    if (!folderKey) return;
+    if (currentFolder !== folderKey) {
+      // Trim forward history if we navigated somewhere new
+      historyStack.splice(historyIndex + 1);
+      historyStack.push(folderKey);
+      historyIndex = historyStack.length - 1;
+      currentFolder = folderKey;
+      selectedFile = null;
+      searchQuery = '';
+      render();
+    }
+  }
+
+  function goBack() {
+    if (historyIndex > 0) {
+      historyIndex--;
+      currentFolder = historyStack[historyIndex];
+      selectedFile = null;
+      searchQuery = '';
+      render();
+    }
+  }
+
+  function goUp() {
+    const parentMap = {
+      books844: 'documents',
+      schoolwork: 'documents',
+      pictures: 'documents',
+      downloads: 'documents',
+      desktop: 'c_drive',
+      cloud: 'c_drive'
+    };
+    const target = parentMap[currentFolder] || 'documents';
+    navigateTo(target);
+  }
+
+  function executeOpenFile(file) {
+    if (!file) return;
+
+    // 1. If it's a folder, navigate inside
+    if (file.type === 'folder' || file.target) {
+      navigateTo(file.target || 'documents');
+      return;
+    }
+
+    // 2. Open via Dawamu OS Global handler
+    if (window.dawamuOS?.openFile) {
+      window.dawamuOS.openFile(file);
+      return;
+    }
+
+    // 3. Fallback handlers
+    if (file.targetUrl) {
+      window.dispatchEvent(new CustomEvent('open-dawamu-url', { detail: { url: file.targetUrl } }));
+    } else {
+      const ext = file.name.split('.').pop().toLowerCase();
+      if (['docx', 'doc'].includes(ext)) {
+        window.dawamuOS?.openApp('word', { fileName: file.name });
+      } else if (['xlsx', 'csv'].includes(ext)) {
+        window.dawamuOS?.openApp('spreadsheet', { fileName: file.name });
+      } else {
+        dawamuDialogs.toast(`Opened ${file.name}`, 'info');
+      }
+    }
+  }
+
   function render() {
     const rawFiles = fileSystem.folders[currentFolder] || fileSystem.folders.documents;
     const files = searchQuery.trim() 
       ? rawFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
       : rawFiles;
 
+    const canGoBack = historyIndex > 0;
+
     root.innerHTML = `
+      <!-- Toolbar Ribbon -->
       <div class="bg-[#0f172a] border-b border-white/10 px-3 py-2 flex items-center justify-between shrink-0 text-xs">
         <div class="flex items-center gap-2">
-          <button class="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 font-semibold text-xs transition-all active:scale-95">
+          <button id="exp-new-btn" class="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 flex items-center gap-1.5 font-semibold text-xs transition-all active:scale-95 cursor-pointer">
             <i class="fas fa-plus text-emerald-400 text-[10px]"></i> New Document
           </button>
-          <button class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors">
+          <button id="exp-cut-btn" class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors cursor-pointer ${!selectedFile ? 'opacity-50 pointer-events-none' : ''}">
             <i class="fas fa-cut text-[10px]"></i> Cut
           </button>
-          <button class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors">
+          <button id="exp-copy-btn" class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors cursor-pointer ${!selectedFile ? 'opacity-50 pointer-events-none' : ''}">
             <i class="fas fa-copy text-[10px]"></i> Copy
           </button>
-          <button class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors">
-            <i class="fas fa-paste text-[10px]"></i> Paste
+          <button id="exp-paste-btn" class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors cursor-pointer ${!clipboard ? 'opacity-50 pointer-events-none' : ''}">
+            <i class="fas fa-paste text-[10px]"></i> Paste ${clipboard ? `(${clipboard.file.name})` : ''}
           </button>
         </div>
         <div class="text-[11px] text-slate-400 font-mono flex items-center gap-1.5">
@@ -135,18 +216,25 @@ export function createExplorerApp() {
         </div>
       </div>
 
+      <!-- Navigation & Breadcrumb Bar -->
       <div class="bg-[#0b1320] border-b border-white/5 px-3 py-2 flex items-center gap-2.5 shrink-0">
         <div class="flex items-center gap-1 text-slate-400">
-          <button id="exp-back-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all"><i class="fas fa-arrow-left"></i></button>
-          <button id="exp-up-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all"><i class="fas fa-arrow-up"></i></button>
-          <button id="exp-refresh-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all"><i class="fas fa-redo"></i></button>
+          <button id="exp-back-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer ${!canGoBack ? 'opacity-40 cursor-not-allowed' : ''}" title="Back">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+          <button id="exp-up-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer" title="Up to Parent Folder">
+            <i class="fas fa-arrow-up"></i>
+          </button>
+          <button id="exp-refresh-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer" title="Refresh">
+            <i class="fas fa-redo"></i>
+          </button>
         </div>
 
         <div class="flex-1 bg-[#0f172a] border border-white/10 focus-within:border-emerald-500 rounded-xl px-3.5 py-1.5 flex items-center gap-2 text-xs text-slate-200 transition-all">
           <i class="fas fa-laptop text-emerald-400 text-xs"></i>
-          <span class="text-slate-400">This PC</span>
+          <span class="text-slate-400 hover:text-white cursor-pointer" id="bread-root">This PC</span>
           <span class="text-slate-600">&gt;</span>
-          <span class="font-semibold capitalize text-emerald-300">${currentFolder}</span>
+          <span class="font-semibold capitalize text-emerald-300">${currentFolder.replace('_', ' ')}</span>
         </div>
 
         <div class="w-60 bg-[#0f172a] border border-white/10 focus-within:border-emerald-500 rounded-xl px-3 py-1.5 flex items-center gap-2 text-xs transition-all">
@@ -155,8 +243,10 @@ export function createExplorerApp() {
         </div>
       </div>
 
+      <!-- Main Container: Sidebar + File Grid -->
       <div class="flex-1 flex overflow-hidden">
-        <div class="w-52 bg-[#080d16] border-r border-white/5 p-3 space-y-4 overflow-y-auto text-xs shrink-0 select-none">
+        <!-- Sidebar Navigation Tree -->
+        <div class="w-56 bg-[#080d16] border-r border-white/5 p-3 space-y-4 overflow-y-auto text-xs shrink-0 select-none">
           <div>
             <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">Quick Access</div>
             <div class="space-y-1">
@@ -182,85 +272,172 @@ export function createExplorerApp() {
           </div>
         </div>
 
-        <div class="flex-1 bg-[#0b111c] p-5 overflow-y-auto">
+        <!-- Files & Folders Grid -->
+        <div class="flex-1 bg-[#0b111c] p-5 overflow-y-auto" id="files-container">
           <div class="grid grid-cols-4 gap-3.5" id="files-grid">
-            ${files.map(f => `
-              <div class="file-item p-4 rounded-2xl bg-[#0f172a]/70 hover:bg-[#1e293b] border border-white/5 hover:border-emerald-500/40 transition-all cursor-pointer flex flex-col items-center text-center group shadow-sm hover:shadow-lg hover:-translate-y-0.5" data-name="${f.name}" data-url="${f.targetUrl || ''}">
+            ${files.map((f, idx) => `
+              <div class="file-item p-4 rounded-2xl ${selectedFile?.name === f.name ? 'bg-emerald-600/25 border-emerald-500/50 ring-1 ring-emerald-500/40' : 'bg-[#0f172a]/70 hover:bg-[#1e293b] border-white/5'} border hover:border-emerald-500/40 transition-all cursor-pointer flex flex-col items-center text-center group shadow-sm hover:shadow-lg hover:-translate-y-0.5" data-idx="${idx}" data-name="${f.name}">
                 <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-2xl mb-2.5 group-hover:scale-110 transition-transform shadow-inner">
                   <i class="${f.icon}"></i>
                 </div>
                 <div class="text-xs font-semibold text-slate-200 line-clamp-2 w-full break-words group-hover:text-white">${f.name}</div>
-                <div class="text-[10px] text-slate-500 mt-1">${f.size || 'Folder'}</div>
+                <div class="text-[10px] text-slate-500 mt-1">${f.size || (f.type === 'folder' ? 'Folder' : 'Document')}</div>
               </div>
             `).join('')}
-            ${files.length === 0 ? `<div class="col-span-4 text-center py-12 text-slate-500 text-xs"><i class="fas fa-folder-open text-3xl mb-2 block text-slate-600"></i>No files found</div>` : ''}
+            ${files.length === 0 ? `
+              <div class="col-span-4 text-center py-16 text-slate-500 text-xs">
+                <i class="fas fa-folder-open text-4xl mb-3 block text-slate-600"></i>
+                <div class="font-bold text-slate-400 text-sm">This folder is empty</div>
+                <div class="text-[11px] text-slate-500 mt-1">Create a new document or transfer files here.</div>
+              </div>` : ''}
           </div>
         </div>
       </div>
 
+      <!-- Status Bar -->
       <div class="bg-[#080d16] border-t border-white/5 px-4 py-2 flex justify-between items-center text-[11px] text-slate-400 shrink-0 font-sans">
         <div class="flex items-center gap-2">
           <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
           <span>${files.length} items</span>
+          ${selectedFile ? `<span class="border-l border-white/10 pl-2 text-emerald-300 font-medium">Selected: ${selectedFile.name}</span>` : ''}
         </div>
-        <div class="text-[10px] text-slate-500">Encrypted Local Storage • Dawamu Kiosk v2.4</div>
+        <div class="text-[10px] text-slate-500">Virtual OS File System • Double-click any file to open</div>
       </div>
     `;
 
+    attachEvents();
+  }
+
+  function attachEvents() {
+    // Nav items
     root.querySelectorAll('.exp-nav-item').forEach(el => {
       el.addEventListener('click', () => {
-        currentFolder = el.dataset.folder;
-        searchQuery = '';
-        render();
+        navigateTo(el.dataset.folder);
       });
     });
 
+    // History buttons
+    root.querySelector('#exp-back-btn')?.addEventListener('click', goBack);
+    root.querySelector('#exp-up-btn')?.addEventListener('click', goUp);
+    root.querySelector('#bread-root')?.addEventListener('click', () => navigateTo('documents'));
+
+    // Refresh
+    root.querySelector('#exp-refresh-btn')?.addEventListener('click', () => {
+      loadRealDownloads();
+      render();
+      dawamuDialogs.toast('Folder refreshed.', 'info');
+    });
+
+    // Search bar
     const searchInput = root.querySelector('#exp-search');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
         searchQuery = e.target.value;
-        const rawFiles = fileSystem.folders[currentFolder] || fileSystem.folders.documents;
-        const filtered = searchQuery.trim()
-          ? rawFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
-          : rawFiles;
-        const grid = root.querySelector('#files-grid');
-        if (grid) {
-          grid.innerHTML = filtered.map(f => `
-            <div class="file-item p-4 rounded-2xl bg-[#0f172a]/70 hover:bg-[#1e293b] border border-white/5 hover:border-emerald-500/40 transition-all cursor-pointer flex flex-col items-center text-center group shadow-sm hover:shadow-lg hover:-translate-y-0.5" data-name="${f.name}" data-url="${f.targetUrl || ''}">
-              <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-2xl mb-2.5 group-hover:scale-110 transition-transform shadow-inner">
-                <i class="${f.icon}"></i>
-              </div>
-              <div class="text-xs font-semibold text-slate-200 line-clamp-2 w-full break-words group-hover:text-white">${f.name}</div>
-              <div class="text-[10px] text-slate-500 mt-1">${f.size || 'Folder'}</div>
-            </div>
-          `).join('') || `<div class="col-span-4 text-center py-12 text-slate-500 text-xs"><i class="fas fa-search text-3xl mb-2 block text-slate-600"></i>No matching files</div>`;
-
-          grid.querySelectorAll('.file-item').forEach(el => {
-            el.addEventListener('dblclick', () => {
-              if (el.dataset.url) {
-                window.dispatchEvent(new CustomEvent('open-dawamu-url', { detail: { url: el.dataset.url } }));
-              } else {
-                alert('File: ' + el.dataset.name + '\nLocation: os_storage/downloads/' + el.dataset.name);
-              }
-            });
-          });
+        render();
+        // Restore cursor focus after re-render
+        const reInput = root.querySelector('#exp-search');
+        if (reInput) {
+          reInput.focus();
+          reInput.setSelectionRange(searchQuery.length, searchQuery.length);
         }
       });
     }
 
-    root.querySelectorAll('.file-item').forEach(el => {
-      el.addEventListener('dblclick', () => {
-        if (el.dataset.url) {
-          window.dispatchEvent(new CustomEvent('open-dawamu-url', { detail: { url: el.dataset.url } }));
-        } else {
-          alert('File: ' + el.dataset.name + '\nLocation: os_storage/downloads/' + el.dataset.name);
+    // New Document button
+    root.querySelector('#exp-new-btn')?.addEventListener('click', async () => {
+      const docName = await dawamuDialogs.prompt({
+        title: 'Create New Document',
+        message: 'Enter the filename for the new document:',
+        defaultValue: `New Document ${Date.now().toString().slice(-4)}.docx`,
+        confirmText: 'Create & Open'
+      });
+
+      if (docName && docName.trim()) {
+        const cleanName = docName.trim();
+        const newFile = {
+          name: cleanName.endsWith('.docx') ? cleanName : `${cleanName}.docx`,
+          size: '1 KB',
+          date: 'Just now',
+          icon: 'fas fa-file-word text-blue-500',
+          type: 'doc'
+        };
+
+        if (!fileSystem.folders[currentFolder]) {
+          fileSystem.folders[currentFolder] = [];
         }
+        fileSystem.folders[currentFolder].unshift(newFile);
+        render();
+        dawamuDialogs.toast(`Created ${newFile.name}`, 'success');
+        executeOpenFile(newFile);
+      }
+    });
+
+    // Cut / Copy / Paste handlers
+    root.querySelector('#exp-copy-btn')?.addEventListener('click', () => {
+      if (selectedFile) {
+        clipboard = { action: 'copy', file: { ...selectedFile }, sourceFolder: currentFolder };
+        dawamuDialogs.toast(`Copied "${selectedFile.name}" to clipboard.`, 'info');
+        render();
+      }
+    });
+
+    root.querySelector('#exp-cut-btn')?.addEventListener('click', () => {
+      if (selectedFile) {
+        clipboard = { action: 'cut', file: { ...selectedFile }, sourceFolder: currentFolder };
+        dawamuDialogs.toast(`Cut "${selectedFile.name}".`, 'info');
+        render();
+      }
+    });
+
+    root.querySelector('#exp-paste-btn')?.addEventListener('click', () => {
+      if (clipboard && clipboard.file) {
+        if (!fileSystem.folders[currentFolder]) fileSystem.folders[currentFolder] = [];
+
+        // If cut, remove from source folder
+        if (clipboard.action === 'cut' && fileSystem.folders[clipboard.sourceFolder]) {
+          fileSystem.folders[clipboard.sourceFolder] = fileSystem.folders[clipboard.sourceFolder].filter(
+            f => f.name !== clipboard.file.name
+          );
+        }
+
+        // Add to current folder
+        fileSystem.folders[currentFolder].push({ ...clipboard.file, date: 'Just now' });
+        dawamuDialogs.toast(`Pasted "${clipboard.file.name}".`, 'success');
+        if (clipboard.action === 'cut') clipboard = null;
+        render();
+      }
+    });
+
+    // File selection, opening & double click
+    const rawFiles = fileSystem.folders[currentFolder] || fileSystem.folders.documents;
+    const currentFiles = searchQuery.trim() 
+      ? rawFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
+      : rawFiles;
+
+    root.querySelectorAll('.file-item').forEach(el => {
+      const idx = parseInt(el.dataset.idx, 10);
+      const file = currentFiles[idx];
+
+      // Single click: select item
+      el.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedFile = file;
+        render();
+      });
+
+      // Double click: open file or folder
+      el.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        executeOpenFile(file);
       });
     });
 
-    root.querySelector('#exp-refresh-btn')?.addEventListener('click', () => {
-      loadRealDownloads();
-      render();
+    // Click outside to deselect
+    root.querySelector('#files-container')?.addEventListener('click', () => {
+      if (selectedFile) {
+        selectedFile = null;
+        render();
+      }
     });
   }
 

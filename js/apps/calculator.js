@@ -1,10 +1,18 @@
 /**
- * ChromeOS Student Edition - Scientific Calculator App
+ * Dawamu OS - Educational Scientific Calculator
+ * Features:
+ * - Full mathematical evaluation with operator precedence
+ * - Scientific functions: sin, cos, tan, sqrt, log, ln, powers, factorial, constants (π, e)
+ * - Division by zero protection & friendly error states
+ * - Real keyboard listener (0-9, +, -, *, /, Enter, Backspace, Escape)
+ * - Calculation history log
+ * - Memory operations (MC, MR, M+, M-)
  */
 
 export function createCalculatorApp() {
   const container = document.createElement('div');
-  container.className = 'flex h-full bg-slate-900 text-slate-100 font-mono';
+  container.className = 'flex h-full bg-[#0a0f1d] text-slate-100 font-mono select-none outline-none';
+  container.tabIndex = 0; // enables keyboard focus
 
   let displayValue = '0';
   let memoryValue = 0;
@@ -14,13 +22,13 @@ export function createCalculatorApp() {
     <!-- Calculator Main Pad -->
     <div class="flex-1 p-5 flex flex-col justify-between space-y-4">
       <!-- Display Screen -->
-      <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 text-right shadow-inner">
-        <div id="calc-expression" class="text-xs text-slate-400 min-h-[16px] truncate"></div>
-        <div id="calc-display" class="text-3xl font-extrabold text-white tracking-wider truncate">0</div>
+      <div class="bg-[#040814] border border-white/10 rounded-2xl p-4 text-right shadow-inner">
+        <div id="calc-expression" class="text-xs text-slate-400 min-h-[16px] truncate font-sans"></div>
+        <div id="calc-display" class="text-3xl font-extrabold text-white tracking-wider truncate font-mono">0</div>
       </div>
 
       <!-- Keys Grid -->
-      <div class="grid grid-cols-5 gap-2 text-sm">
+      <div class="grid grid-cols-5 gap-2 text-xs">
         <!-- Memory & Sci Row 1 -->
         <button class="calc-btn sci" data-val="MC">MC</button>
         <button class="calc-btn sci" data-val="MR">MR</button>
@@ -68,10 +76,10 @@ export function createCalculatorApp() {
     </div>
 
     <!-- History Sidebar -->
-    <div class="w-48 bg-slate-950 border-l border-slate-800 p-3 flex flex-col text-xs">
-      <div class="font-bold text-slate-400 uppercase tracking-wider mb-2 pb-2 border-b border-slate-800 flex justify-between items-center">
+    <div class="w-48 bg-[#040814] border-l border-white/10 p-3 flex flex-col text-xs font-sans">
+      <div class="font-bold text-slate-400 uppercase tracking-wider mb-2 pb-2 border-b border-white/10 flex justify-between items-center">
         <span>History</span>
-        <button id="calc-clear-hist" class="hover:text-red-400 text-[10px]"><i class="fas fa-trash"></i></button>
+        <button id="calc-clear-hist" class="hover:text-rose-400 text-[10px] cursor-pointer" title="Clear History"><i class="fas fa-trash"></i></button>
       </div>
       <div id="calc-history-list" class="flex-1 overflow-y-auto space-y-2 text-slate-300">
         <div class="text-slate-500 text-[11px] text-center pt-4">No calculations yet</div>
@@ -86,18 +94,19 @@ export function createCalculatorApp() {
         cursor: pointer;
         transition: all 0.1s ease;
         text-align: center;
-        border: 1px solid rgba(255,255,255,0.05);
+        border: 1px solid rgba(255,255,255,0.06);
       }
-      .calc-btn.num { background: #1e293b; color: #f8fafc; }
-      .calc-btn.num:hover { background: #334155; }
-      .calc-btn.sci { background: #0f172a; color: #94a3b8; font-size: 11px; }
-      .calc-btn.sci:hover { background: #1e293b; color: #38bdf8; }
-      .calc-btn.op { background: #1e3a8a; color: #60a5fa; }
+      .calc-btn:active { transform: scale(0.95); }
+      .calc-btn.num { background: #162032; color: #f8fafc; font-size: 13px; }
+      .calc-btn.num:hover { background: #1f2d45; }
+      .calc-btn.sci { background: #0c1524; color: #94a3b8; font-size: 11px; }
+      .calc-btn.sci:hover { background: #162238; color: #38bdf8; }
+      .calc-btn.op { background: #1e3a8a; color: #93c5fd; font-size: 14px; }
       .calc-btn.op:hover { background: #2563eb; color: #ffffff; }
-      .calc-btn.action { background: #991b1b; color: #fca5a5; }
-      .calc-btn.action:hover { background: #dc2626; color: #ffffff; }
-      .calc-btn.equals { background: #166534; color: #4ade80; }
-      .calc-btn.equals:hover { background: #15803d; color: #ffffff; }
+      .calc-btn.action { background: #881337; color: #fecdd3; font-size: 12px; }
+      .calc-btn.action:hover { background: #be123c; color: #ffffff; }
+      .calc-btn.equals { background: #065f46; color: #a7f3d0; font-size: 16px; font-weight: 900; }
+      .calc-btn.equals:hover { background: #059669; color: #ffffff; }
     </style>
   `;
 
@@ -117,7 +126,7 @@ export function createCalculatorApp() {
     historyListEl.innerHTML = historyLog
       .map(
         (item) => `
-      <div class="bg-slate-900 p-2 rounded-lg border border-slate-800 text-right">
+      <div class="bg-[#0f172a] p-2 rounded-xl border border-white/5 text-right font-mono">
         <div class="text-[10px] text-slate-400 truncate">${item.expr}</div>
         <div class="font-bold text-emerald-400 text-sm">= ${item.res}</div>
       </div>
@@ -127,6 +136,15 @@ export function createCalculatorApp() {
   };
 
   const calculateResult = () => {
+    if (!displayValue || displayValue === 'Error' || displayValue === 'Cannot divide by zero') return;
+
+    // Check for division by zero
+    if (/\/\s*0(?![0-9.])/.test(displayValue.replace(/÷/g, '/'))) {
+      displayValue = 'Cannot divide by zero';
+      updateDisplay();
+      return;
+    }
+
     try {
       let evalExpr = displayValue
         .replace(/÷/g, '/')
@@ -140,8 +158,20 @@ export function createCalculatorApp() {
         .replace(/ln\(/g, 'Math.log(')
         .replace(/√\(/g, 'Math.sqrt(');
 
-      // Safe JS math execution
+      // Safe JS math execution with validation
+      if (!/^[0-9+\-*/().^%\sMathPIsincoetalgqrd]+$/.test(evalExpr)) {
+        throw new Error('Invalid characters');
+      }
+
+      // eslint-disable-next-line no-new-func
       const result = Function(`"use strict"; return (${evalExpr})`)();
+
+      if (!isFinite(result)) {
+        displayValue = 'Cannot divide by zero';
+        updateDisplay();
+        return;
+      }
+
       const rounded = Number.isInteger(result) ? result.toString() : parseFloat(result.toFixed(8)).toString();
 
       historyLog.unshift({ expr: displayValue, res: rounded });
@@ -149,54 +179,85 @@ export function createCalculatorApp() {
       displayValue = rounded;
       updateDisplay();
       renderHistory();
-    } catch (e) {
-      displayValue = 'Error';
+    } catch (_) {
+      displayValue = 'Invalid Expression';
       updateDisplay();
-      setTimeout(() => {
-        displayValue = '0';
-        updateDisplay();
-      }, 1500);
     }
   };
+
+  function handleInput(val) {
+    if (displayValue === 'Error' || displayValue === 'Cannot divide by zero' || displayValue === 'Invalid Expression') {
+      displayValue = '0';
+    }
+
+    if (val === 'C') {
+      displayValue = '0';
+      exprEl.textContent = '';
+    } else if (val === 'DEL') {
+      displayValue = displayValue.length > 1 ? displayValue.slice(0, -1) : '0';
+    } else if (val === '=') {
+      calculateResult();
+      return;
+    } else if (['sin', 'cos', 'tan', 'log', 'ln'].includes(val)) {
+      displayValue = displayValue === '0' ? `${val}(` : `${displayValue}${val}(`;
+    } else if (val === 'sqrt') {
+      displayValue = displayValue === '0' ? '√(' : `${displayValue}√(`;
+    } else if (val === 'pi') {
+      displayValue = displayValue === '0' ? 'π' : `${displayValue}π`;
+    } else if (val === 'MC') {
+      memoryValue = 0;
+    } else if (val === 'MR') {
+      displayValue = memoryValue.toString();
+    } else if (val === 'M+') {
+      memoryValue += parseFloat(displayValue) || 0;
+    } else if (val === 'M-') {
+      memoryValue -= parseFloat(displayValue) || 0;
+    } else if (val === '+/-') {
+      displayValue = displayValue.startsWith('-') ? displayValue.slice(1) : '-' + displayValue;
+    } else {
+      if (displayValue === '0' && !['.', '+', '-', '*', '/', '^'].includes(val)) {
+        displayValue = val;
+      } else {
+        displayValue += val;
+      }
+    }
+    updateDisplay();
+  }
 
   // Button clicks handler
   container.querySelectorAll('.calc-btn').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const val = btn.dataset.val;
-
-      if (val === 'C') {
-        displayValue = '0';
-        exprEl.textContent = '';
-      } else if (val === 'DEL') {
-        displayValue = displayValue.length > 1 ? displayValue.slice(0, -1) : '0';
-      } else if (val === '=') {
-        calculateResult();
-        return;
-      } else if (['sin', 'cos', 'tan', 'log', 'ln'].includes(val)) {
-        displayValue = displayValue === '0' ? `${val}(` : `${displayValue}${val}(`;
-      } else if (val === 'sqrt') {
-        displayValue = displayValue === '0' ? '√(' : `${displayValue}√(`;
-      } else if (val === 'pi') {
-        displayValue = displayValue === '0' ? 'π' : `${displayValue}π`;
-      } else if (val === 'MC') {
-        memoryValue = 0;
-      } else if (val === 'MR') {
-        displayValue = memoryValue.toString();
-      } else if (val === 'M+') {
-        memoryValue += parseFloat(displayValue) || 0;
-      } else if (val === 'M-') {
-        memoryValue -= parseFloat(displayValue) || 0;
-      } else if (val === '+/-') {
-        displayValue = displayValue.startsWith('-') ? displayValue.slice(1) : '-' + displayValue;
-      } else {
-        if (displayValue === '0' && !['.', '+', '-', '*', '/', '^'].includes(val)) {
-          displayValue = val;
-        } else {
-          displayValue += val;
-        }
-      }
-      updateDisplay();
+      handleInput(btn.dataset.val);
     });
+  });
+
+  // Keyboard navigation & typing handler
+  container.addEventListener('keydown', (e) => {
+    if (e.key >= '0' && e.key <= '9') {
+      e.preventDefault();
+      handleInput(e.key);
+    } else if (['+', '-', '*', '/'].includes(e.key)) {
+      e.preventDefault();
+      handleInput(e.key);
+    } else if (e.key === '.') {
+      e.preventDefault();
+      handleInput('.');
+    } else if (e.key === '(' || e.key === ')') {
+      e.preventDefault();
+      handleInput(e.key);
+    } else if (e.key === '^') {
+      e.preventDefault();
+      handleInput('^');
+    } else if (e.key === 'Enter' || e.key === '=') {
+      e.preventDefault();
+      handleInput('=');
+    } else if (e.key === 'Backspace') {
+      e.preventDefault();
+      handleInput('DEL');
+    } else if (e.key === 'Escape' || e.key.toLowerCase() === 'c') {
+      e.preventDefault();
+      handleInput('C');
+    }
   });
 
   container.querySelector('#calc-clear-hist').addEventListener('click', () => {

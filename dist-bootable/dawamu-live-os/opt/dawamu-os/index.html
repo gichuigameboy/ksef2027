@@ -3,113 +3,199 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: https:; connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://127.0.0.1:8080 http://localhost:8080 http://127.0.0.1:3000 http://localhost:3000; frame-src 'self' http://127.0.0.1:8000 http://localhost:8000 http://127.0.0.1:3000 http://localhost:3000;">
   <title>Dawamu OS</title>
 
-  <!-- Tailwind CSS CDN -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- FontAwesome Icons CDN -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-  <!-- Custom Stylesheet -->
+  <!-- Official Dawamu Logo Favicon & Icons -->
+  <link rel="icon" type="image/png" href="assets/dawamu-logo.png">
+  <link rel="shortcut icon" href="assets/dawamu-logo.png">
+  <link rel="apple-touch-icon" href="assets/dawamu-logo.png">
+  <link rel="manifest" href="manifest.json">
+
+  <!-- Local Custom Stylesheet (Instant Native Rendering - 0ms Delay) -->
   <link rel="stylesheet" href="css/style.css">
+  <!-- FontAwesome Icons (Local with embedded base64 fonts - Zero Network Needed) -->
+  <link rel="stylesheet" href="css/fa/all.min.css">
 </head>
 <body class="dark-mode overflow-hidden select-none">
 
-  <!-- 1. System Powered Off Screen (Standby / Power-On) -->
-  <div id="os-power-off-screen" class="fixed inset-0 z-[200000] bg-black hidden flex flex-col items-center justify-center select-none">
-    <div class="text-center space-y-6 flex flex-col items-center">
-      <button id="os-power-on-btn" class="w-24 h-24 rounded-full bg-slate-900 border-2 border-emerald-500/40 text-emerald-400 hover:text-emerald-300 hover:border-emerald-400 hover:shadow-[0_0_30px_rgba(56,158,60,0.5)] active:scale-95 flex items-center justify-center text-4xl transition-all cursor-pointer group" title="Press to Boot Dawamu OS">
-        <i class="fas fa-power-off group-hover:scale-110 transition-transform"></i>
-      </button>
-      <div class="space-y-1">
-        <div class="text-white font-bold text-sm tracking-widest uppercase">System Powered Down</div>
-        <div class="text-slate-500 text-xs">Click the Power Button to Boot Dawamu OS</div>
-      </div>
-    </div>
-  </div>
+  <!-- 1. OS Login Screen Overlay (Opens Instantly with Zero Waiting Time) -->
+  <!-- 1. OS Login Screen Overlay (Opens Instantly with Zero Waiting Time) -->
+  <div id="os-login-screen" class="fixed inset-0 z-[100000] flex flex-col items-center justify-center transition-all duration-200">
+    <div class="p-8 rounded-3xl flex flex-col items-center min-w-[360px] max-w-md w-full mx-4 relative overflow-hidden">
+      <!-- Glow decoration -->
+      <div class="absolute -top-20 -left-20 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
+      <div class="absolute -bottom-20 -right-20 w-40 h-40 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
 
-  <!-- 2. Dawamu BIOS / UEFI POST & Boot Sequence Screen -->
-  <div id="os-boot-screen" class="fixed inset-0 z-[150000] bg-black text-white flex flex-col justify-between p-8 font-mono select-none">
-    <!-- BIOS Diagnostics Terminal -->
-    <div id="boot-terminal-log" class="text-xs text-slate-400 space-y-1 font-mono">
-      <div class="text-emerald-400 font-bold">DAWAMU SECURE BOOTLOADER v2.4 (UEFI x86_64)</div>
-      <div class="text-slate-500">Copyright (C) Dawamu School IT Infrastructure. All Rights Reserved.</div>
-      <div class="pt-2 text-slate-300" id="boot-log-lines"></div>
-    </div>
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain mb-3 drop-shadow-md">
+      <h2 class="text-white text-2xl font-bold tracking-tight mb-0.5">Student Sign In</h2>
+      <p class="text-emerald-400 font-semibold text-[11px] uppercase tracking-[0.2em] mb-6">Dawamu OS • Student Edition</p>
 
-    <!-- Center Splash Logo & Progress -->
-    <div class="flex flex-col items-center justify-center text-center space-y-5 my-auto">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-28 w-auto object-contain drop-shadow-[0_0_25px_rgba(56,158,60,0.4)] animate-pulse">
-      <div>
-        <h1 class="text-2xl font-bold tracking-tight text-white font-sans">DAWAMU OS</h1>
-        <p class="text-xs text-[#389e3c] font-semibold tracking-[0.25em] uppercase font-sans mt-1">Transforming Boys Into Leaders</p>
-      </div>
-
-      <!-- Boot Loader Bar -->
-      <div class="w-64 bg-slate-900 border border-slate-800 rounded-full h-2 overflow-hidden p-0.5">
-        <div id="boot-progress-bar" class="bg-gradient-to-r from-emerald-600 to-green-400 h-full rounded-full transition-all duration-300 w-0"></div>
-      </div>
-      <div id="boot-status-text" class="text-[11px] text-slate-400 font-sans">Initializing Secure Kernel...</div>
-    </div>
-
-    <!-- Footer -->
-    <div class="flex justify-between text-[10px] text-slate-600 border-t border-slate-900 pt-3">
-      <span>SECURE BOOT: ENABLED</span>
-      <span>PRESS DEL/F2 FOR SETUP • F12 FOR NETWORK BOOT</span>
-      <span>BUILD: 2026.09.29-PROD</span>
-    </div>
-  </div>
-
-  <!-- 3. OS Login Screen Overlay -->
-  <div id="os-login-screen" class="fixed inset-0 z-[100000] flex flex-col items-center justify-center bg-[#0f172a] bg-cover bg-center transition-transform duration-700 hidden" style="background-image: radial-gradient(circle at 50% 50%, #064e3b 0%, #022c22 100%);">
-    <div class="bg-[#1e293b]/90 backdrop-blur-md p-10 rounded-3xl border border-[#389e3c]/30 shadow-2xl flex flex-col items-center min-w-[360px]">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-24 w-auto object-contain mb-4 drop-shadow-md">
-      <h2 class="text-white text-2xl font-bold mb-1">Student Login</h2>
-      <p class="text-[#389e3c] font-semibold text-xs uppercase tracking-widest mb-8">Dawamu OS</p>
-
-      <form id="os-login-form" class="w-full flex flex-col gap-5">
+      <form id="os-login-form" class="w-full flex flex-col gap-4">
         <div class="flex flex-col gap-1.5">
-          <label class="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-1">Admission Number</label>
+          <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Admission Number / Username</label>
           <div class="relative">
-            <i class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-            <input type="text" id="login-adm" required placeholder="e.g. 10245"
-                   class="w-full bg-[#0f172a]/80 text-white border border-slate-600 rounded-2xl py-3 pl-11 pr-4 focus:outline-none focus:border-[#389e3c] focus:ring-1 focus:ring-[#389e3c] transition-all">
+            <i class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="text" id="login-adm" name="username" autocomplete="username" placeholder="e.g. 1001, teacher, admin"
+                   class="w-full text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none transition-all text-sm font-medium">
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[10px] text-slate-400 font-bold uppercase tracking-widest pl-1">Password</label>
+          <div class="flex justify-between items-center pl-1 pr-1">
+            <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Password</label>
+            <span class="text-[10px] text-emerald-400/80 font-mono">Demo: dawamu2026 or 1234</span>
+          </div>
           <div class="relative">
-            <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-            <input type="password" id="login-pass" required placeholder="••••••••"
-                   class="w-full bg-[#0f172a]/80 text-white border border-slate-600 rounded-2xl py-3 pl-11 pr-4 focus:outline-none focus:border-[#389e3c] focus:ring-1 focus:ring-[#389e3c] transition-all">
+            <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+            <input type="password" id="login-pass" name="password" autocomplete="current-password" placeholder="dawamu2026"
+                   class="w-full text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none transition-all text-sm font-medium">
           </div>
         </div>
 
-        <button type="submit" class="w-full bg-[#389e3c] hover:bg-[#2e7d32] text-white font-bold text-sm py-3.5 rounded-2xl shadow-lg shadow-green-900/40 transition-all active:scale-[0.98] mt-4">
-          Access System
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm py-3 rounded-xl shadow-lg shadow-green-900/40 transition-all active:scale-[0.98] mt-2 cursor-pointer flex items-center justify-center gap-2">
+          <span>Access System</span>
+          <i class="fas fa-arrow-right text-xs"></i>
         </button>
       </form>
 
-      <div id="login-error-msg" class="hidden text-rose-400 text-xs mt-5 flex items-center gap-2 bg-rose-500/10 px-4 py-2.5 rounded-xl border border-rose-500/20 w-full justify-center">
+      <div id="login-error-msg" class="hidden text-rose-400 text-xs mt-3 flex items-center gap-2 bg-rose-500/10 px-4 py-2 rounded-xl border border-rose-500/20 w-full justify-center">
         <i class="fas fa-exclamation-circle"></i> <span>Invalid Credentials</span>
       </div>
       
-      <!-- Mock Data helper just for testing -->
-      <div class="mt-6 text-[10px] text-slate-500 border-t border-slate-700/50 pt-4 w-full text-center">
-        <div class="mb-1 font-semibold">Test Accounts:</div>
-        <div>Adm: <b class="text-slate-300">1001</b> | Pass: <b class="text-slate-300">dawamu2026</b></div>
-        <div>Adm: <b class="text-slate-300">1002</b> | Pass: <b class="text-slate-300">dawamu2026</b></div>
+      <!-- 1-Click Quick Login Student & Staff Accounts (Offline Demo) -->
+      <div class="mt-5 text-[11px] text-slate-400 border-t border-slate-700/50 pt-4 w-full text-center">
+        <div class="mb-2 font-semibold text-slate-300 flex items-center justify-center gap-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+          <span>1-Click Demo Accounts (Evaluation Simulation):</span>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" data-quick-login data-adm="1001" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
+            <i class="fas fa-user-circle text-emerald-400"></i>
+            <span>Brian O. (1001)</span>
+          </button>
+          <button type="button" data-quick-login data-adm="1002" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
+            <i class="fas fa-user-circle text-emerald-400"></i>
+            <span>Kevin M. (1002)</span>
+          </button>
+          <button type="button" data-quick-login data-adm="teacher" data-pass="teacher2026" class="bg-blue-900/40 hover:bg-blue-800/60 border border-blue-600/40 text-blue-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
+            <i class="fas fa-chalkboard-user text-blue-400"></i>
+            <span>Teacher Proctor</span>
+          </button>
+          <button type="button" data-quick-login data-adm="admin" data-pass="1234" class="bg-purple-900/40 hover:bg-purple-800/60 border border-purple-600/40 text-purple-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
+            <i class="fas fa-user-shield text-purple-400"></i>
+            <span>IT Administrator</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
   <!-- Main Desktop Viewport Canvas -->
-  <main id="desktop">
-    <!-- Desktop Welcome Widget -->
-    <div class="absolute top-10 left-10 text-white space-y-3 max-w-md pointer-events-none drop-shadow-lg flex flex-col items-start">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain">
-      <div class="flex items-center gap-2 text-[#389e3c] font-semibold text-[10px] uppercase tracking-[0.2em] bg-emerald-950/60 backdrop-blur border border-[#389e3c]/30 px-3 py-1.5 rounded-full w-fit">
-        <i class="fas fa-shield-alt text-sm"></i> Transforming Boys Into Leaders
+  <main id="desktop" class="relative w-full h-full overflow-hidden">
+    <!-- Desktop Icons Grid (Windows / ChromeOS Style) -->
+    <div id="desktop-icons" class="absolute top-6 left-6 grid grid-flow-col grid-rows-6 gap-4 z-10 select-none">
+      <div class="desktop-icon" data-app-id="explorer">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%); color: #ffffff;">
+          <i class="fas fa-folder-open"></i>
+        </div>
+        <span class="desktop-icon-label">This PC</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="browser">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff;">
+          <i class="fab fa-chrome"></i>
+        </div>
+        <span class="desktop-icon-label">Safe Web</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="offlineBrowser">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); color: #ffffff;">
+          <i class="fas fa-globe-africa"></i>
+        </div>
+        <span class="desktop-icon-label">Offline Web</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="eduguard">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #10b981 0%, #0d9488 100%); color: #ffffff;">
+          <i class="fas fa-shield-halved"></i>
+        </div>
+        <span class="desktop-icon-label">EduGuard AI</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="books844">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #059669 0%, #064e3b 100%); color: #ffffff;">
+          <i class="fas fa-book-reader"></i>
+        </div>
+        <span class="desktop-icon-label">8-4-4 Books</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="docs">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%); color: #ffffff;">
+          <i class="fas fa-file-alt"></i>
+        </div>
+        <span class="desktop-icon-label">Notes & Docs</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="classroom">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #059669 0%, #064e3b 100%); color: #ffffff;">
+          <i class="fas fa-graduation-cap"></i>
+        </div>
+        <span class="desktop-icon-label">Classroom</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="word">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff;">
+          <i class="fas fa-file-word"></i>
+        </div>
+        <span class="desktop-icon-label">Word</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="spreadsheet">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #10b981 0%, #047857 100%); color: #ffffff;">
+          <i class="fas fa-file-excel"></i>
+        </div>
+        <span class="desktop-icon-label">Sheets</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="database">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); color: #ffffff;">
+          <i class="fas fa-database"></i>
+        </div>
+        <span class="desktop-icon-label">Database</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="calculator">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff;">
+          <i class="fas fa-calculator"></i>
+        </div>
+        <span class="desktop-icon-label">Calculator</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="settings">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #475569 0%, #334155 100%); color: #ffffff;">
+          <i class="fas fa-cog"></i>
+        </div>
+        <span class="desktop-icon-label">Settings</span>
+      </div>
+
+      <div class="desktop-icon" data-app-id="installer">
+        <div class="desktop-icon-box" style="background: linear-gradient(135deg, #f59e0b 0%, #b45309 100%); color: #ffffff;">
+          <i class="fas fa-download"></i>
+        </div>
+        <span class="desktop-icon-label">Install to PC</span>
+      </div>
+    </div>
+
+    <!-- Desktop Welcome Widget (Positioned Top-Right) -->
+    <div class="absolute top-6 right-6 text-white space-y-2 max-w-xs pointer-events-none drop-shadow-xl flex flex-col items-end text-right select-none">
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-16 w-auto object-contain drop-shadow-md">
+      <div class="flex items-center gap-2 text-emerald-300 font-bold text-[10px] uppercase tracking-[0.18em] bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 px-3.5 py-1.5 rounded-full w-fit shadow-lg shadow-black/40">
+        <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span>Transforming Boys Into Leaders</span>
+      </div>
+      <div class="text-[11px] text-slate-300 bg-slate-900/60 backdrop-blur-md border border-slate-700/60 px-3 py-1 rounded-xl shadow-md">
+        KCSE Candidate Edition &bull; 2027
       </div>
     </div>
   </main>
@@ -134,18 +220,18 @@
         System locked in accordance with student night curfew (9:00 PM – 7:00 AM). Get a good night's sleep for tomorrow's classes!
       </p>
 
-      <div class="w-full bg-slate-900 border border-slate-700/80 p-4 rounded-2xl space-y-3">
+      <form class="w-full bg-slate-900 border border-slate-700/80 p-4 rounded-2xl space-y-3" onsubmit="return false;">
         <div class="text-xs text-slate-400 font-semibold text-center">Teacher / Parent Bypass PIN</div>
         <div class="flex gap-2">
           <input type="password" id="curfew-bypass-pin" maxlength="6" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-center text-white font-mono outline-none focus:border-indigo-500" placeholder="••••">
-          <button id="curfew-bypass-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 rounded-xl">Unlock</button>
+          <button id="curfew-bypass-btn" type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 rounded-xl cursor-pointer">Unlock</button>
         </div>
         <div id="curfew-bypass-err" class="text-[11px] text-rose-400 text-center min-h-[14px]"></div>
-      </div>
+      </form>
     </div>
   </div>
 
-  <!-- App Store Policy Lock Modal (Triggers when trying to download external extensions) -->
+  <!-- App Store Policy Lock Modal -->
   <div id="app-store-lock-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[99999] hidden flex items-center justify-center p-4">
     <div class="bg-slate-900 border border-slate-800 max-w-md w-full rounded-3xl p-6 text-center shadow-2xl space-y-4">
       <div class="w-16 h-16 bg-rose-500/20 text-rose-500 rounded-full flex items-center justify-center text-3xl mx-auto border border-rose-500/30">
@@ -159,7 +245,7 @@
         <b>Policy Key:</b> ExtensionInstallBlocklist: ["*"]<br>
         <b>Reason:</b> Educational Security & Malware Prevention
       </div>
-      <button id="close-app-lock-modal" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 rounded-2xl transition-colors">
+      <button id="close-app-lock-modal" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs py-3 rounded-2xl transition-colors cursor-pointer">
         Acknowledge & Close
       </button>
     </div>

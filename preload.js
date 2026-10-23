@@ -16,5 +16,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   onDownloadProgress: (callback) => {
     ipcRenderer.on('download-progress', (_, data) => callback(data));
-  }
+  },
+  getNetworkInfo: () => ipcRenderer.invoke('get-network-info')
 });

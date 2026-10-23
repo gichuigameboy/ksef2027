@@ -161,7 +161,9 @@ def test_student_data_isolation():
 
 def test_backend_pytest_suite():
     print("[TEST 4] Running EduGuard Backend Test Suite (50 Unit & Integration Tests)...")
-    res = os.system(f'"{sys.executable}" -m pytest EduGuard/backend/tests -q')
+    venv_py = os.path.join(os.path.dirname(__file__), "EduGuard", "backend", ".venv", "Scripts", "python.exe")
+    py_cmd = venv_py if os.path.exists(venv_py) else sys.executable
+    res = os.system(f'"{py_cmd}" -m pytest EduGuard/backend/tests -q')
     assert res == 0, "Backend pytest suite failed"
     print("  [PASS] All 50 EduGuard backend tests passed successfully!")
 

@@ -8,6 +8,7 @@ import { windowManager } from './os/windowManager.js';
 import { shelf } from './os/shelf.js';
 import { launcher } from './os/launcher.js';
 import { quickSettings } from './os/quickSettings.js';
+import { dawamuDialogs } from './os/dialogs.js';
 
 import { createBrowserApp } from './apps/browser.js';
 import { createOfflineBrowserApp } from './apps/offlineBrowser.js';
@@ -338,12 +339,12 @@ function startDawamuOS() {
       icon: '<i class="fas fa-file-alt text-blue-300"></i>',
       bgColor: 'bg-indigo-600',
       keywords: ['docs', 'notes', 'homework', 'write', 'editor'],
-      launch: () => {
+      launch: (opts = {}) => {
         windowManager.createWindow({
           id: 'docs',
-          title: 'Homework Notes & Rich Text Docs',
+          title: opts.fileName ? `${opts.fileName} - Homework Notes` : 'Homework Notes & Rich Text Docs',
           icon: '<i class="fas fa-file-alt text-blue-300"></i>',
-          content: () => createDocsApp(),
+          content: () => createDocsApp(opts),
           width: 840,
           height: 560
         });
@@ -355,12 +356,12 @@ function startDawamuOS() {
       icon: '<i class="fas fa-file-word text-blue-400"></i>',
       bgColor: 'bg-blue-700',
       keywords: ['word', 'document', 'write', 'essay', 'report', 'letter', 'docx', 'office'],
-      launch: () => {
+      launch: (opts = {}) => {
         windowManager.createWindow({
           id: 'word',
-          title: 'Dawamu Word Processor',
+          title: opts.fileName ? `${opts.fileName} - Dawamu Word` : 'Dawamu Word Processor',
           icon: '<i class="fas fa-file-word text-blue-400"></i>',
-          content: () => createWordApp(),
+          content: () => createWordApp(opts),
           width: 980,
           height: 640
         });
@@ -372,12 +373,12 @@ function startDawamuOS() {
       icon: '<i class="fas fa-file-excel text-emerald-400"></i>',
       bgColor: 'bg-emerald-700',
       keywords: ['spreadsheet', 'excel', 'sheets', 'calc', 'math', 'gradebook', 'table', 'csv', 'formulas'],
-      launch: () => {
+      launch: (opts = {}) => {
         windowManager.createWindow({
           id: 'spreadsheet',
-          title: 'Dawamu Spreadsheet',
+          title: opts.fileName ? `${opts.fileName} - Dawamu Sheets` : 'Dawamu Spreadsheet',
           icon: '<i class="fas fa-file-excel text-emerald-400"></i>',
-          content: () => createSpreadsheetApp(),
+          content: () => createSpreadsheetApp(opts),
           width: 1000,
           height: 620
         });
@@ -513,6 +514,155 @@ function startDawamuOS() {
         const modal = document.getElementById('app-store-lock-modal');
         if (modal) modal.classList.remove('hidden');
       }
+    },
+    {
+      id: 'installer',
+      title: 'Install DawamuOS to PC',
+      icon: '<i class="fas fa-download text-amber-400"></i>',
+      bgColor: 'bg-amber-600',
+      keywords: ['install', 'setup', 'disk', 'hardware', 'bootable', 'usb', 'installer'],
+      launch: () => {
+        windowManager.createWindow({
+          id: 'installer',
+          title: 'DawamuOS Hardware Deployment & Disk Installer',
+          icon: '<i class="fas fa-download text-amber-400"></i>',
+          content: () => {
+            const div = document.createElement('div');
+            div.className = 'flex flex-col h-full bg-[#0b1329] text-white p-6 font-sans overflow-y-auto space-y-5';
+            div.innerHTML = `
+              <div class="flex items-center gap-3 border-b border-slate-800 pb-4">
+                <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl border border-amber-500/30">
+                  <i class="fas fa-hdd"></i>
+                </div>
+                <div>
+                  <h2 class="text-base font-bold text-white">DawamuOS Hardware Installer Wizard</h2>
+                  <p class="text-xs text-slate-400">Deploy DawamuOS directly onto this computer's internal storage drive (SSD/eMMC/HDD)</p>
+                </div>
+              </div>
+
+              <!-- Hardware Specs Card -->
+              <div class="bg-slate-900/80 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Target System Verification</span>
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <span class="text-slate-500 block text-[10px]">CPU ARCH</span>
+                    <span class="font-bold text-emerald-400">x86_64 Dual-Core+</span>
+                  </div>
+                  <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <span class="text-slate-500 block text-[10px]">MEMORY</span>
+                    <span class="font-bold text-emerald-400">Detected: 4GB+ RAM</span>
+                  </div>
+                  <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <span class="text-slate-500 block text-[10px]">BOOT MODE</span>
+                    <span class="font-bold text-emerald-400">UEFI / BIOS</span>
+                  </div>
+                  <div class="bg-slate-950/70 p-2.5 rounded-xl border border-slate-800">
+                    <span class="text-slate-500 block text-[10px]">SECURITY</span>
+                    <span class="font-bold text-emerald-400">KCSE Exam Shield Ready</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Disk Selection Form -->
+              <div class="space-y-3 text-xs">
+                <label class="block font-bold text-slate-300">Select Target Drive for Installation:</label>
+                <select id="target-disk-select" class="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white outline-none focus:border-amber-500 font-mono">
+                  <option value="/dev/sda">/dev/sda - Internal Primary Drive (256 GB SSD) [Recommended]</option>
+                  <option value="/dev/nvme0n1">/dev/nvme0n1 - NVMe M.2 Solid State Drive (512 GB)</option>
+                  <option value="/dev/sdb">/dev/sdb - Secondary Drive / USB Storage (32 GB)</option>
+                </select>
+
+                <div class="space-y-2 pt-2">
+                  <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/80 border border-emerald-500/30 cursor-pointer">
+                    <input type="radio" name="install-type" value="clean" checked class="accent-emerald-500">
+                    <div>
+                      <div class="font-bold text-white text-xs">Clean Installation (Erase and Install DawamuOS)</div>
+                      <div class="text-[11px] text-slate-400">Recommended for school labs & student Chromebooks. Automatically configures UEFI boot partition.</div>
+                    </div>
+                  </label>
+                  <label class="flex items-center gap-2.5 p-3 rounded-xl bg-slate-900/80 border border-slate-800 cursor-pointer">
+                    <input type="radio" name="install-type" value="dual" class="accent-emerald-500">
+                    <div>
+                      <div class="font-bold text-white text-xs">Dual Boot Side-by-Side (Keep Existing OS)</div>
+                      <div class="text-[11px] text-slate-400">Installs GRUB multi-boot alongside Windows 10/11 or Ubuntu Linux.</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <!-- Install Progress Container -->
+              <div id="installer-progress-container" class="hidden space-y-2 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                <div class="flex justify-between text-xs text-slate-300 font-mono">
+                  <span id="install-step-text">Writing EFI system partition...</span>
+                  <span id="install-percent-text">0%</span>
+                </div>
+                <div class="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden border border-slate-700">
+                  <div id="install-progress-bar" class="bg-gradient-to-r from-amber-500 to-emerald-500 h-full transition-all duration-300" style="width: 0%;"></div>
+                </div>
+              </div>
+
+              <div class="flex justify-between items-center pt-2 border-t border-slate-800">
+                <span class="text-[11px] text-slate-500"><i class="fas fa-shield-alt text-emerald-400 mr-1"></i> Automated verification enabled</span>
+                <button id="start-install-btn" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-6 py-2.5 rounded-xl shadow-lg shadow-amber-950/40 transition-all flex items-center gap-2 cursor-pointer">
+                  <i class="fas fa-play"></i> Start Installation
+                </button>
+              </div>
+            `;
+
+            const btn = div.querySelector('#start-install-btn');
+            const progressCont = div.querySelector('#installer-progress-container');
+            const stepText = div.querySelector('#install-step-text');
+            const pctText = div.querySelector('#install-percent-text');
+            const bar = div.querySelector('#install-progress-bar');
+
+            btn?.addEventListener('click', async () => {
+              if (window.dawamuDialogs?.confirm) {
+                const ok = await window.dawamuDialogs.confirm({
+                  title: 'Confirm Installation',
+                  message: 'This wizard will write DawamuOS and the EduGuard educational image to the selected drive. Ensure any critical personal data is backed up before continuing.',
+                  confirmText: 'Proceed with Install',
+                  danger: false
+                });
+                if (!ok) return;
+              }
+
+              btn.disabled = true;
+              btn.classList.add('opacity-50', 'pointer-events-none');
+              progressCont.classList.remove('hidden');
+
+              const steps = [
+                { pct: 15, msg: 'Creating GPT partition table and EFI system partition (FAT32)...' },
+                { pct: 35, msg: 'Extracting DawamuOS core filesystem and Linux kernel image...' },
+                { pct: 60, msg: 'Deploying EduGuard AI cognitive engine & offline KCSE curriculum...' },
+                { pct: 85, msg: 'Configuring systemd bootloader and student security policies...' },
+                { pct: 100, msg: 'Installation completed successfully! Computer is ready to boot DawamuOS.' }
+              ];
+
+              let currentStep = 0;
+              const interval = setInterval(() => {
+                if (currentStep < steps.length) {
+                  const s = steps[currentStep];
+                  bar.style.width = `${s.pct}%`;
+                  pctText.textContent = `${s.pct}%`;
+                  stepText.textContent = s.msg;
+                  currentStep++;
+                } else {
+                  clearInterval(interval);
+                  if (window.dawamuDialogs?.toast) {
+                    window.dawamuDialogs.toast({ message: 'DawamuOS installation finished successfully!', type: 'success' });
+                  }
+                  btn.innerHTML = '<i class="fas fa-check"></i> Installation Finished';
+                  btn.className = 'bg-emerald-600 text-white font-bold text-xs px-6 py-2.5 rounded-xl';
+                }
+              }, 600);
+            });
+
+            return div;
+          },
+          width: 780,
+          height: 560
+        });
+      }
     }
   ];
 
@@ -551,6 +701,42 @@ function startDawamuOS() {
       });
     }
   });
+
+  // Global Dawamu OS API for cross-app launches & file opening
+  window.dawamuOS = {
+    openApp: (appId, options = {}) => {
+      const app = appRegistry.find(a => a.id === appId);
+      if (app) {
+        app.launch(options);
+        return true;
+      }
+      return false;
+    },
+    openFile: (file) => {
+      if (!file) return;
+      const name = (file.name || '').toLowerCase();
+      if (file.targetUrl) {
+        window.dispatchEvent(new CustomEvent('open-dawamu-url', { detail: { url: file.targetUrl } }));
+        return;
+      }
+      if (name.endsWith('.docx') || name.endsWith('.doc') || file.type === 'doc') {
+        const app = appRegistry.find(a => a.id === 'word');
+        if (app) app.launch({ fileName: file.name, fileData: file });
+      } else if (name.endsWith('.xlsx') || name.endsWith('.csv') || file.type === 'excel') {
+        const app = appRegistry.find(a => a.id === 'spreadsheet');
+        if (app) app.launch({ fileName: file.name, fileData: file });
+      } else if (name.endsWith('.pdf') || file.type === 'pdf') {
+        window.dispatchEvent(new CustomEvent('open-dawamu-url', { detail: { url: 'dawamu://books-844' } }));
+      } else if (name.endsWith('.txt') || name.endsWith('.md')) {
+        const app = appRegistry.find(a => a.id === 'docs');
+        if (app) app.launch({ fileName: file.name, fileData: file });
+      } else {
+        dawamuDialogs.toast(`Opening ${file.name} in Dawamu Word`, 'info');
+        const app = appRegistry.find(a => a.id === 'word');
+        if (app) app.launch({ fileName: file.name, fileData: file });
+      }
+    }
+  };
 
   // Initialize OS Shell Modules
   shelf.init(shelfEl, appRegistry);

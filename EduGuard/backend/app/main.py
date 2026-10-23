@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.firebase import initialize_firebase
-from app.routers import health, auth, subjects, learning, diagnosis, ai, teacher
+from app.routers import health, auth, subjects, learning, diagnosis, ai, teacher, playground
 
 def create_app() -> FastAPI:
     # Initialize Firebase Admin SDK if configured
@@ -33,6 +33,7 @@ def create_app() -> FastAPI:
     app.include_router(learning.router, prefix=settings.API_V1_STR)
     app.include_router(diagnosis.router, prefix=settings.API_V1_STR)
     app.include_router(ai.router, prefix=settings.API_V1_STR)
+    app.include_router(playground.router, prefix=settings.API_V1_STR)
     app.include_router(teacher.router)
 
     return app
