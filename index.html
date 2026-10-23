@@ -36,7 +36,7 @@
           <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Admission Number / Username</label>
           <div class="relative">
             <i class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-            <input type="text" id="login-adm" name="username" autocomplete="username" required placeholder="e.g. 1001, teacher, admin"
+            <input type="text" id="login-adm" name="username" autocomplete="username" placeholder="e.g. 1001, teacher, admin"
                    class="w-full text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none transition-all text-sm font-medium">
           </div>
         </div>
@@ -48,7 +48,7 @@
           </div>
           <div class="relative">
             <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-            <input type="password" id="login-pass" name="password" autocomplete="current-password" required placeholder="dawamu2026"
+            <input type="password" id="login-pass" name="password" autocomplete="current-password" placeholder="dawamu2026"
                    class="w-full text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none transition-all text-sm font-medium">
           </div>
         </div>
@@ -202,14 +202,14 @@
         System locked in accordance with student night curfew (9:00 PM – 7:00 AM). Get a good night's sleep for tomorrow's classes!
       </p>
 
-      <div class="w-full bg-slate-900 border border-slate-700/80 p-4 rounded-2xl space-y-3">
+      <form class="w-full bg-slate-900 border border-slate-700/80 p-4 rounded-2xl space-y-3" onsubmit="return false;">
         <div class="text-xs text-slate-400 font-semibold text-center">Teacher / Parent Bypass PIN</div>
         <div class="flex gap-2">
           <input type="password" id="curfew-bypass-pin" maxlength="6" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-center text-white font-mono outline-none focus:border-indigo-500" placeholder="••••">
-          <button id="curfew-bypass-btn" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 rounded-xl cursor-pointer">Unlock</button>
+          <button id="curfew-bypass-btn" type="button" class="bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs px-4 rounded-xl cursor-pointer">Unlock</button>
         </div>
         <div id="curfew-bypass-err" class="text-[11px] text-rose-400 text-center min-h-[14px]"></div>
-      </div>
+      </form>
     </div>
   </div>
 

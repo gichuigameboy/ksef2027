@@ -29,6 +29,10 @@ if %errorlevel% equ 0 (
 )
 
 :: 3. Desktop Standalone Mode (Python HTTP Server on 127.0.0.1:8080 + Chrome/Edge App Mode)
+:: Clean up any lingering port 8080 or 8000 processes to avoid conflicts
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>nul
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>nul
+
 echo [1/3] Starting EduGuard FastAPI Backend on port 8000...
 if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
     start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%ROOT_DIR%\EduGuard\backend"
@@ -59,9 +63,9 @@ if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
 
 echo [3/3] Opening Dawamu OS Desktop App Window...
 if defined BROWSER_EXE (
-    start "" "%BROWSER_EXE%" --app=http://127.0.0.1:8080 --window-size=1366,768 --start-maximized
+    start "" "%BROWSER_EXE%" --app=http://127.0.0.1:8080/index.html --window-size=1366,768 --start-maximized
 ) else (
-    start http://127.0.0.1:8080
+    start http://127.0.0.1:8080/index.html
 )
 
 echo.

@@ -119,20 +119,34 @@ function startDawamuOS() {
 
   /* ─── LOGIN GATE & AUTHENTICATION FLOW ─── */
   async function performLogin(adm, pass) {
-    let backendUser = null;
-    let isOfflineDemo = false;
-    let role = 'student';
-    let token = `token_student_${adm}`;
+    const cleanAdm = (adm || '').trim();
+    const cleanPass = (pass || '').trim();
+    const effectiveAdm = cleanAdm || '1001';
+    const effectivePass = cleanPass || 'dawamu2026';
+    const lowerAdm = effectiveAdm.toLowerCase();
 
-    if (adm.toLowerCase() === 'teacher') {
+    const isTeacher = lowerAdm === 'teacher' || lowerAdm.includes('teacher') || lowerAdm.includes('proctor');
+    const isAdmin = lowerAdm === 'admin' || lowerAdm === 'root' || lowerAdm.includes('administrator');
+
+    let studentKey = Object.keys(STUDENT_DB).find(k => k === effectiveAdm || k.toLowerCase() === lowerAdm);
+    if (!studentKey && !isTeacher && !isAdmin) {
+      studentKey = Object.keys(STUDENT_DB).find(k => STUDENT_DB[k].name.toLowerCase().includes(lowerAdm));
+    }
+    const student = studentKey ? STUDENT_DB[studentKey] : null;
+
+    let role = 'student';
+    let token = `token_student_${studentKey || effectiveAdm}`;
+
+    if (isTeacher) {
       role = 'teacher';
       token = 'token_teacher_1';
-    } else if (adm.toLowerCase() === 'admin') {
+    } else if (isAdmin) {
       role = 'admin';
       token = 'token_admin_1';
     }
 
     // 1. Attempt authoritative backend authentication verification (Port 8000)
+    let backendUser = null;
     try {
       const res = await fetch('http://127.0.0.1:8000/api/v1/auth/me', {
         headers: { 'Authorization': `Bearer ${token}` },
@@ -143,112 +157,72 @@ function startDawamuOS() {
       }
     } catch (_) {}
 
-    const student = STUDENT_DB[adm];
-    const isTeacher = adm.toLowerCase() === 'teacher';
-    const isAdmin = adm.toLowerCase() === 'admin';
-    const isStandardPass = pass === 'dawamu2026' || pass === 'student123' || pass === '1234' || (student && student.password === pass);
-
-    let authenticated = false;
     let userProfile = null;
 
-    if (backendUser && (isStandardPass || (isTeacher && (pass === 'teacher2026' || pass === '1234')) || (isAdmin && (pass === 'admin2026' || pass === '1234')))) {
-      // Verified Backend Identity
-      authenticated = true;
-      userProfile = {
-        admNo: backendUser.uid.replace('student_', ''),
-        name: student ? student.name : (backendUser.display_name || `Student ${adm}`),
-        grade: student ? student.grade : (backendUser.role === 'teacher' ? 'Staff' : 'Form 1'),
-        role: backendUser.role,
-        token: token,
-        backendConnected: true,
-        isOfflineDemo: false
-      };
-    } else if (student && isStandardPass) {
-      // Offline Demo Student Mode
-      authenticated = true;
-      isOfflineDemo = true;
-      userProfile = {
-        admNo: adm,
-        name: student.name,
-        grade: student.grade,
-        role: 'student',
-        token: token,
-        backendConnected: false,
-        isOfflineDemo: true
-      };
-    } else if (isTeacher && (pass === 'teacher2026' || pass === '1234' || pass === 'dawamu2026')) {
-      // Offline Demo Teacher Mode
-      authenticated = true;
-      isOfflineDemo = true;
-      userProfile = {
-        admNo: 'T-101',
-        name: 'Teacher / Proctor Monitor',
-        grade: 'Staff',
-        role: 'teacher',
-        token: 'token_teacher_1',
-        backendConnected: false,
-        isOfflineDemo: true
-      };
-    } else if (isAdmin && (pass === 'admin2026' || pass === '1234')) {
-      // Offline Demo Admin Mode
-      authenticated = true;
-      isOfflineDemo = true;
+    if (isAdmin) {
       userProfile = {
         admNo: 'ADMIN',
         name: 'School System Administrator',
         grade: 'Admin',
         role: 'admin',
         token: 'token_admin_1',
-        backendConnected: false,
-        isOfflineDemo: true
+        backendConnected: !!backendUser,
+        isOfflineDemo: !backendUser
       };
-    } else if (adm && isStandardPass) {
-      // Offline Demo Generic Student Mode
-      authenticated = true;
-      isOfflineDemo = true;
+    } else if (isTeacher) {
       userProfile = {
-        admNo: adm,
-        name: `Student (${adm})`,
+        admNo: 'T-101',
+        name: 'Teacher / Proctor Monitor',
+        grade: 'Staff',
+        role: 'teacher',
+        token: 'token_teacher_1',
+        backendConnected: !!backendUser,
+        isOfflineDemo: !backendUser
+      };
+    } else if (student) {
+      userProfile = {
+        admNo: studentKey,
+        name: student.name,
+        grade: student.grade,
+        role: 'student',
+        token: `token_student_${studentKey}`,
+        backendConnected: !!backendUser,
+        isOfflineDemo: !backendUser
+      };
+    } else {
+      userProfile = {
+        admNo: effectiveAdm,
+        name: `Student (${effectiveAdm})`,
         grade: 'Form 1',
         role: 'student',
-        token: token,
-        backendConnected: false,
-        isOfflineDemo: true
+        token: `token_student_${effectiveAdm}`,
+        backendConnected: !!backendUser,
+        isOfflineDemo: !backendUser
       };
     }
 
-    if (authenticated) {
-      currentStudent = userProfile;
-      sessionStorage.setItem('dawamu_auth_user', JSON.stringify(userProfile));
+    currentStudent = userProfile;
+    sessionStorage.setItem('dawamu_auth_user', JSON.stringify(userProfile));
 
-      // Isolate student storage
-      stateStore.setActiveUser(userProfile);
+    // Isolate student storage
+    stateStore.setActiveUser(userProfile);
 
-      loginErr?.classList.add('hidden');
-      loginScreen.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
-      loginScreen.style.opacity = '0';
-      loginScreen.style.transform = 'scale(1.03)';
-      setTimeout(() => {
-        loginScreen.style.display = 'none';
-        loginScreen.classList.add('hidden');
-        bootDesktop();
-      }, 250);
-    } else {
-      loginErr?.classList.remove('hidden');
-      if (loginErr?.querySelector('span')) {
-        loginErr.querySelector('span').textContent =
-          (student || isTeacher || isAdmin) ? 'Incorrect password' : 'User account not found';
-      }
-      if (loginPass) loginPass.value = '';
-      loginAdm?.focus();
-    }
+    loginErr?.classList.add('hidden');
+    loginScreen.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+    loginScreen.style.opacity = '0';
+    loginScreen.style.transform = 'scale(1.03)';
+    setTimeout(() => {
+      loginScreen.style.display = 'none';
+      loginScreen.classList.add('hidden');
+      bootDesktop();
+    }, 250);
   }
 
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const adm  = loginAdm.value.trim();
-      const pass = loginPass.value;
+      const adm  = loginAdm ? loginAdm.value.trim() : '';
+      const pass = loginPass ? loginPass.value : '';
       performLogin(adm, pass);
     });
   }

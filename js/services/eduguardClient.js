@@ -980,6 +980,8 @@ export class EduGuardClient {
       };
     }
   }
+
+  getPendingQueueCount() {
     try {
       return JSON.parse(localStorage.getItem(this._queueKey()) || '[]').length;
     } catch (_) {
