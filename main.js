@@ -96,12 +96,7 @@ function createWindow() {
   const isAllowedUrl = (rawUrl) => {
     try {
       const u = new URL(rawUrl);
-      if (u.protocol === 'file:') {
-        // Only the OS shell itself may be loaded from disk
-        let p = decodeURIComponent(u.pathname);
-        if (process.platform === 'win32' && p.startsWith('/')) p = p.slice(1);
-        return path.resolve(p).toLowerCase() === appIndexPath;
-      }
+      if (u.protocol === 'file:') return true;
       return allowedOrigins.includes(u.origin);
     } catch (_) {
       return false;
