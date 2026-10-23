@@ -128,7 +128,9 @@ export function createFocusTimerApp() {
         if (timerMode === 'focus') {
           stateStore.addFocusSession(Math.round(totalSeconds / 60));
           updateStats();
-          alert('🎉 Focus Session Completed! Take a well-deserved 5-minute break.');
+          if (window.dawamuDialogs?.toast) {
+            window.dawamuDialogs.toast('Focus Session Completed! Take a well-deserved 5-minute break.', 'success');
+          }
         }
       }
     }, 1000);

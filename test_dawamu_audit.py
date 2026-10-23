@@ -143,11 +143,29 @@ def test_student_data_isolation():
     def get_student_state(adm_no):
         return storage.get(f"dawamu_student_state_{adm_no}", None)
         
-    # Student 1 logs in and completes an assignment
-    set_student_state("1001", {"name": "Brian Ochieng", "assignments": [{"id": "math_1", "score": 90}]})
+    # Student 1 logs in and completes an assignment + sets a custom wallpaper
+    set_student_state("1001", {
+        "name": "Brian Ochieng",
+        "assignments": [{"id": "math_1", "score": 90}],
+        "personalization": {
+            "wallpaperId": "custom",
+            "customWallpaperDataUrl": "data:image/svg+xml;base64,PHN2Zz48L3N2Zz4=",
+            "customWallpaperName": "brian_wallpaper.svg",
+            "accentHex": "#f43f5e"
+        }
+    })
     
-    # Student 2 logs in
-    set_student_state("1002", {"name": "Faith Muthoni", "assignments": []})
+    # Student 2 logs in with default personalization
+    set_student_state("1002", {
+        "name": "Faith Muthoni",
+        "assignments": [],
+        "personalization": {
+            "wallpaperId": "emerald",
+            "customWallpaperDataUrl": None,
+            "customWallpaperName": None,
+            "accentHex": "#10b981"
+        }
+    })
     
     # Verify isolation
     s1 = get_student_state("1001")
@@ -156,8 +174,12 @@ def test_student_data_isolation():
     assert len(s1["assignments"]) == 1
     assert len(s2["assignments"]) == 0
     assert s1["name"] != s2["name"]
+    assert s1["personalization"]["wallpaperId"] == "custom"
+    assert s2["personalization"]["wallpaperId"] == "emerald"
+    assert s2["personalization"]["customWallpaperDataUrl"] is None
+    assert s1["personalization"]["accentHex"] != s2["personalization"]["accentHex"]
     
-    print("  [PASS] Student data isolation verified across storage namespaces!")
+    print("  [PASS] Student data & custom wallpaper personalization isolation verified across storage namespaces!")
 
 def test_backend_pytest_suite():
     print("[TEST 4] Running EduGuard Backend Test Suite (50 Unit & Integration Tests)...")

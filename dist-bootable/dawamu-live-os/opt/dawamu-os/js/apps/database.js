@@ -9,11 +9,17 @@
  * - Integration with Dawamu Dialogs
  */
 
-export function createDatabaseApp() {
+import { stateStore } from '../os/state.js';
+import { dawamuDialogs } from '../os/dialogs.js';
+
+export function createDatabaseApp(options = {}) {
   const root = document.createElement('div');
   root.className = 'flex flex-col h-full bg-[#0f172a] text-white font-sans overflow-hidden select-none';
 
-  const STORAGE_KEY = 'dawamu_school_db';
+  const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (300,000 ms)
+  let isDirty = false;
+  let currentFolderKey = options.folderKey || 'documents';
+  let currentFileName = options.fileName || 'Dawamu_School_Records.db.json';
 
   const DEFAULT_DB = {
     students: [
@@ -56,17 +62,29 @@ export function createDatabaseApp() {
     ]
   };
 
-  let DB = DEFAULT_DB;
+  let DB = JSON.parse(JSON.stringify(DEFAULT_DB));
+  let lastSavedSnapshot = null;
+
   const loadDB = () => {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
-      if (raw) DB = JSON.parse(raw);
-    } catch (_) {}
-  };
-  const saveDB = () => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DB));
-    } catch (_) {}
+      const rawFileData = typeof options.fileData === 'string'
+        ? options.fileData
+        : (typeof options.fileData?.content === 'string' ? options.fileData.content : null);
+      if (rawFileData) {
+        const parsed = JSON.parse(rawFileData);
+        if (parsed && (Array.isArray(parsed.students) || Array.isArray(parsed.courses))) {
+          DB = parsed;
+        }
+      } else {
+        const savedWs = stateStore.getAppWorkspace('database', null);
+        if (savedWs && (Array.isArray(savedWs.students) || Array.isArray(savedWs.courses))) {
+          DB = JSON.parse(JSON.stringify(savedWs));
+        }
+      }
+    } catch (_) {
+      DB = JSON.parse(JSON.stringify(DEFAULT_DB));
+    }
+    lastSavedSnapshot = JSON.parse(JSON.stringify(DB));
   };
 
   loadDB();
@@ -85,15 +103,26 @@ export function createDatabaseApp() {
           <i class="fas fa-database"></i>
         </div>
         <div>
-          <div class="font-bold text-white text-sm">Dawamu School Database</div>
+          <div class="flex items-center gap-2">
+            <div class="font-bold text-white text-sm">Dawamu School Database</div>
+            <span id="db-save-status" class="text-[10px] bg-blue-950/90 text-blue-200 px-2.5 py-0.5 rounded-full border border-blue-500/30 flex items-center gap-1.5">
+              <i class="fas fa-check-circle text-emerald-400"></i> Saved • Auto-Save (5m)
+            </span>
+          </div>
           <div class="text-[10px] text-slate-400">Student Records • Courses • Library Catalog</div>
         </div>
       </div>
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-2">
         <div class="flex items-center gap-2 bg-[#1e293b] border border-white/10 rounded-xl px-3 py-1.5">
           <i class="fas fa-search text-slate-500 text-xs"></i>
-          <input id="db-search" type="text" placeholder="Search records..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 w-40">
+          <input id="db-search" type="text" placeholder="Search records..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 w-32">
         </div>
+        <button id="btn-save-db" class="bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer" title="Save Database (Ctrl+S)">
+          <i class="fas fa-save text-[10px]"></i> Save DB
+        </button>
+        <button id="btn-save-db-downloads" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer" title="Save Database Snapshot to This PC > Downloads">
+          <i class="fas fa-folder-plus text-[10px]"></i> Save to Downloads
+        </button>
         <button id="btn-add-record" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold px-3 py-1.5 rounded-xl flex items-center gap-1.5 transition-all cursor-pointer">
           <i class="fas fa-plus text-[10px]"></i> <span id="add-btn-label">Add Student</span>
         </button>
@@ -143,6 +172,57 @@ export function createDatabaseApp() {
   `;
 
   root.style.position = 'relative';
+  const saveStatusBadge = root.querySelector('#db-save-status');
+
+  function updateSaveStatusBadge(customMsg = null) {
+    if (!saveStatusBadge) return;
+    if (isDirty) {
+      saveStatusBadge.className = 'text-[10px] bg-amber-400 text-slate-950 font-bold px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1.5 shadow-sm';
+      saveStatusBadge.innerHTML = `<i class="fas fa-circle text-[7px] text-amber-950 animate-pulse"></i> ${customMsg || 'Unsaved Changes • Auto-saves every 5m'}`;
+    } else {
+      saveStatusBadge.className = 'text-[10px] bg-blue-950/90 text-blue-200 px-2.5 py-0.5 rounded-full border border-blue-500/30 flex items-center gap-1.5';
+      saveStatusBadge.innerHTML = `<i class="fas fa-check-circle text-emerald-400"></i> ${customMsg || 'Saved • Auto-Save (5m)'}`;
+    }
+  }
+
+  function markDirty() {
+    if (!isDirty) {
+      isDirty = true;
+      updateSaveStatusBadge();
+    }
+  }
+
+  function saveDatabase(targetFolder = currentFolderKey, silent = false) {
+    try {
+      const folder = (typeof targetFolder === 'string' && targetFolder) ? targetFolder : currentFolderKey;
+      currentFolderKey = folder;
+      const snapshot = JSON.parse(JSON.stringify(DB));
+
+      // Save to active student's Database workspace
+      stateStore.saveAppWorkspace('database', snapshot);
+
+      // Save as file in active student's Virtual File System
+      stateStore.saveFileToVFS(currentFolderKey, {
+        name: currentFileName,
+        type: 'db',
+        icon: 'fa-database',
+        color: 'text-indigo-400',
+        content: JSON.stringify(snapshot, null, 2)
+      });
+
+      lastSavedSnapshot = snapshot;
+      isDirty = false;
+      const folderMeta = stateStore.getFolderMeta(currentFolderKey);
+      updateSaveStatusBadge(`Saved in ${folderMeta?.label || currentFolderKey} • Auto-Save (5m)`);
+      if (!silent) {
+        dawamuDialogs.toast(`Saved "${currentFileName}" to This PC > ${folderMeta?.label || currentFolderKey}`, 'success');
+      }
+      return snapshot;
+    } catch (e) {
+      console.error('Database save error:', e);
+      return null;
+    }
+  }
 
   function updateCounts() {
     root.querySelector('#count-students').textContent = DB.students.length;
@@ -275,12 +355,7 @@ export function createDatabaseApp() {
     contentEl.querySelectorAll('.row-del-btn').forEach(btn => {
       btn.addEventListener('click', async () => {
         const id = btn.dataset.id;
-        let confirmed = false;
-        if (window.dawamuDialogs && window.dawamuDialogs.confirm) {
-          confirmed = await window.dawamuDialogs.confirm(`Are you sure you want to delete record ${id}?`);
-        } else {
-          confirmed = confirm(`Delete record ${id}?`);
-        }
+        const confirmed = await dawamuDialogs.confirm(`Are you sure you want to delete record ${id}?`);
         if (confirmed) {
           if (activeTab === 'students') {
             DB.students = DB.students.filter(s => s.id !== id);
@@ -289,11 +364,9 @@ export function createDatabaseApp() {
           } else {
             DB.library = DB.library.filter(b => b.isbn !== id);
           }
-          saveDB();
+          markDirty();
           renderContent();
-          if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-            window.dawamuDialogs.toast(`Record ${id} removed successfully`, 'success');
-          }
+          dawamuDialogs.toast(`Record ${id} removed (Click Save DB to commit)`, 'info');
         }
       });
     });
@@ -334,19 +407,33 @@ export function createDatabaseApp() {
     renderContent();
   });
 
+  root.querySelector('#btn-save-db').addEventListener('click', () => {
+    saveDatabase(currentFolderKey, false);
+  });
+
+  root.querySelector('#btn-save-db-downloads').addEventListener('click', () => {
+    saveDatabase('downloads', false);
+  });
+
   root.querySelector('#btn-export-db').addEventListener('click', () => {
     const data = DB[activeTab];
     if (!data?.length) return;
     const keys = Object.keys(data[0]);
     const csv = [keys.join(','), ...data.map(r => keys.map(k => `"${r[k]}"`).join(','))].join('\n');
+    const csvName = `dawamu_${activeTab}_export.csv`;
+    stateStore.saveFileToVFS('downloads', {
+      name: csvName,
+      type: 'sheet',
+      icon: 'fa-file-csv',
+      color: 'text-emerald-400',
+      content: csv
+    });
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `dawamu_${activeTab}_${Date.now()}.csv`;
+    a.download = csvName;
     a.click();
-    if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-      window.dawamuDialogs.toast(`Exported ${activeTab} as CSV`, 'success');
-    }
+    dawamuDialogs.toast(`Saved "${csvName}" to This PC > Downloads`, 'success');
   });
 
   // Modal Setup
@@ -502,6 +589,7 @@ export function createDatabaseApp() {
         return;
       }
 
+      const wasEditing = Boolean(editingRecord);
       if (editingRecord) {
         const idx = DB.students.findIndex(s => s.id === editingRecord.id);
         if (idx !== -1) {
@@ -511,12 +599,10 @@ export function createDatabaseApp() {
         DB.students.push({ id, name, grade, stream, dob, parent, phone, status: 'Active' });
       }
 
-      saveDB();
+      markDirty();
       closeModal();
       renderContent();
-      if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-        window.dawamuDialogs.toast(`Student "${name}" ${editingRecord ? 'updated' : 'added'} successfully`, 'success');
-      }
+      dawamuDialogs.toast(`Student "${name}" ${wasEditing ? 'updated' : 'added'} (Click Save DB to commit)`, 'info');
     } else if (activeTab === 'courses') {
       const code = root.querySelector('#f-code')?.value.trim().toUpperCase();
       const name = root.querySelector('#f-name')?.value.trim();
@@ -546,12 +632,10 @@ export function createDatabaseApp() {
         DB.courses.push({ code, name, teacher, form, hrs, room });
       }
 
-      saveDB();
+      markDirty();
       closeModal();
       renderContent();
-      if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-        window.dawamuDialogs.toast(`Course "${name}" saved`, 'success');
-      }
+      dawamuDialogs.toast(`Course "${name}" updated (Click Save DB to commit)`, 'info');
     } else {
       const isbn = root.querySelector('#f-isbn')?.value.trim();
       const title = root.querySelector('#f-title')?.value.trim();
@@ -581,16 +665,51 @@ export function createDatabaseApp() {
         DB.library.push({ isbn, title, author, category, copies, avail });
       }
 
-      saveDB();
+      markDirty();
       closeModal();
       renderContent();
-      if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-        window.dawamuDialogs.toast(`Book "${title}" saved`, 'success');
-      }
+      dawamuDialogs.toast(`Book "${title}" updated (Click Save DB to commit)`, 'info');
     }
   });
 
+  root.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      saveDatabase(currentFolderKey, false);
+    }
+  });
+
+  // 5-Minute Automatic Save Interval while in Dawamu School Database
+  const autoSaveIntervalId = setInterval(() => {
+    if (!document.body.contains(root)) {
+      clearInterval(autoSaveIntervalId);
+      return;
+    }
+    saveDatabase(currentFolderKey, true);
+    dawamuDialogs.toast(`Auto-saved "${currentFileName}" (5-minute interval)`, 'info');
+  }, AUTO_SAVE_INTERVAL_MS);
+
+  // Register lifecycle controller for WindowManager close interception & E2E inspection
+  root.__dawamuAppController = {
+    appId: 'database',
+    autoSaveIntervalMs: AUTO_SAVE_INTERVAL_MS,
+    isDirty: () => isDirty,
+    getTitle: () => currentFileName,
+    saveNow: () => saveDatabase(currentFolderKey, false),
+    triggerAutoSaveNow: () => saveDatabase(currentFolderKey, true),
+    discardChanges: () => {
+      if (lastSavedSnapshot) {
+        DB = JSON.parse(JSON.stringify(lastSavedSnapshot));
+      }
+      isDirty = false;
+    },
+    onDestroy: () => {
+      clearInterval(autoSaveIntervalId);
+    }
+  };
+
   updateTabs();
   renderContent();
+  updateSaveStatusBadge();
   return root;
 }

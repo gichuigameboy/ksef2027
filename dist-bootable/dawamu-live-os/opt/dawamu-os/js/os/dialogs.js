@@ -37,12 +37,21 @@ class DialogManager {
 
   /**
    * Display a non-blocking toast notification.
-   * @param {string} message 
+   * @param {string|{message: string, type?: string, duration?: number}} messageOrOptions 
    * @param {'info'|'success'|'warning'|'error'} type 
    * @param {number} duration ms
    */
-  toast(message, type = 'info', duration = 3500) {
+  toast(messageOrOptions, type = 'info', duration = 3500) {
     if (!this.toastContainer) this.init();
+
+    let message = messageOrOptions;
+    if (messageOrOptions && typeof messageOrOptions === 'object') {
+      message = messageOrOptions.message || messageOrOptions.title || '';
+      type = messageOrOptions.type || type;
+      duration = messageOrOptions.duration || duration;
+    }
+    message = String(message ?? '');
+    if (!message) return;
 
     // Prevent identical duplicates stacking
     if (this.activeToasts.has(message)) return;
@@ -115,18 +124,20 @@ class DialogManager {
    * Accessible confirmation dialog (Promise<boolean>)
    */
   confirm(options = {}) {
+    const parsedOptions = typeof options === 'string' ? { message: options } : (options || {});
     const {
       title = 'Confirm Action',
       message = 'Are you sure you want to proceed?',
       confirmText = 'Confirm',
       cancelText = 'Cancel',
-      type = 'primary' // 'primary' | 'danger'
-    } = typeof options === 'string' ? { message: options } : options;
+      type = 'primary', // 'primary' | 'danger'
+      danger = false
+    } = parsedOptions;
 
     return new Promise((resolve) => {
       if (!this.modalContainer) this.init();
 
-      const isDanger = type === 'danger';
+      const isDanger = type === 'danger' || danger === true;
       const iconClass = isDanger ? 'fas fa-triangle-exclamation text-rose-400' : 'fas fa-question-circle text-emerald-400';
       const confirmBtnClass = isDanger
         ? 'bg-rose-600 hover:bg-rose-500 text-white font-semibold'
@@ -322,6 +333,193 @@ class DialogManager {
       document.addEventListener('keydown', onKeyDown);
 
       okBtn?.addEventListener('click', closeDialog);
+    });
+  }
+
+  /**
+   * 3-Option Unsaved Changes Warning Modal when closing an app/tab with unsaved edits.
+   * Returns Promise<'save' | 'discard' | 'cancel'>
+   */
+  unsavedChanges(options = {}) {
+    const {
+      appName = 'Application',
+      itemName = 'your document'
+    } = options;
+
+    return new Promise((resolve) => {
+      if (!this.modalContainer) this.init();
+
+      this.modalContainer.innerHTML = `
+        <div id="dawamu-unsaved-modal" class="bg-[#0f172a] border border-rose-500/40 rounded-3xl p-6 max-w-lg w-full shadow-2xl relative text-left transition-all scale-95 opacity-0 modal-box">
+          <div class="flex items-start gap-4 mb-4">
+            <div class="w-11 h-11 rounded-2xl bg-rose-500/15 border border-rose-500/30 flex items-center justify-center shrink-0">
+              <i class="fas fa-triangle-exclamation text-rose-400 text-xl"></i>
+            </div>
+            <div>
+              <h3 class="text-base font-bold text-white mb-1">Unsaved Changes in ${appName}</h3>
+              <p class="text-xs text-slate-300 leading-relaxed">
+                You have unsaved changes in <b class="text-amber-300">"${itemName}"</b>. Do you want to save your work before exiting?
+              </p>
+            </div>
+          </div>
+          <div class="flex flex-wrap justify-end gap-2.5 mt-6">
+            <button id="modal-cancel-close-btn" data-choice="cancel" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white transition-all cursor-pointer font-medium">
+              Cancel / Stay
+            </button>
+            <button id="modal-dont-save-exit-btn" data-choice="discard" class="px-4 py-2 rounded-xl bg-rose-600/25 hover:bg-rose-600/40 border border-rose-500/40 text-xs text-rose-200 hover:text-white font-semibold transition-all cursor-pointer active:scale-95">
+              Don't Save &amp; Exit
+            </button>
+            <button id="modal-save-exit-btn" data-choice="save" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-bold transition-all cursor-pointer active:scale-95 shadow-lg">
+              <i class="fas fa-save mr-1"></i> Save &amp; Exit
+            </button>
+          </div>
+        </div>
+      `;
+
+      this.modalContainer.classList.remove('hidden');
+      this.modalContainer.classList.add('flex');
+
+      const modalBox = this.modalContainer.querySelector('.modal-box');
+      requestAnimationFrame(() => {
+        modalBox.classList.remove('scale-95', 'opacity-0');
+      });
+
+      const saveBtn = this.modalContainer.querySelector('#modal-save-exit-btn');
+      const discardBtn = this.modalContainer.querySelector('#modal-dont-save-exit-btn');
+      const cancelBtn = this.modalContainer.querySelector('#modal-cancel-close-btn');
+      saveBtn?.focus();
+
+      const closeDialog = (choice) => {
+        document.removeEventListener('keydown', onKeyDown);
+        this.modalContainer.classList.add('hidden');
+        this.modalContainer.classList.remove('flex');
+        this.modalContainer.innerHTML = '';
+        resolve(choice);
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Escape') closeDialog('cancel');
+      };
+      document.addEventListener('keydown', onKeyDown);
+
+      saveBtn?.addEventListener('click', () => closeDialog('save'));
+      discardBtn?.addEventListener('click', () => closeDialog('discard'));
+      cancelBtn?.addEventListener('click', () => closeDialog('cancel'));
+    });
+  }
+
+  /**
+   * Folder & Filename Picker Dialog for Save To / Move To
+   * Returns Promise<{ folderKey: string, fileName: string } | null>
+   */
+  chooseFolder(options = {}) {
+    const {
+      title = 'Select Destination Folder',
+      message = 'Choose where to store or move this item in This PC:',
+      folders = [],
+      defaultFolder = 'downloads',
+      showFileName = false,
+      defaultFileName = 'Document.docx',
+      confirmText = 'Save Here'
+    } = options;
+
+    return new Promise((resolve) => {
+      if (!this.modalContainer) this.init();
+
+      let selectedFolder = defaultFolder;
+
+      this.modalContainer.innerHTML = `
+        <div class="bg-[#0f172a] border border-white/10 rounded-3xl p-6 max-w-md w-full shadow-2xl relative text-left transition-all scale-95 opacity-0 modal-box">
+          <div class="flex items-start gap-3.5 mb-4">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
+              <i class="fas fa-folder-tree text-emerald-400 text-lg"></i>
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="text-base font-bold text-white mb-0.5">${title}</h3>
+              <p class="text-xs text-slate-400">${message}</p>
+            </div>
+          </div>
+
+          ${showFileName ? `
+            <div class="mb-3">
+              <label class="text-[10px] text-slate-400 uppercase font-bold tracking-wider block mb-1">File Name</label>
+              <input id="modal-folder-filename" type="text" value="${defaultFileName}"
+                     class="w-full bg-[#080d16] border border-white/15 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-xs text-white outline-none font-sans">
+            </div>
+          ` : ''}
+
+          <div class="mb-2 text-[10px] text-slate-400 uppercase font-bold tracking-wider">Destination Folder</div>
+          <div class="max-h-52 overflow-y-auto space-y-1.5 pr-1" id="modal-folder-list">
+            ${folders.map(f => `
+              <button type="button" data-folder-key="${f.key}"
+                      class="modal-folder-opt w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-xs transition-all cursor-pointer ${f.key === selectedFolder ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300 font-bold' : 'bg-[#080d16] border-white/5 text-slate-300 hover:bg-white/5'}">
+                <i class="${f.icon || 'fas fa-folder text-amber-400'} w-4 text-center"></i>
+                <span class="truncate flex-1">${f.name}</span>
+                ${f.key === 'downloads' ? '<span class="text-[10px] text-emerald-400 font-mono">Downloads</span>' : ''}
+              </button>
+            `).join('')}
+          </div>
+
+          <div class="flex justify-end gap-2.5 mt-5">
+            <button id="modal-folder-cancel" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white transition-all cursor-pointer font-medium">
+              Cancel
+            </button>
+            <button id="modal-folder-confirm" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-xs text-white font-bold transition-all cursor-pointer active:scale-95">
+              ${confirmText}
+            </button>
+          </div>
+        </div>
+      `;
+
+      this.modalContainer.classList.remove('hidden');
+      this.modalContainer.classList.add('flex');
+
+      const modalBox = this.modalContainer.querySelector('.modal-box');
+      requestAnimationFrame(() => {
+        modalBox.classList.remove('scale-95', 'opacity-0');
+      });
+
+      const listEl = this.modalContainer.querySelector('#modal-folder-list');
+      listEl?.querySelectorAll('.modal-folder-opt').forEach(btn => {
+        btn.addEventListener('click', () => {
+          selectedFolder = btn.dataset.folderKey;
+          listEl.querySelectorAll('.modal-folder-opt').forEach(b => {
+            const isSel = b.dataset.folderKey === selectedFolder;
+            b.className = `modal-folder-opt w-full text-left flex items-center gap-3 px-3.5 py-2.5 rounded-xl border text-xs transition-all cursor-pointer ${isSel ? 'bg-emerald-600/20 border-emerald-500/50 text-emerald-300 font-bold' : 'bg-[#080d16] border-white/5 text-slate-300 hover:bg-white/5'}`;
+          });
+        });
+      });
+
+      const fileInput = this.modalContainer.querySelector('#modal-folder-filename');
+      const confirmBtn = this.modalContainer.querySelector('#modal-folder-confirm');
+      const cancelBtn = this.modalContainer.querySelector('#modal-folder-cancel');
+
+      const closeDialog = (res) => {
+        document.removeEventListener('keydown', onKeyDown);
+        this.modalContainer.classList.add('hidden');
+        this.modalContainer.classList.remove('flex');
+        this.modalContainer.innerHTML = '';
+        resolve(res);
+      };
+
+      const onKeyDown = (e) => {
+        if (e.key === 'Escape') closeDialog(null);
+        if (e.key === 'Enter') {
+          closeDialog({
+            folderKey: selectedFolder,
+            fileName: fileInput ? fileInput.value.trim() : defaultFileName
+          });
+        }
+      };
+      document.addEventListener('keydown', onKeyDown);
+
+      confirmBtn?.addEventListener('click', () => {
+        closeDialog({
+          folderKey: selectedFolder,
+          fileName: fileInput ? fileInput.value.trim() : defaultFileName
+        });
+      });
+      cancelBtn?.addEventListener('click', () => closeDialog(null));
     });
   }
 }

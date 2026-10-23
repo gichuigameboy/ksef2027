@@ -259,9 +259,13 @@ export function createAdminPanelApp() {
       const newPin = container.querySelector('#change-pin-input').value.trim();
       if (newPin.length >= 4) {
         stateStore.setAdminPin(newPin);
-        alert('✓ Admin PIN successfully updated!');
+        if (window.dawamuDialogs?.toast) {
+          window.dawamuDialogs.toast('Admin PIN successfully updated!', 'success');
+        }
       } else {
-        alert('PIN must be at least 4 digits long.');
+        if (window.dawamuDialogs?.toast) {
+          window.dawamuDialogs.toast('PIN must be at least 4 digits long.', 'warning');
+        }
       }
     });
   };

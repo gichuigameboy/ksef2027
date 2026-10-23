@@ -176,6 +176,16 @@ export function createInstallerApp() {
     }
   }
 
+  function closeInstallerWindow() {
+    const closeBtn = root.closest('.cros-window')?.querySelector('.close-btn');
+    if (closeBtn) {
+      closeBtn.click();
+    } else {
+      const winEl = root.closest('.cros-window') || root.closest('.win-window');
+      if (winEl) winEl.remove();
+    }
+  }
+
   function attachEvents() {
     root.querySelector('#inst-next-btn')?.addEventListener('click', () => {
       if (currentStep < 3) {
@@ -183,8 +193,7 @@ export function createInstallerApp() {
         render();
       } else {
         // Step 3 finished, close window
-        const winEl = root.closest('.win-window');
-        if (winEl) winEl.remove();
+        closeInstallerWindow();
       }
     });
 
@@ -196,8 +205,7 @@ export function createInstallerApp() {
     });
 
     root.querySelector('#inst-cancel-btn')?.addEventListener('click', () => {
-      const winEl = root.closest('.win-window');
-      if (winEl) winEl.remove();
+      closeInstallerWindow();
     });
   }
 

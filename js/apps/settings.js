@@ -3,21 +3,21 @@
  * Complete Implementation: Network, Personalization, Display, Accounts, Security, System & About
  */
 
-import { stateStore } from '../os/state.js';
+import { stateStore, WALLPAPER_PRESETS, DEFAULT_PERSONALIZATION } from '../os/state.js';
 import { dawamuDialogs } from '../os/dialogs.js';
 
-export function createSettingsApp() {
+export function createSettingsApp(options = {}) {
   const root = document.createElement('div');
   root.className = 'flex flex-col h-full bg-[#181818] text-white font-sans select-none overflow-hidden';
 
-  let currentCategory = 'network'; // Default to network to verify fix immediately
+  let currentCategory = options.category || 'personalization';
   let cachedNetworkInfo = null;
   let isTestingLatency = false;
   let latencyResult = null;
 
   const categories = [
-    { id: 'network', name: 'Network & Internet', icon: 'fas fa-wifi' },
     { id: 'personalization', name: 'Personalization & Theme', icon: 'fas fa-palette' },
+    { id: 'network', name: 'Network & Internet', icon: 'fas fa-wifi' },
     { id: 'system', name: 'System & Hardware', icon: 'fas fa-laptop' },
     { id: 'display', name: 'Display & Brightness', icon: 'fas fa-sun' },
     { id: 'accounts', name: 'Student Accounts', icon: 'fas fa-user-graduate' },
@@ -25,38 +25,7 @@ export function createSettingsApp() {
     { id: 'about', name: 'About Dawamu OS', icon: 'fas fa-info-circle' }
   ];
 
-  const WALLPAPERS = [
-    {
-      id: 'emerald',
-      name: 'Dawamu Emerald (Default)',
-      color: '#10b981',
-      bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(16, 185, 129, 0.22) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(4, 120, 87, 0.18) 0%, transparent 60%), #041409'
-    },
-    {
-      id: 'deep_blue',
-      name: 'Deep Blue Windows',
-      color: '#3b82f6',
-      bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(59, 130, 246, 0.25) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(30, 58, 138, 0.25) 0%, transparent 60%), #030712'
-    },
-    {
-      id: 'midnight',
-      name: 'Midnight Obsidian',
-      color: '#8b5cf6',
-      bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139, 92, 246, 0.18) 0%, transparent 65%), #07070c'
-    },
-    {
-      id: 'sunset',
-      name: 'African Savannah Sunset',
-      color: '#f59e0b',
-      bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(245, 158, 11, 0.25) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(225, 29, 72, 0.18) 0%, transparent 60%), #140505'
-    },
-    {
-      id: 'slate',
-      name: 'Minimal Slate Dark',
-      color: '#64748b',
-      bgCss: 'linear-gradient(135deg, #0b1120 0%, #1e293b 100%)'
-    }
-  ];
+  const WALLPAPERS = WALLPAPER_PRESETS;
 
   const ACCENTS = [
     { name: 'Emerald', hex: '#10b981' },
@@ -67,22 +36,56 @@ export function createSettingsApp() {
   ];
 
   function getSavedPersonalization() {
-    try {
-      const saved = localStorage.getItem('dawamu_personalization');
-      if (saved) return JSON.parse(saved);
-    } catch (_) {}
-    return { wallpaperId: 'emerald', accentHex: '#10b981', themeMode: 'dark' };
+    return stateStore.getPersonalization();
   }
 
-  function savePersonalization(config) {
-    try {
-      localStorage.setItem('dawamu_personalization', JSON.stringify(config));
-    } catch (_) {}
+  function savePersonalization(updates) {
+    return stateStore.updatePersonalization(updates);
+  }
 
-    // Apply wallpaper
-    const wp = WALLPAPERS.find(w => w.id === config.wallpaperId) || WALLPAPERS[0];
-    document.documentElement.style.setProperty('--desktop-bg', wp.bgCss);
-    document.documentElement.style.setProperty('--primary', config.accentHex || '#10b981');
+  /**
+   * Reads a local image File and returns an optimized Data URL (max 1600x900)
+   * so student custom wallpapers fit comfortably in per-user localStorage.
+   */
+  function readImageFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('Could not read image file.'));
+      reader.onload = () => {
+        const rawDataUrl = reader.result;
+        // Keep SVGs or small files (< 350 KB) intact without re-encoding
+        if (file.type === 'image/svg+xml' || file.size < 350 * 1024) {
+          resolve(rawDataUrl);
+          return;
+        }
+        const img = new Image();
+        img.onerror = () => resolve(rawDataUrl);
+        img.onload = () => {
+          try {
+            const maxW = 1600;
+            const maxH = 900;
+            let width = img.naturalWidth || img.width || 1280;
+            let height = img.naturalHeight || img.height || 720;
+            if (width > maxW || height > maxH) {
+              const ratio = Math.min(maxW / width, maxH / height);
+              width = Math.round(width * ratio);
+              height = Math.round(height * ratio);
+            }
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressed = canvas.toDataURL('image/jpeg', 0.84);
+            resolve(compressed);
+          } catch (_) {
+            resolve(rawDataUrl);
+          }
+        };
+        img.src = rawDataUrl;
+      };
+      reader.readAsDataURL(file);
+    });
   }
 
   async function fetchNetworkDetails() {
@@ -277,21 +280,102 @@ export function createSettingsApp() {
           </div>
         `;
 
-      case 'personalization':
+      case 'personalization': {
+        const hasCustomWp = Boolean(personalization.customWallpaperDataUrl);
+        const isCustomActive = personalization.wallpaperId === 'custom' && hasCustomWp;
+        const customName = personalization.customWallpaperName || 'Custom Chosen Image';
+        const wpFit = personalization.wallpaperFit || 'cover';
+        const wpDim = typeof personalization.wallpaperDim === 'number' ? personalization.wallpaperDim : 20;
+
         return `
           <div class="max-w-2xl space-y-6">
-            <div>
-              <h2 class="text-2xl font-bold text-white flex items-center gap-2.5">
-                <i class="fas fa-palette text-emerald-400 text-xl"></i>
-                Personalization & Appearance
-              </h2>
-              <p class="text-xs text-slate-400 mt-1">Customize your desktop wallpaper, accent color, and interface themes.</p>
+            <div class="flex items-start justify-between gap-4">
+              <div>
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2.5">
+                  <i class="fas fa-palette text-emerald-400 text-xl"></i>
+                  Personalization & Appearance
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Customize your desktop wallpaper, custom image background, and system accent color.</p>
+              </div>
+              <div class="px-3 py-1.5 rounded-xl bg-emerald-950/30 border border-emerald-500/30 text-[11px] text-emerald-300 font-semibold flex items-center gap-2 shrink-0">
+                <i class="fas fa-user-lock text-emerald-400"></i>
+                <span>Saved for ${user.name} (${user.admNo})</span>
+              </div>
             </div>
 
-            <!-- Wallpaper Selector -->
+            <!-- Custom Wallpaper Upload & Image URL Card -->
             <div class="bg-[#242424] border border-white/5 rounded-2xl p-5 space-y-4">
               <div class="flex items-center justify-between">
-                <div class="font-bold text-xs text-white uppercase tracking-wider">Desktop Wallpaper</div>
+                <div>
+                  <div class="font-bold text-xs text-white uppercase tracking-wider flex items-center gap-2">
+                    <i class="fas fa-image text-emerald-400"></i>
+                    Custom Image Wallpaper
+                  </div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">Choose any photo or image from your computer or paste an image path/URL. Saved exclusively to your student profile (${user.admNo}).</div>
+                </div>
+              </div>
+
+              <div class="flex flex-wrap items-center gap-3">
+                <input type="file" id="wp-file-input" accept="image/*" class="hidden" />
+                <button id="wp-upload-btn" class="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs flex items-center gap-2 shadow-lg transition-all cursor-pointer">
+                  <i class="fas fa-upload"></i>
+                  <span>Choose Image from Computer...</span>
+                </button>
+
+                <div class="flex-1 min-w-[220px] flex items-center gap-2">
+                  <input
+                    type="text"
+                    id="wp-url-input"
+                    placeholder="Or paste image URL / path (e.g. assets/dawamu-logo.png)..."
+                    value="${hasCustomWp && !personalization.customWallpaperDataUrl.startsWith('data:') ? personalization.customWallpaperDataUrl : ''}"
+                    class="flex-1 px-3 py-2 rounded-xl bg-[#181818] border border-white/10 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500"
+                  />
+                  <button id="wp-url-apply-btn" class="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-xs font-semibold text-white transition-all cursor-pointer shrink-0">
+                    Use Image
+                  </button>
+                </div>
+              </div>
+
+              ${hasCustomWp ? `
+                <div class="p-3.5 rounded-2xl bg-[#1a1a1a] border ${isCustomActive ? 'border-emerald-500 ring-2 ring-emerald-500/20' : 'border-white/10'} flex flex-col gap-3">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3 min-w-0 cursor-pointer wallpaper-option" data-wp-id="custom">
+                      <img src="${personalization.customWallpaperDataUrl}" alt="Custom Wallpaper Preview" class="w-20 h-12 rounded-xl object-cover border border-white/15 shrink-0 bg-black" />
+                      <div class="min-w-0">
+                        <div class="flex items-center gap-2">
+                          <span class="text-xs font-bold text-white truncate">${customName}</span>
+                          ${isCustomActive ? '<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">Active</span>' : '<span class="text-[10px] text-slate-400 underline">Click to activate</span>'}
+                        </div>
+                        <div class="text-[10px] text-slate-400 mt-0.5">Personal wallpaper bound to Adm No. ${user.admNo}</div>
+                      </div>
+                    </div>
+                    <button id="wp-remove-custom-btn" class="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-500/30 text-rose-300 text-[11px] font-semibold transition-all cursor-pointer shrink-0">
+                      <i class="fas fa-trash-alt mr-1"></i> Remove
+                    </button>
+                  </div>
+
+                  <div class="grid grid-cols-2 gap-3 pt-2 border-t border-white/5 text-xs">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-slate-400 text-[11px]">Picture Fit:</span>
+                      <select id="wp-fit-select" class="px-2.5 py-1 rounded-lg bg-[#252525] border border-white/10 text-white text-xs focus:outline-none focus:border-emerald-500 cursor-pointer">
+                        <option value="cover" ${wpFit === 'cover' ? 'selected' : ''}>Fill Screen (Cover)</option>
+                        <option value="contain" ${wpFit === 'contain' ? 'selected' : ''}>Fit Inside (Contain)</option>
+                        <option value="center" ${wpFit === 'center' ? 'selected' : ''}>Centered</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-slate-400 text-[11px]">Contrast Dim: <b id="wp-dim-val" class="text-slate-200">${wpDim}%</b></span>
+                      <input type="range" id="wp-dim-range" min="0" max="70" value="${wpDim}" class="w-24 accent-emerald-500 cursor-pointer" />
+                    </div>
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+
+            <!-- Built-in Wallpaper Presets -->
+            <div class="bg-[#242424] border border-white/5 rounded-2xl p-5 space-y-4">
+              <div class="flex items-center justify-between">
+                <div class="font-bold text-xs text-white uppercase tracking-wider">Dawamu OS Theme Wallpapers</div>
                 <span class="text-[10px] text-emerald-400 font-semibold">Changes take effect immediately</span>
               </div>
               <div class="grid grid-cols-3 gap-3.5">
@@ -320,7 +404,7 @@ export function createSettingsApp() {
             <div class="flex justify-between items-center p-4 rounded-2xl bg-[#202020] border border-white/5 text-xs">
               <div>
                 <div class="font-bold text-white">Restore Standard Theme</div>
-                <div class="text-[10px] text-slate-400">Revert wallpaper and accent colors back to Dawamu official green.</div>
+                <div class="text-[10px] text-slate-400">Revert wallpaper and accent colors back to Dawamu official green for ${user.name}.</div>
               </div>
               <button id="theme-reset-btn" class="px-4 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 font-semibold text-slate-300 hover:text-white transition-all cursor-pointer">
                 Reset Defaults
@@ -328,6 +412,7 @@ export function createSettingsApp() {
             </div>
           </div>
         `;
+      }
 
       case 'display':
       case 'system':
@@ -549,15 +634,99 @@ export function createSettingsApp() {
       }
     });
 
-    // Personalization Wallpaper click
+    // Custom Wallpaper File Upload
+    const wpFileInput = root.querySelector('#wp-file-input');
+    root.querySelector('#wp-upload-btn')?.addEventListener('click', () => {
+      wpFileInput?.click();
+    });
+
+    wpFileInput?.addEventListener('change', async (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      if (!file.type.startsWith('image/')) {
+        dawamuDialogs.toast('Please choose a valid image file (PNG, JPG, WEBP, SVG, GIF).', 'warning');
+        return;
+      }
+      try {
+        const dataUrl = await readImageFileAsDataUrl(file);
+        savePersonalization({
+          wallpaperId: 'custom',
+          customWallpaperDataUrl: dataUrl,
+          customWallpaperName: file.name
+        });
+        render();
+        dawamuDialogs.toast(`Custom wallpaper "${file.name}" applied and saved to your account!`, 'success');
+      } catch (err) {
+        dawamuDialogs.toast('Could not load the selected image file.', 'error');
+      }
+    });
+
+    // Custom Wallpaper URL / Local Asset Path
+    const applyCustomUrl = () => {
+      const urlInput = root.querySelector('#wp-url-input');
+      const rawUrl = (urlInput?.value || '').trim();
+      if (!rawUrl) {
+        dawamuDialogs.toast('Please enter an image URL or local file path first.', 'warning');
+        return;
+      }
+      const label = rawUrl.startsWith('data:')
+        ? 'Custom Data Image'
+        : (rawUrl.split('/').pop()?.split('?')[0] || 'Custom Image URL');
+      savePersonalization({
+        wallpaperId: 'custom',
+        customWallpaperDataUrl: rawUrl,
+        customWallpaperName: label
+      });
+      render();
+      dawamuDialogs.toast('Custom image wallpaper applied and saved to your account!', 'success');
+    };
+
+    root.querySelector('#wp-url-apply-btn')?.addEventListener('click', applyCustomUrl);
+    root.querySelector('#wp-url-input')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        applyCustomUrl();
+      }
+    });
+
+    // Remove Custom Wallpaper
+    root.querySelector('#wp-remove-custom-btn')?.addEventListener('click', () => {
+      savePersonalization({
+        wallpaperId: 'emerald',
+        customWallpaperDataUrl: null,
+        customWallpaperName: null
+      });
+      render();
+      dawamuDialogs.toast('Custom wallpaper removed.', 'info');
+    });
+
+    // Custom Wallpaper Fit & Dimming controls
+    root.querySelector('#wp-fit-select')?.addEventListener('change', (e) => {
+      savePersonalization({
+        wallpaperId: 'custom',
+        wallpaperFit: e.target.value
+      });
+      render();
+      dawamuDialogs.toast('Wallpaper fit updated.', 'success');
+    });
+
+    root.querySelector('#wp-dim-range')?.addEventListener('input', (e) => {
+      const dim = parseInt(e.target.value, 10) || 0;
+      const lbl = root.querySelector('#wp-dim-val');
+      if (lbl) lbl.textContent = `${dim}%`;
+      savePersonalization({
+        wallpaperId: 'custom',
+        wallpaperDim: dim
+      });
+    });
+
+    // Personalization Wallpaper click (Presets + Custom preview card)
     root.querySelectorAll('.wallpaper-option').forEach(el => {
       el.addEventListener('click', () => {
         const wpId = el.dataset.wpId;
-        const current = getSavedPersonalization();
-        current.wallpaperId = wpId;
-        savePersonalization(current);
+        savePersonalization({ wallpaperId: wpId });
         render();
-        dawamuDialogs.toast('Desktop wallpaper updated.', 'success');
+        dawamuDialogs.toast('Desktop wallpaper updated for your account.', 'success');
       });
     });
 
@@ -565,11 +734,9 @@ export function createSettingsApp() {
     root.querySelectorAll('.accent-color-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         const hex = btn.dataset.hex;
-        const current = getSavedPersonalization();
-        current.accentHex = hex;
-        savePersonalization(current);
+        savePersonalization({ accentHex: hex });
         render();
-        dawamuDialogs.toast('Accent color updated.', 'success');
+        dawamuDialogs.toast('Accent color updated for your account.', 'success');
       });
     });
 
@@ -577,11 +744,11 @@ export function createSettingsApp() {
     root.querySelector('#theme-reset-btn')?.addEventListener('click', async () => {
       const confirmed = await dawamuDialogs.confirm({
         title: 'Restore Default Theme',
-        message: 'Are you sure you want to revert wallpaper and accent color to Dawamu default?',
+        message: 'Are you sure you want to revert your personal wallpaper and accent color to Dawamu default?',
         confirmText: 'Restore'
       });
       if (confirmed) {
-        savePersonalization({ wallpaperId: 'emerald', accentHex: '#10b981', themeMode: 'dark' });
+        savePersonalization({ ...DEFAULT_PERSONALIZATION });
         render();
         dawamuDialogs.toast('Theme reset to defaults.', 'info');
       }
@@ -651,8 +818,8 @@ export function createSettingsApp() {
     }
   }
 
-  // Load and apply saved personalization on startup
-  savePersonalization(getSavedPersonalization());
+  // Apply the active user's personalization on startup
+  stateStore.applyPersonalization(getSavedPersonalization());
 
   render();
   return root;

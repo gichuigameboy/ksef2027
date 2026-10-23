@@ -442,23 +442,33 @@ export class EduGuardClient {
 
   // 6b. AI tutor — real backend route is POST /api/v1/ai/tutor (TutorRequest schema)
   async askTutor(message) {
-    const lower = message.toLowerCase();
+    const lower = String(message || '').toLowerCase();
     const topicId =
       /quadratic|roots|discriminant/.test(lower) ? 'quadratic_equations' :
       /factor/.test(lower) ? 'factorisation' :
       /expand|bracket|algebra/.test(lower) ? 'algebraic_manipulation' :
       /mitosis|meiosis|cell division/.test(lower) ? 'cell_division' :
       /vector/.test(lower) ? 'vectors' : 'general';
-    const res = await this._fetch('/ai/tutor', {
-      method: 'POST',
-      body: JSON.stringify({ topic_id: topicId, mode: 'explain', user_message: message })
-    }, 8000);
-    const parts = [res.explanation];
-    if (res.steps && res.steps.length) parts.push(res.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'));
-    if (res.example) parts.push(`Example: ${res.example}`);
-    if (res.check_question) parts.push(`Check yourself: ${res.check_question}`);
-    if (res.is_fallback) parts.push('(EduGuard rule-based fallback answer — Gemini AI not configured)');
-    return parts.filter(Boolean).join('\n\n');
+    try {
+      const res = await this._fetch('/ai/tutor', {
+        method: 'POST',
+        body: JSON.stringify({ topic_id: topicId, mode: 'explain', user_message: message })
+      }, 8000);
+      const parts = [res.explanation];
+      if (res.steps && res.steps.length) parts.push(res.steps.map((s, i) => `${i + 1}. ${s}`).join('\n'));
+      if (res.example) parts.push(`Example: ${res.example}`);
+      if (res.check_question) parts.push(`Check yourself: ${res.check_question}`);
+      if (res.is_fallback) parts.push('(EduGuard rule-based fallback answer — Gemini AI not configured)');
+      return parts.filter(Boolean).join('\n\n');
+    } catch (_) {
+      const matchedQ = LOCAL_QUESTION_BANK.find(q => q.topic_id === topicId) || LOCAL_QUESTION_BANK[5];
+      return [
+        `Let's break down ${topicId.replace(/_/g, ' ')} step-by-step using the KCSE curriculum approach:`,
+        `1. Identify the governing relationship and standard form.\n2. Check prerequisite operations (${(LOCAL_PREREQUISITES[topicId] || ['algebraic_manipulation']).join(', ').replace(/_/g, ' ')}).\n3. Apply the rule and verify by substitution.`,
+        `Worked Example: ${matchedQ.question_text}\nSolution: ${matchedQ.explanation}`,
+        `Check yourself: ${matchedQ.hint || 'Can you state why each step preserves equality?'}`
+      ].join('\n\n');
+    }
   }
 
   // 7. Mastery overview — backend first, otherwise computed from real local attempts

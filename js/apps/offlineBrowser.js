@@ -13,6 +13,8 @@
 import { restrictionManager } from '../os/restrictionManager.js';
 import { OFFLINE_ARTICLES, STUDY_QUIZZES } from './offlineContent.js';
 import { BOOKS_844, BOOKS_844_CATALOG, renderBooks844Portal } from './books844.js';
+import { stateStore } from '../os/state.js';
+import { dawamuDialogs } from '../os/dialogs.js';
 
 /* ─── OFFLINE WEBPAGES DATABASE ─── */
 const OFFLINE_WEB_DB = {
@@ -423,6 +425,7 @@ export function createOfflineBrowserApp(initialUrl = 'dawamu://home') {
 
       <!-- Quick Actions -->
       <div class="flex items-center gap-1.5">
+        <button id="btn-save-page" class="px-3 py-1.5 rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white text-xs flex items-center gap-1.5 transition-all cursor-pointer shrink-0 font-bold" title="Save Current Web Article to This PC > Downloads"><i class="fas fa-file-download"></i> <span class="text-[11px]">Save Page</span></button>
         <button id="btn-python" class="px-3 py-1.5 rounded-xl bg-gradient-to-r from-emerald-900/50 to-teal-900/50 hover:from-emerald-800/70 hover:to-teal-800/70 border border-emerald-600/40 text-emerald-300 text-xs flex items-center gap-2 transition-all shadow-sm active:scale-95" title="Open Offline Python Runner">
           <i class="fab fa-python text-yellow-400"></i> <span class="text-[11px] font-bold">Python</span>
         </button>
@@ -675,6 +678,22 @@ export function createOfflineBrowserApp(initialUrl = 'dawamu://home') {
 
   root.querySelector('#btn-python').addEventListener('click', () => {
     loadUrl('dawamu://python-playground');
+  });
+  root.querySelector('#btn-save-page')?.addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const rawTitle = (tab?.title || 'Offline_Article').replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_');
+    const fileName = `${rawTitle || 'Web_Article'}.docx`;
+    const articleHtml = `<h1>${tab?.title || 'Dawamu Offline Web Article'}</h1><p style="font-size:12px;color:#64748b;"><b>Saved from Dawamu Offline Web:</b> ${tab?.url || 'dawamu://home'}</p><hr>${viewport.innerHTML}`;
+    stateStore.saveFileToVFS('downloads', {
+      name: fileName,
+      type: 'doc',
+      icon: 'fa-file-word',
+      color: 'text-blue-400',
+      content: articleHtml
+    });
+    dawamuDialogs.toast(`Saved "${fileName}" to This PC > Downloads`, 'success');
+  });
+  (() => {
   });
 
   // Open First Tab
@@ -1693,6 +1712,13 @@ function wireInteractivePageElements(container, loadUrl) {
       e.preventDefault();
       e.stopPropagation();
       const filename = btn.dataset.filename || 'KLB_Secondary_Coursebook_Notes.docx';
+      stateStore.saveFileToVFS('downloads', {
+        name: filename,
+        type: 'doc',
+        icon: 'fa-file-word',
+        color: 'text-blue-400',
+        content: `<h1>${filename.replace(/\.[^/.]+$/, '').replace(/_/g, ' ')}</h1><p>Verified Dawamu OS 8-4-4 Coursebook Resource saved on ${new Date().toLocaleDateString()}.</p>`
+      });
       if (window.electronAPI && typeof window.electronAPI.saveDownloadFile === 'function') {
         window.electronAPI.saveDownloadFile({ filename });
       } else {

@@ -13,17 +13,23 @@
  * - Zoom controls (50% to 150%) & Fullscreen focus mode
  */
 
+import { stateStore } from '../os/state.js';
+import { dawamuDialogs } from '../os/dialogs.js';
+
 export function createWordApp(options = {}) {
   const root = document.createElement('div');
   root.className = 'flex flex-col h-full bg-[#eef1f5] font-sans text-slate-800 select-none overflow-hidden';
+
+  const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (300,000 ms)
 
   // State
   let activeRibbonTab = 'home';
   let zoomLevel = 1.0;
   let showRuler = true;
-  let currentDocId = 'doc_' + Date.now();
+  let currentDocId = options.fileId || ('doc_' + Date.now());
+  let currentFolderKey = options.folderKey || 'documents';
   let currentDocTitle = options.fileName || options.title || 'Term 3 Academic Essay.docx';
-  let autoSaveTimeout = null;
+  let isDirty = false;
   let findMatches = [];
   let currentMatchIndex = -1;
 
@@ -144,20 +150,25 @@ export function createWordApp(options = {}) {
         <div class="flex items-center gap-2">
           <input id="word-doc-title" type="text" value="${currentDocTitle}" spellcheck="false"
                  class="bg-transparent text-white font-semibold text-xs outline-none border-b border-transparent hover:border-white/40 focus:border-white px-1 py-0.5 w-64 transition-all">
-          <span class="text-[10px] bg-blue-800/80 text-blue-200 px-2 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1">
-            <i class="fas fa-cloud-check text-emerald-300"></i> Auto-Saved
+          <span id="word-save-status" class="text-[10px] bg-blue-800/80 text-blue-200 px-2.5 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1.5">
+            <i class="fas fa-check-circle text-emerald-300"></i> Saved • Auto-Save (5m)
           </span>
         </div>
       </div>
 
       <!-- Quick Action Icons -->
       <div class="flex items-center gap-1.5 text-xs text-blue-100">
-        <button id="btn-quick-save" class="app-top-btn" title="Save Document (Ctrl+S)"><i class="fas fa-save"></i></button>
+        <button id="btn-quick-save" class="app-top-btn flex items-center gap-1 bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded text-[11px] font-bold text-white" title="Save Document (Ctrl+S)">
+          <i class="fas fa-save"></i> Save
+        </button>
+        <button id="btn-save-downloads" class="app-top-btn flex items-center gap-1 bg-emerald-600/80 hover:bg-emerald-500 px-2.5 py-1 rounded text-[11px] font-bold text-white" title="Save Copy to This PC > Downloads">
+          <i class="fas fa-folder-plus"></i> Save to Downloads
+        </button>
         <button id="btn-quick-undo" class="app-top-btn" title="Undo (Ctrl+Z)"><i class="fas fa-undo"></i></button>
         <button id="btn-quick-redo" class="app-top-btn" title="Redo (Ctrl+Y)"><i class="fas fa-redo"></i></button>
         <div class="h-4 w-[1px] bg-blue-400/40 mx-1"></div>
         <button id="btn-quick-print" class="app-top-btn" title="Print / PDF"><i class="fas fa-print"></i></button>
-        <button id="btn-quick-export" class="app-top-btn" title="Download Document"><i class="fas fa-download"></i></button>
+        <button id="btn-quick-export" class="app-top-btn" title="Export HTML File"><i class="fas fa-download"></i></button>
       </div>
     </div>
 
@@ -378,18 +389,64 @@ export function createWordApp(options = {}) {
   const zoomText = root.querySelector('#zoom-text');
   const findReplaceBar = root.querySelector('#find-replace-bar');
 
-  // Load initial content (passed file or default template)
-  if (options.fileData) {
-    paper.innerHTML = options.fileData;
+  const saveStatusBadge = root.querySelector('#word-save-status');
+
+  function updateSaveStatusBadge(customMsg = null) {
+    if (!saveStatusBadge) return;
+    if (isDirty) {
+      saveStatusBadge.className = 'text-[10px] bg-amber-500/90 text-slate-950 font-bold px-2.5 py-0.5 rounded-full border border-amber-300 flex items-center gap-1.5 shadow-sm';
+      saveStatusBadge.innerHTML = `<i class="fas fa-circle text-[7px] text-amber-950 animate-pulse"></i> ${customMsg || 'Unsaved Changes • Auto-saves every 5m'}`;
+    } else {
+      saveStatusBadge.className = 'text-[10px] bg-blue-800/80 text-blue-100 px-2.5 py-0.5 rounded-full border border-blue-400/30 flex items-center gap-1.5';
+      saveStatusBadge.innerHTML = `<i class="fas fa-check-circle text-emerald-300"></i> ${customMsg || 'Saved • Auto-Save (5m)'}`;
+    }
+  }
+
+  function markDirty() {
+    if (!isDirty) {
+      isDirty = true;
+      updateSaveStatusBadge();
+    }
+  }
+
+  // Load initial content (passed file -> active student's saved Word workspace -> default template)
+  const savedWorkspace = stateStore.getAppWorkspace('word', null);
+  const rawFileData = typeof options.fileData === 'string'
+    ? options.fileData
+    : (typeof options.fileData?.content === 'string' ? options.fileData.content : null);
+
+  if (rawFileData) {
+    paper.innerHTML = rawFileData;
     currentDocTitle = options.fileName || 'Document.docx';
+    if (options.fileId) currentDocId = options.fileId;
+    if (options.folderKey) currentFolderKey = options.folderKey;
   } else if (options.fileName) {
     currentDocTitle = options.fileName;
-    paper.innerHTML = TEMPLATES.blank.content;
+    const lowerName = options.fileName.toLowerCase();
+    if (lowerName.includes('lab') || lowerName.includes('experiment') || lowerName.includes('chem') || lowerName.includes('bio') || lowerName.includes('phy')) {
+      paper.innerHTML = TEMPLATES.lab.content;
+    } else if (lowerName.includes('letter') || lowerName.includes('permission')) {
+      paper.innerHTML = TEMPLATES.letter.content;
+    } else if (lowerName.includes('notes') || lowerName.includes('guide') || lowerName.includes('summary')) {
+      paper.innerHTML = TEMPLATES.cornell.content;
+    } else {
+      paper.innerHTML = TEMPLATES.essay.content;
+    }
+  } else if (savedWorkspace && savedWorkspace.currentDoc && savedWorkspace.currentDoc.content) {
+    currentDocId = savedWorkspace.currentDoc.id || currentDocId;
+    currentDocTitle = savedWorkspace.currentDoc.title || TEMPLATES.essay.title;
+    currentFolderKey = savedWorkspace.currentDoc.folderKey || 'documents';
+    paper.innerHTML = savedWorkspace.currentDoc.content;
   } else {
     paper.innerHTML = TEMPLATES.essay.content;
     currentDocTitle = TEMPLATES.essay.title;
   }
   titleInput.value = currentDocTitle;
+  let lastSavedSnapshot = {
+    title: currentDocTitle,
+    content: paper.innerHTML,
+    folderKey: currentFolderKey
+  };
 
   /* ═══════════════════════════════════════════════════
      RIBBON PANELS RENDERER
@@ -682,6 +739,16 @@ export function createWordApp(options = {}) {
         <div class="ribbon-group-divider"></div>
 
         <!-- Document Storage -->
+        <button id="btn-file-save-now" class="ribbon-action-btn">
+          <i class="fas fa-save text-blue-600 text-base mb-1"></i>
+          <span>Save Doc</span>
+        </button>
+
+        <button id="btn-file-save-downloads" class="ribbon-action-btn">
+          <i class="fas fa-folder-plus text-emerald-600 text-base mb-1"></i>
+          <span>To Downloads</span>
+        </button>
+
         <button id="btn-open-saved-docs" class="ribbon-action-btn">
           <i class="fas fa-folder text-indigo-600 text-base mb-1"></i>
           <span>Open Saved</span>
@@ -781,9 +848,17 @@ export function createWordApp(options = {}) {
     });
 
     // Insert Table
-    ribbonPanels.querySelector('#btn-insert-table')?.addEventListener('click', () => {
-      const rows = prompt('Number of rows:', '3') || 3;
-      const cols = prompt('Number of columns:', '3') || 3;
+    ribbonPanels.querySelector('#btn-insert-table')?.addEventListener('click', async () => {
+      const rowsStr = window.dawamuDialogs?.prompt
+        ? await window.dawamuDialogs.prompt({ title: 'Insert Table', message: 'Number of rows:', defaultValue: '3' })
+        : '3';
+      if (rowsStr === null) return;
+      const colsStr = window.dawamuDialogs?.prompt
+        ? await window.dawamuDialogs.prompt({ title: 'Insert Table', message: 'Number of columns:', defaultValue: '3' })
+        : '3';
+      if (colsStr === null) return;
+      const rows = Math.max(1, Math.min(20, parseInt(rowsStr, 10) || 3));
+      const cols = Math.max(1, Math.min(10, parseInt(colsStr, 10) || 3));
       let html = '<table style="width:100%; border-collapse:collapse; margin:12px 0;"><thead><tr>';
       for (let c = 0; c < cols; c++) html += `<th style="border:1px solid #cbd5e1; padding:6px 10px; background:#f1f5f9;">Header ${c+1}</th>`;
       html += '</tr></thead><tbody>';
@@ -793,14 +868,18 @@ export function createWordApp(options = {}) {
         html += '</tr>';
       }
       html += '</tbody></table><p><br></p>';
+      paper.focus();
       document.execCommand('insertHTML', false, html);
       updateDocumentMetrics();
     });
 
     // Insert Image
-    ribbonPanels.querySelector('#btn-insert-image')?.addEventListener('click', () => {
-      const url = prompt('Enter Image URL or Path (e.g., assets/dawamu-logo.png):', 'assets/dawamu-logo.png');
+    ribbonPanels.querySelector('#btn-insert-image')?.addEventListener('click', async () => {
+      const url = window.dawamuDialogs?.prompt
+        ? await window.dawamuDialogs.prompt({ title: 'Insert Image', message: 'Enter Image URL or Path:', defaultValue: 'assets/dawamu-logo.png' })
+        : 'assets/dawamu-logo.png';
       if (url) {
+        paper.focus();
         document.execCommand('insertHTML', false, `<div style="text-align:center; margin:16px 0;"><img src="${url}" alt="Document Image" style="max-width:85%; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"><br><small style="color:#64748b;">Figure: Image illustration</small></div><p><br></p>`);
       }
     });
@@ -826,9 +905,14 @@ export function createWordApp(options = {}) {
     });
 
     // Insert Link
-    ribbonPanels.querySelector('#btn-insert-link')?.addEventListener('click', () => {
-      const url = prompt('Enter Hyperlink URL (e.g. https://en.wikipedia.org):', 'https://');
-      if (url) document.execCommand('createLink', false, url);
+    ribbonPanels.querySelector('#btn-insert-link')?.addEventListener('click', async () => {
+      const url = window.dawamuDialogs?.prompt
+        ? await window.dawamuDialogs.prompt({ title: 'Insert Hyperlink', message: 'Enter Hyperlink URL:', defaultValue: 'https://en.wikipedia.org' })
+        : 'https://en.wikipedia.org';
+      if (url) {
+        paper.focus();
+        document.execCommand('createLink', false, url);
+      }
     });
 
     // Page Break
@@ -947,6 +1031,8 @@ export function createWordApp(options = {}) {
     ribbonPanels.querySelector('#btn-file-new-essay')?.addEventListener('click', () => loadTemplate('essay'));
     ribbonPanels.querySelector('#btn-file-new-lab')?.addEventListener('click', () => loadTemplate('lab'));
     ribbonPanels.querySelector('#btn-file-new-letter')?.addEventListener('click', () => loadTemplate('letter'));
+    ribbonPanels.querySelector('#btn-file-save-now')?.addEventListener('click', () => saveDocument(currentFolderKey, false));
+    ribbonPanels.querySelector('#btn-file-save-downloads')?.addEventListener('click', () => saveDocument('downloads', false));
     ribbonPanels.querySelector('#btn-open-saved-docs')?.addEventListener('click', openSavedDocsModal);
     ribbonPanels.querySelector('#btn-export-html')?.addEventListener('click', exportHtml);
     ribbonPanels.querySelector('#btn-export-txt')?.addEventListener('click', exportTxt);
@@ -966,11 +1052,17 @@ export function createWordApp(options = {}) {
   });
 
   // Top App Bar Buttons
-  root.querySelector('#btn-quick-save').addEventListener('click', saveDocument);
-  root.querySelector('#btn-quick-undo').addEventListener('click', () => { document.execCommand('undo'); updateDocumentMetrics(); });
-  root.querySelector('#btn-quick-redo').addEventListener('click', () => { document.execCommand('redo'); updateDocumentMetrics(); });
+  root.querySelector('#btn-quick-save').addEventListener('click', () => saveDocument(currentFolderKey, false));
+  root.querySelector('#btn-save-downloads').addEventListener('click', () => saveDocument('downloads', false));
+  root.querySelector('#btn-quick-undo').addEventListener('click', () => { document.execCommand('undo'); markDirty(); updateDocumentMetrics(false); });
+  root.querySelector('#btn-quick-redo').addEventListener('click', () => { document.execCommand('redo'); markDirty(); updateDocumentMetrics(false); });
   root.querySelector('#btn-quick-print').addEventListener('click', printDoc);
   root.querySelector('#btn-quick-export').addEventListener('click', exportHtml);
+
+  titleInput.addEventListener('input', () => {
+    currentDocTitle = titleInput.value.trim() || 'Untitled.docx';
+    markDirty();
+  });
 
   // Zoom Controls
   function setZoom(val) {
@@ -989,6 +1081,8 @@ export function createWordApp(options = {}) {
     btn.addEventListener('click', () => {
       paper.focus();
       document.execCommand('insertText', false, btn.innerText);
+      markDirty();
+      updateDocumentMetrics(false);
       root.querySelector('#symbols-modal').classList.add('hidden');
     });
   });
@@ -1017,7 +1111,7 @@ export function createWordApp(options = {}) {
   root.querySelector('#btn-ok-stats').addEventListener('click', () => root.querySelector('#stats-modal').classList.add('hidden'));
 
   // Live Metrics Update
-  function updateDocumentMetrics() {
+  function updateDocumentMetrics(markAsEdited = true) {
     const text = paper.innerText || '';
     const words = text.trim() ? text.trim().split(/\s+/).length : 0;
     const chars = text.length;
@@ -1027,19 +1121,23 @@ export function createWordApp(options = {}) {
     liveCharCount.textContent = `${chars} characters`;
     pageCountBadge.innerHTML = `<i class="fas fa-file-alt mr-1"></i>Page 1 of ${estPages}`;
 
-    // Auto-save debounced
-    clearTimeout(autoSaveTimeout);
-    autoSaveTimeout = setTimeout(saveDocumentSilently, 1000);
+    if (markAsEdited) {
+      markDirty();
+    }
   }
 
-  paper.addEventListener('input', updateDocumentMetrics);
+  paper.addEventListener('input', () => updateDocumentMetrics(true));
 
   // Text Case Transformation
   function transformSelection(fn) {
     const sel = window.getSelection();
     if (!sel.rangeCount) return;
     const text = sel.toString();
-    if (text) document.execCommand('insertText', false, fn(text));
+    if (text) {
+      document.execCommand('insertText', false, fn(text));
+      markDirty();
+      updateDocumentMetrics(false);
+    }
   }
 
   // Find & Replace Engine
@@ -1081,7 +1179,8 @@ export function createWordApp(options = {}) {
     const repText = replaceInput.value;
     if (findText && paper.innerHTML.includes(findText)) {
       paper.innerHTML = paper.innerHTML.replace(findText, repText);
-      updateDocumentMetrics();
+      markDirty();
+      updateDocumentMetrics(false);
       doFind();
     }
   });
@@ -1092,59 +1191,100 @@ export function createWordApp(options = {}) {
     if (findText) {
       const regex = new RegExp(findText, 'gi');
       paper.innerHTML = paper.innerHTML.replace(regex, repText);
-      updateDocumentMetrics();
+      markDirty();
+      updateDocumentMetrics(false);
       doFind();
     }
   });
 
-  // Storage / Saved Docs
-  function saveDocumentSilently() {
-    try {
-      const doc = {
-        id: currentDocId,
-        title: titleInput.value.trim() || 'Untitled.docx',
-        content: paper.innerHTML,
-        lastModified: new Date().toISOString()
-      };
-      localStorage.setItem('dawamu_word_current', JSON.stringify(doc));
-      let docsList = JSON.parse(localStorage.getItem('dawamu_word_library') || '[]');
-      const existingIdx = docsList.findIndex(d => d.id === currentDocId);
-      if (existingIdx >= 0) docsList[existingIdx] = doc;
-      else docsList.unshift(doc);
-      localStorage.setItem('dawamu_word_library', JSON.stringify(docsList));
-    } catch(e) {}
+  // Storage / Saved Docs (Per-Student Workspace + VFS)
+  function getStudentWordLibrary() {
+    const ws = stateStore.getAppWorkspace('word', null);
+    if (ws && Array.isArray(ws.library)) return ws.library;
+    return [];
   }
 
-  function saveDocument() {
-    saveDocumentSilently();
-    if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-      window.dawamuDialogs.toast(`Document "${titleInput.value}" saved to Dawamu OS Storage`, 'success');
-    } else {
-      alert('Document "' + titleInput.value + '" saved to Dawamu OS Storage.');
+  function saveDocumentSilently(targetFolder = currentFolderKey) {
+    try {
+      let cleanTitle = titleInput.value.trim() || 'Untitled.docx';
+      if (!/\.(docx|doc|txt|html)$/i.test(cleanTitle)) {
+        cleanTitle += '.docx';
+      }
+      titleInput.value = cleanTitle;
+      currentDocTitle = cleanTitle;
+      if (targetFolder) currentFolderKey = targetFolder;
+
+      const doc = {
+        id: currentDocId,
+        title: cleanTitle,
+        content: paper.innerHTML,
+        folderKey: currentFolderKey,
+        lastModified: new Date().toISOString()
+      };
+
+      const docsList = [...getStudentWordLibrary()];
+      const existingIdx = docsList.findIndex(d => d.id === currentDocId || d.title === cleanTitle);
+      if (existingIdx >= 0) docsList[existingIdx] = doc;
+      else docsList.unshift(doc);
+
+      // Persist to active student's Word workspace
+      stateStore.saveAppWorkspace('word', {
+        currentDoc: doc,
+        library: docsList
+      });
+
+      // Persist as real file in active student's Virtual File System (Documents or Downloads)
+      stateStore.saveFileToVFS(currentFolderKey, {
+        id: currentDocId,
+        name: cleanTitle,
+        type: 'doc',
+        icon: 'fa-file-word',
+        color: 'text-blue-400',
+        content: paper.innerHTML
+      });
+
+      lastSavedSnapshot = {
+        title: cleanTitle,
+        content: paper.innerHTML,
+        folderKey: currentFolderKey
+      };
+      isDirty = false;
+      const folderMeta = stateStore.getFolderMeta(currentFolderKey);
+      updateSaveStatusBadge(`Saved in ${folderMeta?.label || currentFolderKey} • Auto-Save (5m)`);
+      return doc;
+    } catch (e) {
+      console.error('Word save error:', e);
+      return null;
     }
+  }
+
+  function saveDocument(targetFolder = currentFolderKey, silent = false) {
+    const target = (typeof targetFolder === 'string' && targetFolder) ? targetFolder : currentFolderKey;
+    const saved = saveDocumentSilently(target);
+    if (!silent && saved) {
+      const folderMeta = stateStore.getFolderMeta(target);
+      dawamuDialogs.toast(`Saved "${saved.title}" to This PC > ${folderMeta?.label || target}`, 'success');
+    }
+    return saved;
   }
 
   async function loadTemplate(tplKey) {
     const tpl = TEMPLATES[tplKey];
     if (!tpl) return;
-    let ok = false;
-    if (window.dawamuDialogs && window.dawamuDialogs.confirm) {
-      ok = await window.dawamuDialogs.confirm(`Load template "${tpl.title}"? Current unsaved edits will be replaced.`);
-    } else {
-      ok = confirm(`Load template "${tpl.title}"? Current unsaved edits will be replaced.`);
-    }
+    const ok = await dawamuDialogs.confirm(`Load template "${tpl.title}"? Current unsaved edits will be replaced.`);
     if (ok) {
       currentDocId = 'doc_' + Date.now();
       paper.innerHTML = tpl.content;
       titleInput.value = tpl.title;
-      updateDocumentMetrics();
+      currentDocTitle = tpl.title;
+      markDirty();
+      updateDocumentMetrics(false);
     }
   }
 
   function openSavedDocsModal() {
     const listEl = root.querySelector('#saved-docs-list');
-    let docs = [];
-    try { docs = JSON.parse(localStorage.getItem('dawamu_word_library') || '[]'); } catch(e){}
+    let docs = getStudentWordLibrary();
 
     if (docs.length === 0) {
       listEl.innerHTML = `<div class="p-8 text-center text-slate-400 italic">No saved documents yet. Click "Save Current as New" to store this document.</div>`;
@@ -1157,7 +1297,7 @@ export function createWordApp(options = {}) {
             </div>
             <div>
               <div class="font-bold text-slate-800">${d.title}</div>
-              <div class="text-[10px] text-slate-500">${new Date(d.lastModified).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
+              <div class="text-[10px] text-slate-500">Folder: ${d.folderKey || 'documents'} • ${new Date(d.lastModified).toLocaleDateString([], { day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' })}</div>
             </div>
           </div>
           <button class="text-rose-500 hover:text-rose-700 p-2 cursor-pointer" data-del-id="${d.id}" title="Delete"><i class="fas fa-trash-alt"></i></button>
@@ -1169,9 +1309,13 @@ export function createWordApp(options = {}) {
           const doc = docs.find(d => d.id === btn.dataset.loadId);
           if (doc) {
             currentDocId = doc.id;
+            currentDocTitle = doc.title;
+            currentFolderKey = doc.folderKey || 'documents';
             titleInput.value = doc.title;
             paper.innerHTML = doc.content;
-            updateDocumentMetrics();
+            isDirty = false;
+            updateSaveStatusBadge();
+            updateDocumentMetrics(false);
             root.querySelector('#file-modal').classList.add('hidden');
           }
         });
@@ -1180,19 +1324,17 @@ export function createWordApp(options = {}) {
       listEl.querySelectorAll('[data-del-id]').forEach(btn => {
         btn.addEventListener('click', async (e) => {
           e.stopPropagation();
-          let ok = false;
-          if (window.dawamuDialogs && window.dawamuDialogs.confirm) {
-            ok = await window.dawamuDialogs.confirm('Delete this saved document from Dawamu OS?');
-          } else {
-            ok = confirm('Delete this saved document?');
-          }
+          const ok = await dawamuDialogs.confirm('Delete this saved document from your Word library?');
           if (ok) {
+            const targetDoc = docs.find(d => d.id === btn.dataset.delId);
             docs = docs.filter(d => d.id !== btn.dataset.delId);
-            localStorage.setItem('dawamu_word_library', JSON.stringify(docs));
-            openSavedDocsModal();
-            if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-              window.dawamuDialogs.toast('Document deleted', 'info');
+            const ws = stateStore.getAppWorkspace('word', {}) || {};
+            stateStore.saveAppWorkspace('word', { ...ws, library: docs });
+            if (targetDoc?.title) {
+              stateStore.deleteItemInVFS(targetDoc.folderKey || 'documents', targetDoc.title);
             }
+            openSavedDocsModal();
+            dawamuDialogs.toast('Document deleted', 'info');
           }
         });
       });
@@ -1207,11 +1349,11 @@ export function createWordApp(options = {}) {
 
   root.querySelector('#btn-save-as-new').addEventListener('click', () => {
     currentDocId = 'doc_' + Date.now();
-    saveDocument();
+    saveDocument(currentFolderKey, false);
     openSavedDocsModal();
   });
 
-  // Export HTML
+  // Export HTML (also saves copy to This PC > Downloads)
   function exportHtml() {
     const title = titleInput.value.replace(/\.[^/.]+$/, '');
     const htmlContent = `<!DOCTYPE html>
@@ -1233,22 +1375,38 @@ export function createWordApp(options = {}) {
   ${paper.innerHTML}
 </body>
 </html>`;
+    stateStore.saveFileToVFS('downloads', {
+      name: `${title}.docx`,
+      type: 'doc',
+      icon: 'fa-file-word',
+      color: 'text-blue-400',
+      content: paper.innerHTML
+    });
     const blob = new Blob([htmlContent], { type: 'text/html' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${title}.html`;
     a.click();
+    dawamuDialogs.toast(`Saved "${title}.docx" to This PC > Downloads`, 'success');
   }
 
-  // Export Plain Text
+  // Export Plain Text (also saves copy to This PC > Downloads)
   function exportTxt() {
     const title = titleInput.value.replace(/\.[^/.]+$/, '');
     const text = paper.innerText || '';
+    stateStore.saveFileToVFS('downloads', {
+      name: `${title}.txt`,
+      type: 'doc',
+      icon: 'fa-file-alt',
+      color: 'text-slate-300',
+      content: `<pre>${text}</pre>`
+    });
     const blob = new Blob([text], { type: 'text/plain' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = `${title}.txt`;
     a.click();
+    dawamuDialogs.toast(`Saved "${title}.txt" to This PC > Downloads`, 'success');
   }
 
   // Print Document
@@ -1279,21 +1437,53 @@ export function createWordApp(options = {}) {
     w.print();
   }
 
-  // Keyboard Shortcuts: Ctrl+S, Ctrl+F, Ctrl+B, Ctrl+I, Ctrl+U, Ctrl+Z
+  // Keyboard Shortcuts: Ctrl+S, Ctrl+F
   root.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
       e.preventDefault();
-      saveDocument();
-    } else if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      saveDocument(currentFolderKey, false);
+    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
       e.preventDefault();
       findReplaceBar.classList.remove('hidden');
       findInput.focus();
     }
   });
 
-  // Initial Ribbon Render & Metrics
+  // 5-Minute Automatic Save Interval while in Dawamu Word
+  const autoSaveIntervalId = setInterval(() => {
+    if (!document.body.contains(root)) {
+      clearInterval(autoSaveIntervalId);
+      return;
+    }
+    saveDocumentSilently(currentFolderKey);
+    dawamuDialogs.toast(`Auto-saved "${titleInput.value}" (5-minute interval)`, 'info');
+  }, AUTO_SAVE_INTERVAL_MS);
+
+  // Register lifecycle controller for WindowManager close interception & E2E inspection
+  root.__dawamuAppController = {
+    appId: 'word',
+    autoSaveIntervalMs: AUTO_SAVE_INTERVAL_MS,
+    isDirty: () => isDirty,
+    getTitle: () => titleInput.value.trim() || currentDocTitle,
+    saveNow: () => saveDocument(currentFolderKey, false),
+    triggerAutoSaveNow: () => saveDocumentSilently(currentFolderKey),
+    discardChanges: () => {
+      if (lastSavedSnapshot) {
+        titleInput.value = lastSavedSnapshot.title;
+        paper.innerHTML = lastSavedSnapshot.content;
+        currentFolderKey = lastSavedSnapshot.folderKey || 'documents';
+      }
+      isDirty = false;
+    },
+    onDestroy: () => {
+      clearInterval(autoSaveIntervalId);
+    }
+  };
+
+  // Initial Ribbon Render & Metrics (without marking dirty on startup)
   renderRibbonPanel();
-  updateDocumentMetrics();
+  updateDocumentMetrics(false);
+  updateSaveStatusBadge();
 
   return root;
 }

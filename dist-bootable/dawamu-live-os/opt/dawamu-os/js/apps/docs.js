@@ -26,10 +26,15 @@ export function createDocsApp(options = {}) {
     if (existing) {
       currentDocId = existing.id;
     } else {
+      const initialContent = typeof options.fileData === 'string'
+        ? options.fileData
+        : (typeof options.fileData?.content === 'string'
+          ? options.fileData.content
+          : `<p><b>${options.fileName}</b></p><p>Start typing your homework notes here...</p>`);
       const created = stateStore.saveDocument(
         null,
         options.fileName,
-        options.fileData || '<p>Start typing your homework notes here...</p>'
+        initialContent
       );
       currentDocId = created.id;
     }

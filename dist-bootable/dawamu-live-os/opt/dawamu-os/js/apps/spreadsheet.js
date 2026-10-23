@@ -11,15 +11,21 @@
  * - Clean glassmorphic dialogs
  */
 
+import { stateStore } from '../os/state.js';
+import { dawamuDialogs } from '../os/dialogs.js';
+
 export function createSpreadsheetApp(options = {}) {
   const COLS = 10;
   const ROWS = 25;
   const COL_LETTERS = 'ABCDEFGHIJ'.split('');
-  const STORAGE_KEY = 'dawamu_spreadsheet_data';
+  const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (300,000 ms)
 
   let cells = {};
   let selectedCell = null;
   let activeEditInput = null;
+  let isDirty = false;
+  let currentFileId = options.fileId || 'sheet_default';
+  let currentFolderKey = options.folderKey || 'documents';
 
   const GRADEBOOK = {
     A1: 'Student Name', B1: 'Math', C1: 'English', D1: 'Science', E1: 'History', F1: 'Kiswahili', G1: 'Average', H1: 'Grade',
@@ -40,7 +46,7 @@ export function createSpreadsheetApp(options = {}) {
   const root = document.createElement('div');
   root.className = 'flex flex-col h-full bg-white font-sans overflow-hidden text-xs select-none';
 
-  const defaultTitle = options.fileName || options.title || 'Student Gradebook';
+  const defaultTitle = options.fileName || options.title || 'Student_Gradebook.xlsx';
 
   root.innerHTML = `
     <!-- Top Bar -->
@@ -50,19 +56,30 @@ export function createSpreadsheetApp(options = {}) {
           <i class="fas fa-file-excel text-white text-lg"></i>
         </div>
         <div>
-          <input id="sheet-title" type="text" value="${defaultTitle}"
-            class="bg-transparent text-white font-semibold text-sm outline-none border-b border-white/30 w-52 pb-0.5">
+          <div class="flex items-center gap-2">
+            <input id="sheet-title" type="text" value="${defaultTitle}"
+              class="bg-transparent text-white font-semibold text-sm outline-none border-b border-white/30 w-52 pb-0.5">
+            <span id="sheet-save-status" class="text-[10px] bg-emerald-900/70 text-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-1.5">
+              <i class="fas fa-check-circle text-emerald-300"></i> Saved • Auto-Save (5m)
+            </span>
+          </div>
           <div class="text-[10px] text-green-200 mt-0.5">Dawamu Spreadsheet • ${ROWS} rows × ${COLS} cols</div>
         </div>
       </div>
-      <div class="flex items-center gap-2">
-        <button id="btn-load-gradebook" class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
+      <div class="flex items-center gap-1.5">
+        <button id="btn-save-sheet" class="text-xs bg-white/20 hover:bg-white/30 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all" title="Save Spreadsheet (Ctrl+S)">
+          <i class="fas fa-save text-[11px]"></i> Save
+        </button>
+        <button id="btn-save-sheet-downloads" class="text-xs bg-emerald-500/80 hover:bg-emerald-500 font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all" title="Save Copy to This PC > Downloads">
+          <i class="fas fa-folder-plus text-[11px]"></i> Save to Downloads
+        </button>
+        <button id="btn-load-gradebook" class="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
           <i class="fas fa-graduation-cap text-[10px]"></i> Gradebook
         </button>
-        <button id="btn-clear-all" class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
+        <button id="btn-clear-all" class="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
           <i class="fas fa-trash text-[10px]"></i> Clear
         </button>
-        <button id="btn-export-csv" class="text-xs bg-white/10 hover:bg-white/20 px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
+        <button id="btn-export-csv" class="text-xs bg-white/10 hover:bg-white/20 px-2.5 py-1.5 rounded-lg flex items-center gap-1.5 transition-all">
           <i class="fas fa-download text-[10px]"></i> Export CSV
         </button>
       </div>
@@ -103,38 +120,114 @@ export function createSpreadsheetApp(options = {}) {
   const cellRef = root.querySelector('#cell-ref');
   const cellInfo = root.querySelector('#cell-info');
   const calcResult = root.querySelector('#calc-result');
+  const sheetTitleInput = root.querySelector('#sheet-title');
+  const saveStatusBadge = root.querySelector('#sheet-save-status');
+  let lastSavedSnapshot = null;
 
-  function saveStorage() {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(cells));
-    } catch (_) {}
+  function updateSaveStatusBadge(customMsg = null) {
+    if (!saveStatusBadge) return;
+    if (isDirty) {
+      saveStatusBadge.className = 'text-[10px] bg-amber-400 text-slate-950 font-bold px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1.5 shadow-sm';
+      saveStatusBadge.innerHTML = `<i class="fas fa-circle text-[7px] text-amber-950 animate-pulse"></i> ${customMsg || 'Unsaved Changes • Auto-saves every 5m'}`;
+    } else {
+      saveStatusBadge.className = 'text-[10px] bg-emerald-900/70 text-emerald-100 px-2.5 py-0.5 rounded-full border border-emerald-400/30 flex items-center gap-1.5';
+      saveStatusBadge.innerHTML = `<i class="fas fa-check-circle text-emerald-300"></i> ${customMsg || 'Saved • Auto-Save (5m)'}`;
+    }
   }
 
-  function loadInitialCells() {
-    if (options.fileData) {
-      cells = {};
-      const lines = String(options.fileData).split('\n');
-      lines.forEach((line, rIdx) => {
-        const row = rIdx + 1;
-        const vals = line.split(',');
-        vals.forEach((v, cIdx) => {
-          if (cIdx < COLS && row <= ROWS) {
-            cells[COL_LETTERS[cIdx] + row] = { raw: v.trim() };
-          }
-        });
+  function markDirty() {
+    if (!isDirty) {
+      isDirty = true;
+      updateSaveStatusBadge();
+    }
+  }
+
+  function serializeCellsToCSV() {
+    let csv = '';
+    for (let r = 1; r <= ROWS; r++) {
+      const row = COL_LETTERS.map(c => {
+        const v = getCellDisplay(c + r);
+        return v.includes(',') ? `"${v}"` : v;
       });
-      return;
+      if (row.some(v => v !== '')) {
+        csv += row.join(',') + '\n';
+      }
     }
+    return csv.trim();
+  }
 
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) {
-      try {
-        cells = JSON.parse(saved);
-        return;
-      } catch (_) {}
+  function saveSpreadsheet(targetFolder = currentFolderKey, silent = false) {
+    try {
+      const folder = (typeof targetFolder === 'string' && targetFolder) ? targetFolder : currentFolderKey;
+      currentFolderKey = folder;
+      let fileName = (sheetTitleInput.value || 'Student_Gradebook.xlsx').trim();
+      if (!/\.(xlsx|csv)$/i.test(fileName)) {
+        fileName += '.xlsx';
+      }
+      sheetTitleInput.value = fileName;
+
+      const snapshotCells = JSON.parse(JSON.stringify(cells));
+      const payload = {
+        id: currentFileId,
+        title: fileName,
+        folderKey: currentFolderKey,
+        cells: snapshotCells,
+        updatedAt: new Date().toISOString()
+      };
+
+      // Save to active student's Spreadsheet workspace
+      stateStore.saveAppWorkspace('spreadsheet', payload);
+
+      // Also save as file in active student's Virtual File System
+      const serialized = fileName.toLowerCase().endsWith('.csv')
+        ? serializeCellsToCSV()
+        : JSON.stringify({ __dawamuSheet: true, title: fileName, cells: snapshotCells });
+
+      stateStore.saveFileToVFS(currentFolderKey, {
+        id: currentFileId,
+        name: fileName,
+        type: 'sheet',
+        icon: 'fa-file-excel',
+        color: 'text-emerald-400',
+        content: serialized
+      });
+
+      lastSavedSnapshot = {
+        title: fileName,
+        folderKey: currentFolderKey,
+        cells: snapshotCells
+      };
+      isDirty = false;
+      const folderMeta = stateStore.getFolderMeta(currentFolderKey);
+      updateSaveStatusBadge(`Saved in ${folderMeta?.label || currentFolderKey} • Auto-Save (5m)`);
+      if (!silent) {
+        dawamuDialogs.toast(`Saved "${fileName}" to This PC > ${folderMeta?.label || currentFolderKey}`, 'success');
+      }
+      return payload;
+    } catch (e) {
+      console.error('Spreadsheet save error:', e);
+      return null;
     }
+  }
 
-    // Default Gradebook template
+  function parseCSVIntoCells(csvText) {
+    cells = {};
+    const lines = String(csvText).split('\n');
+    lines.forEach((line, rIdx) => {
+      const row = rIdx + 1;
+      const vals = line.split(',');
+      vals.forEach((v, cIdx) => {
+        if (cIdx < COLS && row <= ROWS) {
+          const cleanVal = v.replace(/^"|"$/g, '').trim();
+          if (cleanVal) {
+            cells[COL_LETTERS[cIdx] + row] = { raw: cleanVal };
+          }
+        }
+      });
+    });
+  }
+
+  function loadDefaultGradebookCells() {
     cells = {};
     Object.entries(GRADEBOOK).forEach(([k, v]) => { cells[k] = { raw: String(v) }; });
     for (let r = 2; r <= 8; r++) {
@@ -142,6 +235,42 @@ export function createSpreadsheetApp(options = {}) {
       cells[`G${r}`] = { raw: String(avg) };
       cells[`H${r}`] = { raw: getGrade(Number(avg)) };
     }
+  }
+
+  function loadInitialCells() {
+    const rawData = typeof options.fileData === 'string'
+      ? options.fileData
+      : (typeof options.fileData?.content === 'string' ? options.fileData.content : null);
+
+    if (rawData) {
+      try {
+        const parsed = JSON.parse(rawData);
+        if (parsed && parsed.__dawamuSheet && parsed.cells) {
+          cells = JSON.parse(JSON.stringify(parsed.cells));
+          if (parsed.title && !options.fileName) sheetTitleInput.value = parsed.title;
+        } else {
+          parseCSVIntoCells(rawData);
+        }
+      } catch (_) {
+        parseCSVIntoCells(rawData);
+      }
+    } else {
+      const savedWs = stateStore.getAppWorkspace('spreadsheet', null);
+      if (savedWs && savedWs.cells && Object.keys(savedWs.cells).length > 0) {
+        cells = JSON.parse(JSON.stringify(savedWs.cells));
+        if (savedWs.title && !options.fileName) sheetTitleInput.value = savedWs.title;
+        if (savedWs.id && !options.fileId) currentFileId = savedWs.id;
+        if (savedWs.folderKey && !options.folderKey) currentFolderKey = savedWs.folderKey;
+      } else {
+        loadDefaultGradebookCells();
+      }
+    }
+
+    lastSavedSnapshot = {
+      title: sheetTitleInput.value,
+      folderKey: currentFolderKey,
+      cells: JSON.parse(JSON.stringify(cells))
+    };
   }
 
   function parseRange(rangeStr) {
@@ -319,8 +448,11 @@ export function createSpreadsheetApp(options = {}) {
     const commit = () => {
       if (!activeEditInput) return;
       const val = input.value.trim();
+      const prevRaw = cells[key]?.raw ?? '';
       cells[key] = { raw: val };
-      saveStorage();
+      if (val !== prevRaw) {
+        markDirty();
+      }
       activeEditInput = null;
       td.innerHTML = '';
       td.textContent = getCellDisplay(key);
@@ -366,7 +498,7 @@ export function createSpreadsheetApp(options = {}) {
     if (!selectedCell) return;
     const key = selectedCell.dataset.key;
     cells[key] = { raw: formulaBar.value };
-    saveStorage();
+    markDirty();
     if (activeEditInput) {
       activeEditInput.value = formulaBar.value;
     }
@@ -387,8 +519,19 @@ export function createSpreadsheetApp(options = {}) {
     }
   });
 
+  sheetTitleInput.addEventListener('input', () => {
+    markDirty();
+  });
+
   // Global keydown on table
   root.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (activeEditInput) activeEditInput.blur();
+      saveSpreadsheet(currentFolderKey, false);
+      return;
+    }
+
     if (activeEditInput || document.activeElement === formulaBar || document.activeElement.tagName === 'INPUT') {
       return;
     }
@@ -413,7 +556,7 @@ export function createSpreadsheetApp(options = {}) {
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       e.preventDefault();
       cells[key] = { raw: '' };
-      saveStorage();
+      markDirty();
       formulaBar.value = '';
       selectedCell.textContent = '';
       refreshAll();
@@ -433,62 +576,95 @@ export function createSpreadsheetApp(options = {}) {
   });
 
   // Buttons
+  root.querySelector('#btn-save-sheet').addEventListener('click', () => {
+    if (activeEditInput) activeEditInput.blur();
+    saveSpreadsheet(currentFolderKey, false);
+  });
+
+  root.querySelector('#btn-save-sheet-downloads').addEventListener('click', () => {
+    if (activeEditInput) activeEditInput.blur();
+    saveSpreadsheet('downloads', false);
+  });
+
   root.querySelector('#btn-load-gradebook').addEventListener('click', () => {
-    cells = {};
-    Object.entries(GRADEBOOK).forEach(([k, v]) => { cells[k] = { raw: String(v) }; });
-    for (let r = 2; r <= 8; r++) {
-      const avg = evaluateFormula(`=AVERAGE(B${r}:F${r})`);
-      cells[`G${r}`] = { raw: String(avg) };
-      cells[`H${r}`] = { raw: getGrade(Number(avg)) };
-    }
-    saveStorage();
+    loadDefaultGradebookCells();
+    markDirty();
     refreshAll();
     if (selectedCell) selectCell(selectedCell);
-    if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-      window.dawamuDialogs.toast('Loaded Form 1-4 Student Gradebook template', 'info');
-    }
+    dawamuDialogs.toast('Loaded Form 1-4 Student Gradebook template', 'info');
   });
 
   root.querySelector('#btn-clear-all').addEventListener('click', async () => {
-    let ok = false;
-    if (window.dawamuDialogs && window.dawamuDialogs.confirm) {
-      ok = await window.dawamuDialogs.confirm('Are you sure you want to clear all cells in this spreadsheet?');
-    } else {
-      ok = confirm('Clear all cells?');
-    }
+    const ok = await dawamuDialogs.confirm('Are you sure you want to clear all cells in this spreadsheet?');
     if (ok) {
       cells = {};
-      saveStorage();
+      markDirty();
       refreshAll();
       if (selectedCell) selectCell(selectedCell);
-      if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-        window.dawamuDialogs.toast('Spreadsheet cleared', 'success');
-      }
+      dawamuDialogs.toast('Spreadsheet cleared (Click Save to commit)', 'info');
     }
   });
 
   root.querySelector('#btn-export-csv').addEventListener('click', () => {
-    let csv = '';
-    for (let r = 1; r <= ROWS; r++) {
-      const row = COL_LETTERS.map(c => {
-        const v = getCellDisplay(c + r);
-        return v.includes(',') ? `"${v}"` : v;
-      });
-      csv += row.join(',') + '\n';
-    }
+    const csv = serializeCellsToCSV();
+    const rawTitle = (sheetTitleInput.value || 'spreadsheet').replace(/\.[^/.]+$/, '');
+    const csvName = rawTitle.replace(/[^a-z0-9_-]/gi, '_') + '.csv';
+    stateStore.saveFileToVFS('downloads', {
+      name: csvName,
+      type: 'sheet',
+      icon: 'fa-file-csv',
+      color: 'text-emerald-400',
+      content: csv
+    });
     const blob = new Blob([csv], { type: 'text/csv' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    const title = root.querySelector('#sheet-title').value || 'spreadsheet';
-    a.download = title.replace(/[^a-z0-9]/gi, '_') + '.csv';
+    a.download = csvName;
     a.click();
-    if (window.dawamuDialogs && window.dawamuDialogs.toast) {
-      window.dawamuDialogs.toast(`Exported "${a.download}" successfully`, 'success');
-    }
+    dawamuDialogs.toast(`Saved "${csvName}" to This PC > Downloads`, 'success');
   });
+
+  // 5-Minute Automatic Save Interval while in Dawamu Sheets
+  const autoSaveIntervalId = setInterval(() => {
+    if (!document.body.contains(root)) {
+      clearInterval(autoSaveIntervalId);
+      return;
+    }
+    if (activeEditInput) activeEditInput.blur();
+    saveSpreadsheet(currentFolderKey, true);
+    dawamuDialogs.toast(`Auto-saved "${sheetTitleInput.value}" (5-minute interval)`, 'info');
+  }, AUTO_SAVE_INTERVAL_MS);
+
+  // Register lifecycle controller for WindowManager close interception & E2E inspection
+  root.__dawamuAppController = {
+    appId: 'spreadsheet',
+    autoSaveIntervalMs: AUTO_SAVE_INTERVAL_MS,
+    isDirty: () => isDirty,
+    getTitle: () => sheetTitleInput.value.trim() || 'Student_Gradebook.xlsx',
+    saveNow: () => {
+      if (activeEditInput) activeEditInput.blur();
+      return saveSpreadsheet(currentFolderKey, false);
+    },
+    triggerAutoSaveNow: () => {
+      if (activeEditInput) activeEditInput.blur();
+      return saveSpreadsheet(currentFolderKey, true);
+    },
+    discardChanges: () => {
+      if (lastSavedSnapshot) {
+        sheetTitleInput.value = lastSavedSnapshot.title;
+        currentFolderKey = lastSavedSnapshot.folderKey || 'documents';
+        cells = JSON.parse(JSON.stringify(lastSavedSnapshot.cells || {}));
+      }
+      isDirty = false;
+    },
+    onDestroy: () => {
+      clearInterval(autoSaveIntervalId);
+    }
+  };
 
   loadInitialCells();
   buildGrid();
+  updateSaveStatusBadge();
 
   // Select A1 initially
   const first = sheetBody.querySelector('[data-key="A1"]');

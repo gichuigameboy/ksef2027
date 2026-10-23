@@ -5,6 +5,7 @@
  */
 
 import { restrictionManager } from './restrictionManager.js';
+import { dawamuDialogs } from './dialogs.js';
 
 class WindowManager {
   constructor() {
@@ -37,13 +38,27 @@ class WindowManager {
       return null;
     }
 
-    // If window already exists, restore and focus it!
+    // If window already exists, restore and focus it (and pass new file options if provided)!
     if (this.windows.has(id)) {
       const existing = this.windows.get(id);
       if (existing.minimized) {
         this.restoreWindow(id);
       }
       this.focusWindow(id);
+      if (options.appOptions) {
+        const bodyEl = existing.element.querySelector(`#body-${id}`);
+        const appRoot = bodyEl?.firstElementChild;
+        if (appRoot?.__dawamuAppController?.loadFromOptions) {
+          appRoot.__dawamuAppController.loadFromOptions(options.appOptions);
+        } else if (typeof content === 'function') {
+          try {
+            appRoot?.__dawamuAppController?.onDestroy?.();
+            bodyEl.innerHTML = '';
+            const res = content();
+            if (res instanceof HTMLElement) bodyEl.appendChild(res);
+          } catch (_) {}
+        }
+      }
       return existing;
     }
 
@@ -348,9 +363,38 @@ class WindowManager {
     this.focusWindow(id);
   }
 
-  closeWindow(id) {
+  async closeWindow(id, force = false) {
     const win = this.windows.get(id);
-    if (!win) return;
+    if (!win) return false;
+
+    const bodyEl = win.element.querySelector(`#body-${id}`);
+    const appRoot = bodyEl?.firstElementChild;
+    const controller = appRoot?.__dawamuAppController;
+
+    if (!force && controller && typeof controller.isDirty === 'function' && controller.isDirty()) {
+      const itemName = typeof controller.getTitle === 'function' ? controller.getTitle() : win.title;
+      const choice = await dawamuDialogs.unsavedChanges({
+        appName: win.title,
+        itemName
+      });
+
+      if (choice === 'cancel') {
+        return false;
+      }
+      if (choice === 'save') {
+        if (typeof controller.saveNow === 'function') {
+          await controller.saveNow({ silentToast: false });
+        }
+      } else if (choice === 'discard') {
+        if (typeof controller.discardChanges === 'function') {
+          controller.discardChanges();
+        }
+      }
+    }
+
+    try {
+      controller?.onDestroy?.();
+    } catch (_) {}
 
     win.element.remove();
     this.windows.delete(id);
@@ -359,11 +403,15 @@ class WindowManager {
       this.activeWindowId = null;
     }
     this.notify();
+    return true;
   }
 
   closeAllWindows() {
-    this.windows.forEach((win) => {
+    this.windows.forEach((win, id) => {
       try {
+        const bodyEl = win.element.querySelector(`#body-${id}`);
+        const appRoot = bodyEl?.firstElementChild;
+        appRoot?.__dawamuAppController?.onDestroy?.();
         win.element.remove();
       } catch (_) {}
     });

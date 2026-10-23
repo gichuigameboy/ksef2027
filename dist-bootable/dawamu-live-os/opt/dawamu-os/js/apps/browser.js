@@ -11,6 +11,8 @@
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
+import { stateStore } from '../os/state.js';
+import { dawamuDialogs } from '../os/dialogs.js';
 
 const IS_ELECTRON = !!(window.electronAPI && window.electronAPI.isElectron);
 
@@ -132,7 +134,8 @@ function buildChrome() {
     </div>
 
     <!-- Downloads Drawer Button -->
-    <button id="btn-downloads" class="nb relative" title="Downloads (Stored in Virtual OS)">
+    <button id="btn-save-page" class="px-2.5 h-[30px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0" title="Save Current Web Page to This PC > Downloads"><i class="fas fa-file-download text-xs"></i><span>Save Page</span></button>
+    <button id="btn-downloads" class="nb relative" title="Downloads (Stored in This PC > Downloads)">
       <i class="fas fa-arrow-down text-xs text-slate-300"></i>
       <span id="dl-badge" class="hidden absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full"></span>
     </button>
@@ -779,7 +782,29 @@ function wireChrome(root) {
   const dlPopover = root.querySelector('#dl-popover');
   const dlBadge = root.querySelector('#dl-badge');
   const dlList = root.querySelector('#dl-list');
-  const downloadedItems = [];
+  const downloadedItems = [...stateStore.getFolderFiles('downloads').filter(f => f.type !== 'folder')];
+  const savePageBtn = root.querySelector('#btn-save-page');
+  savePageBtn?.addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const currentUrl = root.querySelector('#omnibox')?.value.trim() || tab?.url || 'dawamu://start';
+    const rawTitle = (tab?.title && tab.title !== 'New Tab') ? tab.title : (urlTitle(currentUrl) || 'Web_Research_Article');
+    const cleanFileName = rawTitle.replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_') + '_WebClip.docx';
+    const toolEl = root.querySelector(`#ot-${activeTabId}`);
+    const bodyHtml = (toolEl && !toolEl.classList.contains('hidden'))
+      ? toolEl.innerHTML
+      : `<p><b>Source URL:</b> ${currentUrl}</p><p>Saved from Dawamu Safe Browser on ${new Date().toLocaleString()}.</p>`;
+    const savedDocHtml = `<h1>${rawTitle}</h1><p style="font-size:12px;color:#64748b;"><b>Saved from Dawamu Browser:</b> ${currentUrl}</p><hr>${bodyHtml}`;
+    const savedFile = stateStore.saveFileToVFS('downloads', {
+      name: cleanFileName,
+      type: 'doc',
+      icon: 'fa-file-word',
+      color: 'text-blue-400',
+      content: savedDocHtml
+    });
+    downloadedItems.unshift(savedFile || { name: cleanFileName, size: '24 KB' });
+    updateDownloadUI();
+    dawamuDialogs.toast(`Saved "${cleanFileName}" to This PC > Downloads`, 'success');
+  });
 
   const updateDownloadUI = () => {
     if (!dlList) return;

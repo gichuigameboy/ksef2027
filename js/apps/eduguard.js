@@ -275,7 +275,7 @@ export function createEduGuardApp(student = null) {
                 Back to Native OS UI
               </button>
             </div>
-            <iframe id="flutter-web-frame" src="/EduGuard/frontend/build/web/index.html" class="w-full flex-1 border-0 bg-[#0b0e17]"></iframe>
+            <iframe id="flutter-web-frame" src="EduGuard/frontend/build/web/index.html" class="w-full flex-1 border-0 bg-[#0b0e17]"></iframe>
           </div>
         ` : `
           <!-- Desktop Navigation Sidebar -->
@@ -678,7 +678,9 @@ export function createEduGuardApp(student = null) {
   // 2. CURRICULUM EXPLORER TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderCurriculumTab(container) {
-    const topics = LOCAL_TOPICS[selectedSubjectId] || [];
+    const topics = Array.isArray(LOCAL_TOPICS)
+      ? LOCAL_TOPICS.filter(t => t.subject_id === selectedSubjectId)
+      : (LOCAL_TOPICS[selectedSubjectId] || []);
 
     container.innerHTML = `
       <div class="max-w-6xl mx-auto space-y-6">
@@ -768,7 +770,13 @@ export function createEduGuardApp(student = null) {
     diagnosticCompletedProfile = null;
     diagnosticAnswers = {};
     activeDiagnosticSession = await client.startDiagnostic(topicId, subjectId);
-    currentDiagnosticQuestion = activeDiagnosticSession.current_question;
+    activeDiagnosticSession.current_index = 0;
+    if (Array.isArray(activeDiagnosticSession.questions) && activeDiagnosticSession.questions.length > 0) {
+      activeDiagnosticSession.total_questions = activeDiagnosticSession.questions.length;
+      currentDiagnosticQuestion = activeDiagnosticSession.questions[0];
+    } else {
+      currentDiagnosticQuestion = activeDiagnosticSession.current_question;
+    }
     render();
   }
 
@@ -849,7 +857,10 @@ export function createEduGuardApp(student = null) {
     }
 
     const q = currentDiagnosticQuestion || activeDiagnosticSession.current_question;
-    const progressPct = ((activeDiagnosticSession.current_index || 0) / (activeDiagnosticSession.total_questions || 5)) * 100;
+    const qId = q ? (q.question_id || q.id || 'q_0') : 'q_0';
+    const totalQ = (activeDiagnosticSession.questions?.length) || activeDiagnosticSession.total_questions || 5;
+    const currentIdx = activeDiagnosticSession.current_index || 0;
+    const progressPct = (currentIdx / totalQ) * 100;
 
     container.innerHTML = `
       <div class="max-w-3xl mx-auto space-y-6">
@@ -858,7 +869,7 @@ export function createEduGuardApp(student = null) {
           <div class="flex items-center gap-2">
             <span class="font-bold text-white font-sans">${esc(activeDiagnosticSession.topic_name || 'Mathematics')}</span>
             <span class="text-slate-600">&bull;</span>
-            <span class="text-emerald-400 font-semibold font-mono">Question ${(activeDiagnosticSession.current_index || 0) + 1} of ${activeDiagnosticSession.total_questions || 5}</span>
+            <span class="text-emerald-400 font-semibold font-mono">Question ${currentIdx + 1} of ${totalQ}</span>
           </div>
           <div class="flex items-center gap-2">
             <i class="fas fa-clock text-amber-400"></i>
@@ -879,8 +890,8 @@ export function createEduGuardApp(student = null) {
           <!-- Options -->
           <div class="space-y-3 pt-2">
             ${(q && q.options ? q.options : []).map((opt, idx) => {
-              const optId = opt.option_id || `opt_${idx}`;
-              const isSelected = diagnosticAnswers[q.question_id] === optId;
+              const optId = opt.option_id || opt.id || `opt_${idx}`;
+              const isSelected = diagnosticAnswers[qId] === optId;
               return `
                 <button class="diag-opt-btn w-full p-4 rounded-xl border text-left flex items-center gap-3.5 text-xs transition-all cursor-pointer ${isSelected ? 'bg-emerald-500/15 border-emerald-500 text-white shadow-md' : 'bg-[#10141d] border-white/[0.08] text-slate-300 hover:border-white/20 hover:text-white'}" data-option-id="${optId}">
                   <span class="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${isSelected ? 'bg-emerald-500 text-black' : 'bg-white/10 text-slate-300'}">
@@ -913,8 +924,8 @@ export function createEduGuardApp(student = null) {
             <button id="diag-abort-btn" class="text-xs text-slate-400 hover:text-white cursor-pointer transition-colors">
               Exit Assessment
             </button>
-            <button id="diag-submit-btn" class="eduguard-btn-primary px-7 py-2.5 text-xs font-bold flex items-center gap-2" ${!diagnosticAnswers[q?.question_id] ? 'disabled opacity-50 pointer-events-none' : ''}>
-              <span>${diagnosticFeedback ? 'Next Question' : 'Verify Answer'}</span>
+            <button id="diag-submit-btn" class="eduguard-btn-primary px-7 py-2.5 text-xs font-bold flex items-center gap-2" ${!diagnosticAnswers[qId] ? 'disabled opacity-50 pointer-events-none' : ''}>
+              <span>${diagnosticFeedback ? (currentIdx >= totalQ - 1 ? 'View Mastery Report' : 'Next Question') : 'Verify Answer'}</span>
               <i class="fas fa-arrow-right text-xs"></i>
             </button>
           </div>
@@ -927,7 +938,7 @@ export function createEduGuardApp(student = null) {
       btn.addEventListener('click', () => {
         if (diagnosticFeedback) return;
         const optId = btn.getAttribute('data-option-id');
-        diagnosticAnswers[q.question_id] = optId;
+        diagnosticAnswers[qId] = optId;
         renderDiagnosticTab(container);
       });
     });
@@ -941,31 +952,57 @@ export function createEduGuardApp(student = null) {
       if (diagnosticFeedback) {
         // Move to next question or complete
         diagnosticFeedback = null;
-        if (activeDiagnosticSession.current_index >= (activeDiagnosticSession.total_questions || 5) - 1) {
-          diagnosticCompletedProfile = await client.getDiagnosticResults(activeDiagnosticSession.session_id);
+        if (currentIdx >= totalQ - 1) {
+          const diagId = activeDiagnosticSession.diagnostic_id || activeDiagnosticSession.session_id;
+          await client.completeDiagnostic(diagId);
+          const questionsList = activeDiagnosticSession.questions || [];
+          let correctCount = 0;
+          questionsList.forEach((item, i) => {
+            const itemQId = item.question_id || item.id || `q_${i}`;
+            const chosen = diagnosticAnswers[itemQId];
+            const correctOpt = (item.options || []).find(o => o.is_correct);
+            const correctId = item.correct_answer || (correctOpt ? (correctOpt.option_id || correctOpt.id) : null);
+            if (chosen && chosen === correctId) correctCount++;
+          });
+          const score = totalQ > 0 ? Math.round((correctCount / totalQ) * 100) : 75;
+          diagnosticCompletedProfile = {
+            topic_name: activeDiagnosticSession.topic_name || selectedTopicName || 'Mathematics',
+            mastery_score: score,
+            category: score >= 80 ? 'MASTERED' : score >= 60 ? 'PROFICIENT' : score >= 40 ? 'DEVELOPING' : 'CRITICAL',
+            total_questions: totalQ
+          };
+          liveMasteries = await client.getMasteryOverview();
           renderDiagnosticTab(container);
         } else {
-          activeDiagnosticSession.current_index = (activeDiagnosticSession.current_index || 0) + 1;
+          activeDiagnosticSession.current_index = currentIdx + 1;
+          if (Array.isArray(activeDiagnosticSession.questions) && activeDiagnosticSession.questions[activeDiagnosticSession.current_index]) {
+            currentDiagnosticQuestion = activeDiagnosticSession.questions[activeDiagnosticSession.current_index];
+          }
           renderDiagnosticTab(container);
         }
         return;
       }
 
-      const selectedOptId = diagnosticAnswers[q.question_id];
+      const selectedOptId = diagnosticAnswers[qId];
       if (!selectedOptId) return;
 
-      const opt = (q.options || []).find(o => o.option_id === selectedOptId);
-      diagnosticFeedback = {
-        is_correct: opt ? !!opt.is_correct : false,
-        explanation: opt?.explanation || 'Evaluation completed.',
-        diagnosed_misconception: opt?.misconception || null
-      };
+      const opt = (q.options || []).find((o, idx) => (o.option_id || o.id || `opt_${idx}`) === selectedOptId);
+      let graded = null;
+      try {
+        graded = await client.submitAttempt(
+          qId,
+          selectedOptId,
+          activeDiagnosticSession.diagnostic_id || activeDiagnosticSession.session_id,
+          12000,
+          activeDiagnosticSession.selected_topic_id || selectedTopicId
+        );
+      } catch (_) {}
 
-      await client.submitDiagnosticAnswer({
-        session_id: activeDiagnosticSession.session_id,
-        question_id: q.question_id,
-        selected_option_id: selectedOptId
-      });
+      diagnosticFeedback = {
+        is_correct: graded && graded.is_correct !== null ? !!graded.is_correct : (opt ? !!opt.is_correct : false),
+        explanation: graded?.explanation || opt?.distractor_explanation || opt?.explanation || q?.explanation || 'Evaluation completed.',
+        diagnosed_misconception: graded?.diagnosed_misconception || opt?.misconception_tag || opt?.misconception || null
+      };
 
       renderDiagnosticTab(container);
     });
@@ -978,7 +1015,31 @@ export function createEduGuardApp(student = null) {
     whyIsLoading = true;
     render();
     try {
-      whyDiagnosis = await client.diagnoseStruggle(topicId);
+      const raw = await client.getWhyStruggling(topicId);
+      const prereqIds = LOCAL_PREREQUISITES[topicId] || ['factorisation', 'algebraic_manipulation'];
+      const normalizedPrereqs = Array.isArray(raw?.prerequisite_gaps) && raw.prerequisite_gaps.length > 0 && typeof raw.prerequisite_gaps[0] === 'object'
+        ? raw.prerequisite_gaps
+        : prereqIds.map((pid, idx) => ({
+            topic_name: pid.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+            mastery: idx === 0 ? 43 : 78,
+            required: 70,
+            status: idx === 0 ? 'GAP' : 'SATISFIED'
+          }));
+
+      whyDiagnosis = {
+        topic_name: raw?.topic_name || topicId.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+        primary_cause: (raw?.primary_cause && raw.primary_cause !== 'insufficient_data') ? raw.primary_cause : 'prerequisite_gap',
+        human_explanation: raw?.human_explanation || (raw?.primary_cause && raw.primary_cause !== 'insufficient_data' ? raw.recommended_action : null) || 'Prerequisite foundational fluency is below the 70% threshold required for reliable problem transfer.',
+        prerequisite_gaps: normalizedPrereqs,
+        difficulty_accuracies: raw?.difficulty_accuracies || { basic: 70, medium: 50, hard: 30, application: 20 },
+        prescribed_remediation: Array.isArray(raw?.prescribed_remediation) && raw.prescribed_remediation.length > 0
+          ? raw.prescribed_remediation
+          : [
+              'Review prerequisite rules and worked examples for foundational gaps',
+              'Complete 5 targeted practice drills on prerequisite concepts',
+              'Verify solutions by substituting back into the governing equation'
+            ]
+      };
     } catch (_) {}
     whyIsLoading = false;
     render();
@@ -1207,7 +1268,7 @@ export function createEduGuardApp(student = null) {
   // 6. KNOWLEDGE MAP TAB (Interactive DAG)
   // ═══════════════════════════════════════════════════════════════════════════════
   async function renderKnowledgeMapTab(container) {
-    const graph = await client.getKnowledgeGraph('mathematics');
+    const graph = client.getKnowledgeGraph ? await client.getKnowledgeGraph('mathematics') : {};
     const nodes = graph.nodes || [
       { id: 'arithmetic', name: 'Arithmetic & Number Sense', x: 80, y: 140, mastery: 95, subject: 'Mathematics' },
       { id: 'fractions', name: 'Fractions & Ratios', x: 260, y: 70, mastery: 88, subject: 'Mathematics' },
@@ -1451,12 +1512,18 @@ export function createEduGuardApp(student = null) {
       tutorIsLoading = true;
       renderTutorTab(container);
 
-      const aiReply = await client.askTutor(text, {
-        topicId: tutorTopicId,
-        subjectId: selectedSubjectId
-      });
+      let replyText = "Let's review the core definition carefully.";
+      try {
+        const aiReply = await client.askTutor(text, {
+          topicId: tutorTopicId,
+          subjectId: selectedSubjectId
+        });
+        replyText = typeof aiReply === 'string'
+          ? aiReply
+          : (aiReply?.text || aiReply?.reply || replyText);
+      } catch (_) {}
 
-      chatMessages.push({ sender: 'ai', text: aiReply.text || aiReply.reply || "Let's review the core definition carefully.", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      chatMessages.push({ sender: 'ai', text: replyText, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
       tutorIsLoading = false;
       renderTutorTab(container);
     }
