@@ -5,9 +5,10 @@ echo   Launching Dawamu OS Desktop with EduGuard (KSEF 2027)...
 echo =========================================================
 
 cd /d "%~dp0"
+set "ROOT_DIR=%CD%"
 
 :: 1. Detect Python executable
-set "PY_EXE=%~dp0EduGuard\backend\.venv\Scripts\python.exe"
+set "PY_EXE=%ROOT_DIR%\EduGuard\backend\.venv\Scripts\python.exe"
 if not exist "%PY_EXE%" (
     set "PY_EXE=C:\Users\infin\Desktop\EduGuard\backend\.venv\Scripts\python.exe"
 )
@@ -19,8 +20,8 @@ if not exist "%PY_EXE%" (
 where npx >nul 2>nul
 if %errorlevel% equ 0 (
     echo [1/2] Starting EduGuard FastAPI Backend on port 8000...
-    if exist "%~dp0EduGuard\backend\app\main.py" (
-        start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%~dp0EduGuard\backend"
+    if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
+        start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%ROOT_DIR%\EduGuard\backend"
     )
     echo [2/2] Launching with Electron native engine...
     npx electron . %*
@@ -29,15 +30,16 @@ if %errorlevel% equ 0 (
 
 :: 3. Desktop Standalone Mode (Python HTTP Server on 127.0.0.1:8080 + Chrome/Edge App Mode)
 echo [1/3] Starting EduGuard FastAPI Backend on port 8000...
-if exist "%~dp0EduGuard\backend\app\main.py" (
-    start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%~dp0EduGuard\backend"
+if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
+    start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%ROOT_DIR%\EduGuard\backend"
 )
 
 echo [2/3] Initializing OS Local Static Engine on port 8080...
-start "Dawamu-StaticServer" /MIN "%PY_EXE%" -m http.server 8080 --bind 127.0.0.1 --directory "%~dp0"
+start "Dawamu-StaticServer" /MIN "%PY_EXE%" -m http.server 8080 --bind 127.0.0.1 --directory "%ROOT_DIR%"
 
-:: Allow background servers 2 seconds to initialize
-timeout /t 2 /nobreak >nul
+:: Allow background servers 2 seconds to initialize (using ping for reliable non-blocking wait)
+ping 127.0.0.1 -n 3 >nul
+
 
 :: 4. Locate Browser (Chrome or Edge)
 set "BROWSER_EXE="
