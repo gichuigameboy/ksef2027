@@ -57,6 +57,8 @@ function createWindow() {
   const isKioskMode = process.argv.includes('--kiosk');
 
   mainWindow = new BrowserWindow({
+    title:     'Dawamu OS',
+    icon:      path.join(__dirname, 'assets', 'dawamu-logo.png'),
     width:     1280,
     height:    800,
     minWidth:  900,

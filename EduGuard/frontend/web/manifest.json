@@ -1,11 +1,11 @@
 {
-    "name": "eduguard",
-    "short_name": "eduguard",
+    "name": "Dawamu OS — EduGuard",
+    "short_name": "Dawamu",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#020c07",
+    "theme_color": "#10b981",
+    "description": "Dawamu OS with EduGuard — Student Operating System & Learning Intelligence (KSEF 2027).",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

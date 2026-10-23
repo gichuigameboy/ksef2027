@@ -1,0 +1,21 @@
+{
+  "name": "Dawamu OS — Student Edition",
+  "short_name": "Dawamu OS",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#020c07",
+  "theme_color": "#10b981",
+  "description": "Dawamu OS — Ultra-Lightweight Educational Operating System with EduGuard AI",
+  "icons": [
+    {
+      "src": "assets/dawamu-logo.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "favicon.png",
+      "sizes": "192x192 512x512",
+      "type": "image/png"
+    }
+  ]
+}
