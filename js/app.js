@@ -774,7 +774,7 @@ function startDawamuOS() {
 
 
   // Personalize the desktop welcome widget with the logged-in student name and mode badge
-  const welcomeWidget = desktopEl.querySelector('.pointer-events-none');
+  const welcomeWidget = document.getElementById('desktop-welcome-widget') || desktopEl.querySelector('.desktop-welcome-widget') || desktopEl.querySelector('.pointer-events-none');
   if (welcomeWidget) {
     let greeting = document.getElementById('desktop-user-greeting');
     if (!greeting) {
@@ -785,13 +785,18 @@ function startDawamuOS() {
     }
     if (currentStudent) {
       const modeBadge = currentStudent.isOfflineDemo
-        ? `<div class="mt-1.5 text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">OFFLINE DEMO MODE (Local Simulation)</div>`
-        : `<div class="mt-1.5 text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">VERIFIED BACKEND ACTIVE</div>`;
+        ? `<div class="mt-1 text-[9px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">OFFLINE DEMO MODE (Local Simulation)</div>`
+        : `<div class="mt-1 text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2.5 py-0.5 rounded-full font-mono font-bold tracking-wider uppercase">VERIFIED BACKEND ACTIVE</div>`;
 
       greeting.innerHTML = `
-        <div class="text-white text-lg font-bold mt-2">Welcome, <span class="text-[#4ade80]">${currentStudent.name}</span></div>
-        <div class="text-slate-400 text-xs">Adm No: ${currentStudent.admNo} • ${currentStudent.grade}</div>
-        ${modeBadge}
+        <div class="mt-2 flex flex-col items-end text-right bg-slate-900/80 backdrop-blur-md border border-emerald-500/30 px-3.5 py-2 rounded-2xl shadow-xl shadow-black/40">
+          <div class="text-white text-sm font-bold flex items-center gap-1.5">
+            <i class="fas fa-user-circle text-emerald-400 text-sm"></i>
+            <span>Welcome, <span class="text-emerald-400 font-extrabold">${currentStudent.name}</span></span>
+          </div>
+          <div class="text-slate-400 text-xs mt-0.5">Adm No: <b class="text-slate-200">${currentStudent.admNo}</b> &bull; <span class="text-emerald-300 font-semibold">${currentStudent.grade}</span></div>
+          ${modeBadge}
+        </div>
       `;
     } else {
       greeting.innerHTML = '';
