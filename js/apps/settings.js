@@ -260,8 +260,8 @@ export function createSettingsApp() {
       if (sEl) sEl.textContent = 'Browser Virtual Storage Active';
     }
   }
-  }
 
   render();
   return root;
 }
+

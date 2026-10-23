@@ -27,19 +27,22 @@
 
       <form id="os-login-form" class="w-full flex flex-col gap-4">
         <div class="flex flex-col gap-1.5">
-          <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Admission Number</label>
+          <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Admission Number / Username</label>
           <div class="relative">
             <i class="fas fa-id-badge absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-            <input type="text" id="login-adm" required placeholder="e.g. 1001"
+            <input type="text" id="login-adm" name="username" autocomplete="username" required placeholder="e.g. 1001, teacher, admin"
                    class="w-full text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none transition-all text-sm font-medium">
           </div>
         </div>
 
         <div class="flex flex-col gap-1.5">
-          <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider pl-1">Password</label>
+          <div class="flex justify-between items-center pl-1 pr-1">
+            <label class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Password</label>
+            <span class="text-[10px] text-emerald-400/80 font-mono">Demo: dawamu2026 or 1234</span>
+          </div>
           <div class="relative">
             <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
-            <input type="password" id="login-pass" required placeholder="••••••••"
+            <input type="password" id="login-pass" name="password" autocomplete="current-password" required placeholder="dawamu2026"
                    class="w-full text-white rounded-xl py-3 pl-11 pr-4 focus:outline-none transition-all text-sm font-medium">
           </div>
         </div>
@@ -54,20 +57,28 @@
         <i class="fas fa-exclamation-circle"></i> <span>Invalid Credentials</span>
       </div>
       
-      <!-- 1-Click Quick Login Student Accounts (Offline Demo) -->
+      <!-- 1-Click Quick Login Student & Staff Accounts (Offline Demo) -->
       <div class="mt-5 text-[11px] text-slate-400 border-t border-slate-700/50 pt-4 w-full text-center">
         <div class="mb-2 font-semibold text-slate-300 flex items-center justify-center gap-1.5">
           <span class="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
-          <span>Offline Demo Accounts (Evaluation Simulation):</span>
+          <span>1-Click Demo Accounts (Evaluation Simulation):</span>
         </div>
-        <div class="flex justify-center gap-2">
-          <button type="button" data-quick-login data-adm="1001" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3.5 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 text-xs">
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" data-quick-login data-adm="1001" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
             <i class="fas fa-user-circle text-emerald-400"></i>
-            <span>Demo 1001 (Brian O.)</span>
+            <span>Brian O. (1001)</span>
           </button>
-          <button type="button" data-quick-login data-adm="1002" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3.5 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5 text-xs">
+          <button type="button" data-quick-login data-adm="1002" data-pass="dawamu2026" class="bg-emerald-900/40 hover:bg-emerald-800/60 border border-emerald-600/40 text-emerald-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
             <i class="fas fa-user-circle text-emerald-400"></i>
-            <span>Demo 1002 (Kevin M.)</span>
+            <span>Kevin M. (1002)</span>
+          </button>
+          <button type="button" data-quick-login data-adm="teacher" data-pass="teacher2026" class="bg-blue-900/40 hover:bg-blue-800/60 border border-blue-600/40 text-blue-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
+            <i class="fas fa-chalkboard-user text-blue-400"></i>
+            <span>Teacher Proctor</span>
+          </button>
+          <button type="button" data-quick-login data-adm="admin" data-pass="1234" class="bg-purple-900/40 hover:bg-purple-800/60 border border-purple-600/40 text-purple-300 px-3 py-2 rounded-xl font-semibold cursor-pointer transition-all active:scale-95 flex items-center justify-center gap-1.5 text-xs truncate">
+            <i class="fas fa-user-shield text-purple-400"></i>
+            <span>IT Administrator</span>
           </button>
         </div>
       </div>
