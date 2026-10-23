@@ -4,25 +4,12 @@ import { EduGuardClient, LOCAL_SUBJECTS, LOCAL_TOPICS, LOCAL_PREREQUISITES } fro
  * Dawamu OS - EduGuard AI Learning Intelligence & Exam Proctoring Application
  *
  * Kenya Science & Engineering Fair (KSEF 2027) Edition
- *
- * Core Capabilities Integrated:
- * 1. Learning Dashboard & Intelligence Briefing (Mastery overview, daily missions, next best action)
- * 2. Curriculum & Subject Explorer (Mathematics, Biology, Physics, Chemistry, Computer Science)
- * 3. Diagnostic & Assessment Engine (Multi-question test, distractor misconceptions, idempotency)
- * 4. "Why Am I Struggling?" Root-Cause Analyzer (Prerequisite gaps, difficulty cliffs, error clusters)
- * 5. Retention Center & Spaced Revision (Ebbinghaus forgetting curve, half-life days, retrieval)
- * 6. Knowledge Map (Interactive SVG prerequisite Directed Acyclic Graph with node details)
- * 7. Learning Timeline & Analytics (Milestones, score trends, study streaks)
- * 8. Socratic AI Tutor (Pedagogical explanations, hints, examples, check-questions)
- * 9. Smart Study Notes Analyzer & Flashcard Coach (Concepts, flip-cards, test questions)
- * 10. Teacher Class Hub (Cohort heatmap, misconception clusters, at-risk interventions)
- * 11. Exam Guard Proctoring Shield (Anti-cheat, focus loss tracking, clipboard monitoring)
- * 12. Live Canvas Mode (Embedded compiled Flutter Web CanvasKit engine toggle)
+ * Fully Redesigned Premium Interface — Inspired by OpenAI / Linear / EduGuard Flutter Web Engine
  */
 
 export function createEduGuardApp(student = null) {
   const root = document.createElement('div');
-  root.className = 'flex flex-col h-full bg-[#0b1329] text-white font-sans overflow-hidden select-none';
+  root.className = 'eduguard-shell flex flex-col h-full w-full overflow-hidden select-none';
 
   const currentStudent = student || {
     name: 'Brian Ochieng',
@@ -36,7 +23,6 @@ export function createEduGuardApp(student = null) {
   const esc = (v) => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   // ─── STATE MANAGEMENT ──────────────────────────────────────────────────────────
-  // Tabs: 'dashboard' | 'curriculum' | 'diagnostic' | 'whystruggling' | 'retention' | 'knowledgemap' | 'timeline' | 'tutor' | 'notes' | 'teacher' | 'proctor' | 'canvas'
   let activeTab = 'dashboard';
   let isCanvasMode = false;
 
@@ -104,8 +90,6 @@ export function createEduGuardApp(student = null) {
 
   // Exam Guard Proctoring State
   let proctorActive = false;
-  let proctorExamTime = 600; // 10 minutes in seconds
-  let proctorTimerId = null;
   let integrityScore = 100;
   let integrityViolations = [];
   let examCurrentIndex = 0;
@@ -117,15 +101,10 @@ export function createEduGuardApp(student = null) {
       id: 1,
       subject: 'Mathematics',
       topic: 'Quadratic Equations',
-      question: 'Solve for x: 2x² - 7x + 3 = 0 using the quadratic formula or factorization.',
-      options: [
-        'x = 3 or x = 0.5',
-        'x = -3 or x = -0.5',
-        'x = 1 or x = 3',
-        'x = 2 or x = 1.5'
-      ],
+      question: 'Solve for x: x² - 5x + 6 = 0',
+      options: ['x = 2 or x = 3', 'x = -2 or x = -3', 'x = 1 or x = 6', 'x = -1 or x = -6'],
       correctIndex: 0,
-      explanation: '(2x - 1)(x - 3) = 0 => 2x = 1 (x = 0.5) or x = 3.'
+      explanation: 'Factorizing gives (x - 2)(x - 3) = 0. Therefore, x = 2 or x = 3.'
     },
     {
       id: 2,
@@ -211,7 +190,7 @@ export function createEduGuardApp(student = null) {
 
   function recordProctorViolation(reason, penalty = 10) {
     integrityScore = Math.max(0, integrityScore - penalty);
-    const time = new Date().toLocaleTimeString();
+    const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     integrityViolations.unshift({ reason, penalty, time });
     render();
   }
@@ -232,44 +211,50 @@ export function createEduGuardApp(student = null) {
 
   // ─── MAIN APP SHELL RENDERER ──────────────────────────────────────────────────
   function render() {
+    const initials = currentStudent.name
+      ? currentStudent.name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+      : 'ST';
+
     root.innerHTML = `
       <!-- Top Application Header Bar -->
-      <header class="bg-[#0b1021] border-b border-white/10 px-4 py-2.5 flex items-center justify-between shrink-0 z-20">
-        <div class="flex items-center gap-3">
-          <div class="w-8 h-8 rounded-lg bg-emerald-600 flex items-center justify-center text-white shadow-md shadow-emerald-500/20">
+      <header class="bg-[#0b0e17] border-b border-white/[0.08] px-5 py-3 flex items-center justify-between shrink-0 z-20">
+        <div class="flex items-center gap-3.5">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-500/25 border border-emerald-400/30">
             <i class="fas fa-brain text-sm"></i>
           </div>
           <div>
             <div class="flex items-center gap-2">
-              <span class="font-bold text-sm tracking-tight text-white">EduGuard Intelligence</span>
-              <span class="text-[10px] bg-emerald-500/20 text-emerald-400 font-semibold px-1.5 py-0.5 rounded border border-emerald-500/30">KSEF 2027</span>
+              <span class="font-bold text-sm tracking-tight text-white font-sans">EduGuard Intelligence</span>
+              <span class="text-[10px] bg-emerald-500/15 text-emerald-400 font-bold px-2 py-0.5 rounded-full border border-emerald-500/30 font-mono tracking-wider">
+                KCSE 2027
+              </span>
             </div>
-            <div class="text-[11px] text-slate-400">Educational Intelligence & Exam Proctoring Platform</div>
+            <div class="text-[11px] text-slate-400 font-medium">Autonomous Cognitive Tutoring & Diagnostic Assessment Engine</div>
           </div>
         </div>
 
         <!-- Student Profile & Status -->
-        <div class="flex items-center gap-3 text-xs">
+        <div class="flex items-center gap-3.5 text-xs">
           <!-- Backend Connectivity Status -->
-          <div class="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full ${isBackendOnline ? 'bg-emerald-950/60 text-emerald-400 border border-emerald-800/60' : 'bg-slate-800/60 text-slate-400 border border-slate-700/60'}">
+          <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-full ${isBackendOnline ? 'bg-emerald-950/60 text-emerald-300 border border-emerald-700/50' : 'bg-slate-800/60 text-slate-400 border border-slate-700/60'}">
             <span class="w-2 h-2 rounded-full ${isBackendOnline ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}"></span>
-            <span class="text-[11px] font-medium">${isBackendOnline ? 'FastAPI Port 8000' : 'Offline Local Engine'}</span>
+            <span class="text-[11px] font-semibold">${isBackendOnline ? 'Adaptive Engine Active • Port 8000' : 'Offline Knowledge Engine'}</span>
           </div>
 
           <!-- Mode Switcher Toggle: High-Performance OS Native vs Flutter Web Canvas -->
-          <button id="eduguard-canvas-toggle" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${isCanvasMode ? 'bg-cyan-600 text-white shadow-sm' : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'}">
-            <i class="fas ${isCanvasMode ? 'fa-desktop' : 'fa-layer-group'}"></i>
-            <span>${isCanvasMode ? 'Return to Native OS View' : 'Canvas Mode (Flutter Web Engine)'}</span>
+          <button id="eduguard-canvas-toggle" class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[11px] font-semibold transition-all cursor-pointer ${isCanvasMode ? 'bg-cyan-600 text-white shadow-md' : 'bg-white/5 hover:bg-white/10 text-slate-300 border border-white/10'}">
+            <i class="fas ${isCanvasMode ? 'fa-desktop' : 'fa-layer-group'} text-cyan-400"></i>
+            <span>${isCanvasMode ? 'Native OS View' : 'Canvas Mode (Flutter Web)'}</span>
           </button>
 
           <!-- User Badge -->
-          <div class="flex items-center gap-2 pl-2 border-l border-white/10">
-            <div class="w-7 h-7 rounded-full bg-emerald-700/50 border border-emerald-500/30 flex items-center justify-center text-emerald-300 font-bold text-xs">
-              ${esc(currentStudent.name.split(' ').map(n => n[0]).join('').slice(0, 2))}
+          <div class="flex items-center gap-2.5 pl-3 border-l border-white/10">
+            <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-700 to-teal-500 border border-emerald-400/40 flex items-center justify-center text-white font-bold text-xs shadow-inner">
+              ${initials}
             </div>
-            <div class="hidden md:block leading-tight">
-              <div class="text-white font-medium text-[12px]">${esc(currentStudent.name)}</div>
-              <div class="text-slate-400 text-[10px]">${esc(currentStudent.grade)} • Adm: ${esc(currentStudent.admNo)}</div>
+            <div class="hidden md:flex flex-col text-left leading-tight">
+              <span class="text-white font-bold text-xs">${esc(currentStudent.name)}</span>
+              <span class="text-slate-400 text-[10px] font-mono">Adm: ${esc(currentStudent.admNo)} • ${esc(currentStudent.grade)}</span>
             </div>
           </div>
         </div>
@@ -279,54 +264,54 @@ export function createEduGuardApp(student = null) {
       <div class="flex-1 flex overflow-hidden relative">
         ${isCanvasMode ? `
           <!-- Flutter Web Live Canvas Mode Embed -->
-          <div class="w-full h-full flex flex-col bg-[#0b1021]">
+          <div class="w-full h-full flex flex-col bg-[#0b0e17]">
             <div class="bg-cyan-950/80 border-b border-cyan-800/50 px-4 py-2 flex items-center justify-between text-xs text-cyan-200">
               <div class="flex items-center gap-2">
                 <i class="fas fa-layer-group text-cyan-400"></i>
                 <span class="font-semibold">EduGuard Flutter Web Canvas Engine Active</span>
                 <span class="text-cyan-400/70 text-[11px]">— Precompiled CanvasKit bundle running in native window</span>
               </div>
-              <button id="exit-canvas-mode-btn" class="text-xs bg-cyan-800 hover:bg-cyan-700 text-white px-2.5 py-0.5 rounded transition-colors">
+              <button id="exit-canvas-mode-btn" class="text-xs bg-cyan-800 hover:bg-cyan-700 text-white px-3 py-1 rounded-lg transition-colors cursor-pointer">
                 Back to Native OS UI
               </button>
             </div>
-            <iframe id="flutter-web-frame" src="/EduGuard/frontend/build/web/index.html" class="w-full flex-1 border-0 bg-[#0b1021]"></iframe>
+            <iframe id="flutter-web-frame" src="/EduGuard/frontend/build/web/index.html" class="w-full flex-1 border-0 bg-[#0b0e17]"></iframe>
           </div>
         ` : `
-          <!-- Desktop Navigation Sidebar (matching desktop_sidebar.dart) -->
-          <aside class="w-60 bg-[#070d1d] border-r border-white/10 flex flex-col shrink-0 select-none">
-            <div class="flex-1 overflow-y-auto py-3 px-2 space-y-4">
+          <!-- Desktop Navigation Sidebar -->
+          <aside class="eduguard-sidebar w-64 flex flex-col shrink-0 select-none">
+            <div class="flex-1 overflow-y-auto py-4 px-3 space-y-4">
               
               <!-- Section: LEARNING CORE -->
               <div>
-                <div class="px-2.5 mb-1.5 text-[10px] font-bold text-slate-500 tracking-wider uppercase">Learning Core</div>
-                <div class="space-y-0.5">
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'dashboard' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="dashboard">
-                    <i class="fas fa-gauge w-4 text-center"></i>
-                    <span>Dashboard</span>
+                <div class="px-3 mb-2 text-[10px] font-extrabold text-slate-500 tracking-wider uppercase font-mono">Learning Core</div>
+                <div class="space-y-1">
+                  <button class="eduguard-nav-item w-full ${activeTab === 'dashboard' ? 'active' : ''}" data-tab="dashboard">
+                    <i class="fas fa-gauge-high w-4 text-center ${activeTab === 'dashboard' ? 'text-emerald-400' : 'text-slate-400'}"></i>
+                    <span>Learning Dashboard</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'curriculum' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="curriculum">
-                    <i class="fas fa-book-open w-4 text-center"></i>
-                    <span>Curriculum & Diag</span>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'curriculum' ? 'active' : ''}" data-tab="curriculum">
+                    <i class="fas fa-book-bookmark w-4 text-center ${activeTab === 'curriculum' ? 'text-emerald-400' : 'text-slate-400'}"></i>
+                    <span>Curriculum Explorer</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'diagnostic' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="diagnostic">
-                    <i class="fas fa-stethoscope w-4 text-center"></i>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'diagnostic' ? 'active' : ''}" data-tab="diagnostic">
+                    <i class="fas fa-stethoscope w-4 text-center ${activeTab === 'diagnostic' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>Diagnostic Test</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'whystruggling' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="whystruggling">
-                    <i class="fas fa-magnifying-glass-chart w-4 text-center"></i>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'whystruggling' ? 'active' : ''}" data-tab="whystruggling">
+                    <i class="fas fa-magnifying-glass-chart w-4 text-center ${activeTab === 'whystruggling' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>Why Am I Struggling?</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'retention' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="retention">
-                    <i class="fas fa-rotate w-4 text-center"></i>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'retention' ? 'active' : ''}" data-tab="retention">
+                    <i class="fas fa-rotate-right w-4 text-center ${activeTab === 'retention' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>Retention Center</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'knowledgemap' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="knowledgemap">
-                    <i class="fas fa-circle-nodes w-4 text-center"></i>
-                    <span>Knowledge Map</span>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'knowledgemap' ? 'active' : ''}" data-tab="knowledgemap">
+                    <i class="fas fa-circle-nodes w-4 text-center ${activeTab === 'knowledgemap' ? 'text-emerald-400' : 'text-slate-400'}"></i>
+                    <span>Knowledge Map (DAG)</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'timeline' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="timeline">
-                    <i class="fas fa-timeline w-4 text-center"></i>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'timeline' ? 'active' : ''}" data-tab="timeline">
+                    <i class="fas fa-timeline w-4 text-center ${activeTab === 'timeline' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>Learning Timeline</span>
                   </button>
                 </div>
@@ -334,14 +319,14 @@ export function createEduGuardApp(student = null) {
 
               <!-- Section: AI INTELLIGENCE -->
               <div>
-                <div class="px-2.5 mb-1.5 text-[10px] font-bold text-slate-500 tracking-wider uppercase">AI Intelligence</div>
-                <div class="space-y-0.5">
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'tutor' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="tutor">
-                    <i class="fas fa-robot w-4 text-center text-emerald-400"></i>
+                <div class="px-3 mb-2 text-[10px] font-extrabold text-slate-500 tracking-wider uppercase font-mono">AI Intelligence</div>
+                <div class="space-y-1">
+                  <button class="eduguard-nav-item w-full ${activeTab === 'tutor' ? 'active' : ''}" data-tab="tutor">
+                    <i class="fas fa-robot w-4 text-center ${activeTab === 'tutor' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>AI Socratic Tutor</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'notes' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="notes">
-                    <i class="fas fa-file-pen w-4 text-center text-cyan-400"></i>
+                  <button class="eduguard-nav-item w-full ${activeTab === 'notes' ? 'active' : ''}" data-tab="notes">
+                    <i class="fas fa-file-signature w-4 text-center ${activeTab === 'notes' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>Lecture Notes Coach</span>
                   </button>
                 </div>
@@ -349,36 +334,35 @@ export function createEduGuardApp(student = null) {
 
               <!-- Section: EDUCATOR & INTEGRITY -->
               <div>
-                <div class="px-2.5 mb-1.5 text-[10px] font-bold text-slate-500 tracking-wider uppercase">Educator & Shield</div>
-                <div class="space-y-0.5">
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'teacher' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="teacher">
-                    <i class="fas fa-chalkboard-user w-4 text-center text-amber-400"></i>
+                <div class="px-3 mb-2 text-[10px] font-extrabold text-slate-500 tracking-wider uppercase font-mono">Educator & Shield</div>
+                <div class="space-y-1">
+                  <button class="eduguard-nav-item w-full ${activeTab === 'teacher' ? 'active' : ''}" data-tab="teacher">
+                    <i class="fas fa-chalkboard-user w-4 text-center ${activeTab === 'teacher' ? 'text-emerald-400' : 'text-slate-400'}"></i>
                     <span>Teacher Class Hub</span>
                   </button>
-                  <button class="nav-item w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-left transition-colors ${activeTab === 'proctor' ? 'bg-emerald-600 text-white font-semibold' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-tab="proctor">
-                    <i class="fas fa-shield-halved w-4 text-center ${proctorActive ? 'text-rose-400 animate-pulse' : 'text-slate-400'}"></i>
-                    <span>Exam Guard</span>
-                    ${proctorActive ? `<span class="w-1.5 h-1.5 rounded-full bg-rose-500 ml-auto"></span>` : ''}
+                  <button class="eduguard-nav-item w-full ${activeTab === 'proctor' ? 'active' : ''}" data-tab="proctor">
+                    <i class="fas fa-shield-halved w-4 text-center ${proctorActive ? 'text-rose-400 animate-pulse' : (activeTab === 'proctor' ? 'text-emerald-400' : 'text-slate-400')}"></i>
+                    <span>Exam Guard Shield</span>
                   </button>
                 </div>
               </div>
-
             </div>
 
-            <!-- Sidebar Footer: Offline Sync Indicator -->
-            <div class="p-3 border-t border-white/10 bg-black/20 text-[11px] text-slate-400">
-              <div class="flex items-center justify-between mb-1">
-                <span>Offline Queue:</span>
-                <span class="font-mono text-emerald-400">${client.getPendingQueueCount()} attempts</span>
+            <!-- Sidebar Footer: Offline Sync & Version -->
+            <div class="p-3.5 border-t border-white/[0.08] bg-[#07090f] text-xs">
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-slate-400 text-[11px] font-medium">Offline Queue</span>
+                <span class="font-mono text-emerald-400 text-[11px] font-bold">${client.getPendingQueueCount()} cached</span>
               </div>
-              <button id="eduguard-sync-btn" class="w-full text-center py-1 bg-white/5 hover:bg-white/10 text-slate-300 rounded border border-white/10 text-[10px] transition-colors cursor-pointer">
-                <i class="fas fa-arrows-rotate mr-1"></i> Sync with Server
+              <button id="eduguard-sync-btn" class="w-full text-center py-2 bg-white/5 hover:bg-white/10 text-slate-200 rounded-xl border border-white/10 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5">
+                <i class="fas fa-arrows-rotate text-emerald-400"></i>
+                <span>Synchronize Server</span>
               </button>
             </div>
           </aside>
 
           <!-- Main Dynamic Content Workspace -->
-          <main id="eduguard-content-area" class="flex-1 overflow-y-auto bg-[#0b1329] p-6 relative">
+          <main id="eduguard-content-area" class="flex-1 overflow-y-auto bg-[#0d1017] p-8 relative">
             <!-- Dynamic Tab Content Rendered Here -->
           </main>
         `}
@@ -407,13 +391,17 @@ export function createEduGuardApp(student = null) {
       syncBtn.addEventListener('click', async () => {
         syncBtn.innerHTML = `<i class="fas fa-spinner fa-spin mr-1"></i> Syncing...`;
         const res = await client.syncOfflineQueue();
-        alert(res.message);
+        if (window.dawamuDialogs?.toast) {
+          window.dawamuDialogs.toast({ message: res.message, type: 'success' });
+        } else {
+          alert(res.message);
+        }
         render();
       });
     }
 
     // Sidebar Navigation events
-    root.querySelectorAll('.nav-item').forEach(btn => {
+    root.querySelectorAll('.eduguard-nav-item').forEach(btn => {
       btn.addEventListener('click', () => {
         activeTab = btn.getAttribute('data-tab');
         render();
@@ -444,79 +432,120 @@ export function createEduGuardApp(student = null) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 1. DASHBOARD TAB (matches dashboard_screen.dart)
+  // 1. DASHBOARD TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderDashboardTab(container) {
     const nextAction = liveNextAction || {
       topicName: 'Quadratic Equations',
       topicId: 'quadratic_equations',
       actionType: 'TARGETED_PRACTICE',
-      reason: 'Quadratic Equations mastery is below threshold (51%). Targeted practice recommended.'
+      reason: 'Quadratic Equations mastery is below threshold (51%). Targeted factorisation reinforcement and zero-product practice recommended.'
     };
 
+    let actionBadgeColor = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30';
+    let actionBadgeText = 'Recommended Next';
+    let actionIcon = 'fa-bullseye text-emerald-400';
+
+    if (nextAction.actionType === 'PREREQUISITE_RECOVERY') {
+      actionBadgeColor = 'bg-rose-500/15 text-rose-300 border-rose-500/30';
+      actionBadgeText = 'Prerequisite Gap';
+      actionIcon = 'fa-triangle-exclamation text-rose-400';
+    } else if (nextAction.actionType === 'RETRIEVAL') {
+      actionBadgeColor = 'bg-amber-500/15 text-amber-300 border-amber-500/30';
+      actionBadgeText = 'Retention Due';
+      actionIcon = 'fa-rotate-right text-amber-400';
+    }
+
     container.innerHTML = `
-      <div class="max-w-6xl mx-auto space-y-6">
+      <div class="max-w-6xl mx-auto space-y-7">
         <!-- Greeting & Status Banner -->
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-2 border-b border-white/5">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
           <div>
-            <h1 class="text-2xl font-bold text-white tracking-tight">
+            <h1 class="text-2xl font-bold text-white tracking-tight font-sans">
               Good afternoon, ${esc(currentStudent.name.split(' ')[0])} 👋
             </h1>
-            <p class="text-xs text-slate-400 mt-1">
+            <p class="text-xs text-slate-400 mt-1 font-medium">
               Here is your personalized educational intelligence briefing and mastery profile for today.
             </p>
           </div>
-          <div class="flex items-center gap-2">
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
-              <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
-              Adaptive Learning Engine Active
+          <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 text-emerald-400 text-xs font-semibold border border-emerald-500/20">
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span>Adaptive Engine Active</span>
             </span>
-            <button id="dash-quick-diag-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg text-xs font-semibold shadow-md shadow-emerald-600/20 transition-all cursor-pointer">
-              <i class="fas fa-stethoscope mr-1"></i> Quick Diagnostic
+            <button id="dash-quick-diag-btn" class="eduguard-btn-primary text-xs flex items-center gap-1.5">
+              <i class="fas fa-stethoscope"></i>
+              <span>Quick Diagnostic</span>
             </button>
           </div>
         </div>
 
-        <!-- Next Best Action Card (Section 17 & 34) -->
-        <div class="bg-gradient-to-r from-emerald-950/70 via-[#10223f] to-[#0f1b36] border border-emerald-500/30 rounded-xl p-5 shadow-lg relative overflow-hidden">
-          <div class="absolute -right-10 -bottom-10 w-44 h-44 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none"></div>
-          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
-            <div class="space-y-1.5">
-              <div class="flex items-center gap-2">
-                <span class="bg-emerald-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">
-                  Recommended Next Best Action
-                </span>
-                <span class="text-xs text-emerald-300 font-mono">${esc(nextAction.actionType || 'PRACTICE')}</span>
+        <!-- Next Best Action Card -->
+        <div class="eduguard-hero-card p-6 relative overflow-hidden">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+            <div class="flex items-start gap-4">
+              <div class="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center text-xl shrink-0 shadow-inner">
+                <i class="fas ${actionIcon}"></i>
               </div>
-              <h3 class="text-lg font-bold text-white">${esc(nextAction.topicName || 'Targeted Topic Practice')}</h3>
-              <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">${esc(nextAction.reason)}</p>
+              <div class="space-y-1.5">
+                <div class="flex items-center gap-2.5">
+                  <span class="text-[10px] font-extrabold uppercase px-2.5 py-0.5 rounded-md border font-mono tracking-wider ${actionBadgeColor}">
+                    ${actionBadgeText}
+                  </span>
+                  <span class="text-xs text-slate-400 font-medium">Priority 85% &bull; Estimated 15 Mins</span>
+                </div>
+                <h3 class="text-lg font-bold text-white">${esc(nextAction.topicName || 'Targeted Topic Practice')}</h3>
+                <p class="text-xs text-slate-300 max-w-2xl leading-relaxed">${esc(nextAction.reason)}</p>
+              </div>
             </div>
-            <button id="dash-start-action-btn" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-5 py-2.5 rounded-lg text-xs transition-colors shrink-0 shadow-md cursor-pointer flex items-center gap-2">
+            <button id="dash-start-action-btn" class="eduguard-btn-primary px-5 py-3 text-xs shrink-0 flex items-center gap-2 shadow-lg">
               <span>Start Adaptive Session</span>
-              <i class="fas fa-arrow-right"></i>
+              <i class="fas fa-arrow-right text-xs"></i>
             </button>
           </div>
+        </div>
+
+        <!-- Curriculum Diagnostic Quick Banner -->
+        <div class="eduguard-card p-4 flex items-center justify-between gap-4 border-emerald-500/30 bg-gradient-to-r from-emerald-950/30 to-[#151922]">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-emerald-500/15 text-emerald-400 flex items-center justify-center text-base border border-emerald-500/30">
+              <i class="fas fa-clipboard-check"></i>
+            </div>
+            <div>
+              <h4 class="text-sm font-bold text-white">Curriculum Diagnostic Assessments</h4>
+              <p class="text-xs text-slate-400">Establish your authentic mastery baseline and identify prerequisite dependencies across 5 KCSE subjects.</p>
+            </div>
+          </div>
+          <button id="dash-select-subject-btn" class="eduguard-btn-secondary text-xs shrink-0 flex items-center gap-1.5">
+            <span>Select Subject</span>
+            <i class="fas fa-chevron-right text-[10px]"></i>
+          </button>
         </div>
 
         <!-- Evidence-Based Learning Insights Carousel -->
         <div>
-          <h2 class="text-sm font-bold text-white uppercase tracking-wider mb-3 flex items-center gap-2">
+          <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3.5 flex items-center gap-2 font-mono">
             <i class="fas fa-lightbulb text-amber-400"></i> Evidence-Based Learning Insights
           </h2>
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             ${liveInsights.length > 0 ? liveInsights.slice(0, 3).map(ins => `
-              <div class="bg-[#101b38] border border-white/10 rounded-xl p-4 hover:border-emerald-500/40 transition-colors">
-                <div class="flex items-center gap-2 mb-2">
-                  <span class="w-6 h-6 rounded-md ${ins.type === 'improving' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'} flex items-center justify-center text-xs">
-                    <i class="fas ${ins.type === 'improving' ? 'fa-arrow-trend-up' : 'fa-triangle-exclamation'}"></i>
-                  </span>
-                  <span class="text-xs font-bold text-white">${esc(ins.title)}</span>
+              <div class="eduguard-card eduguard-card-interactive p-4 flex flex-col justify-between">
+                <div>
+                  <div class="flex items-center gap-2.5 mb-2.5">
+                    <span class="w-7 h-7 rounded-lg ${ins.type === 'improving' ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30' : 'bg-amber-500/15 text-amber-400 border border-amber-500/30'} flex items-center justify-center text-xs">
+                      <i class="fas ${ins.type === 'improving' ? 'fa-arrow-trend-up' : 'fa-triangle-exclamation'}"></i>
+                    </span>
+                    <span class="text-xs font-bold text-white leading-tight">${esc(ins.title)}</span>
+                  </div>
+                  <p class="text-[12px] text-slate-300 mb-3 leading-relaxed">${esc(ins.message)}</p>
                 </div>
-                <p class="text-[11px] text-slate-300 mb-2 leading-relaxed">${esc(ins.message)}</p>
-                <div class="text-[10px] text-slate-500 font-mono border-t border-white/5 pt-1.5">${esc(ins.evidence)}</div>
+                <div class="text-[10px] text-slate-400 font-mono border-t border-white/[0.06] pt-2 flex items-center gap-1">
+                  <i class="fas fa-quote-left text-slate-600"></i>
+                  <span>${esc(ins.evidence)}</span>
+                </div>
               </div>
             `).join('') : `
-              <div class="col-span-3 bg-[#101b38] border border-white/10 rounded-xl p-4 text-center text-xs text-slate-400">
+              <div class="col-span-3 eduguard-card p-6 text-center text-xs text-slate-400">
                 Complete diagnostic assessments to unlock tailored learning insights.
               </div>
             `}
@@ -528,49 +557,49 @@ export function createEduGuardApp(student = null) {
           
           <!-- Left Column: Daily Learning Mission (7 cols) -->
           <div class="lg:col-span-7 space-y-4">
-            <div class="bg-[#101b38] border border-white/10 rounded-xl p-5">
-              <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-2.5">
-                  <div class="w-8 h-8 rounded-lg bg-emerald-600/30 text-emerald-400 flex items-center justify-center">
+            <div class="eduguard-card p-5">
+              <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.06]">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 rounded-xl bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-sm">
                     <i class="fas fa-bullseye"></i>
                   </div>
                   <div>
                     <h3 class="font-bold text-sm text-white">${esc(liveMission ? liveMission.title : "Today's Learning Mission")}</h3>
-                    <p class="text-[11px] text-slate-400">${esc(liveMission ? liveMission.description : "Calculated from prerequisite gaps and forgetting decay")}</p>
+                    <p class="text-[11px] text-slate-400 font-medium">${esc(liveMission ? liveMission.description : "Calculated from prerequisite gaps and forgetting decay")}</p>
                   </div>
                 </div>
-                <span class="text-[10px] bg-white/5 text-slate-300 px-2 py-1 rounded font-mono">
-                  ${liveMission ? liveMission.date : new Date().toLocaleDateString()}
+                <span class="text-[11px] bg-white/5 text-slate-300 px-2.5 py-1 rounded-lg font-mono border border-white/10">
+                  ${liveMission ? liveMission.date : new Date().toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' })}
                 </span>
               </div>
 
               <!-- Mission Items List -->
-              <div class="space-y-2">
+              <div class="space-y-2.5">
                 ${(liveMission && liveMission.items ? liveMission.items : [
-                  { topic_name: 'Factorisation', item_type: 'remediation', target_question_count: 5, reason: 'Prerequisite foundation reinforcement' },
-                  { topic_name: 'Quadratic Equations', item_type: 'advancement', target_question_count: 4, reason: 'Apply zero-product property' }
+                  { topic_name: 'Factorisation of Binomials', item_type: 'remediation', target_question_count: 5, reason: 'Prerequisite foundation reinforcement' },
+                  { topic_name: 'Quadratic Equations (Roots)', item_type: 'advancement', target_question_count: 4, reason: 'Apply zero-product property' }
                 ]).map((item, idx) => `
-                  <div class="bg-[#152347] border border-white/5 rounded-lg p-3 flex items-center justify-between">
+                  <div class="bg-[#10141d] border border-white/[0.06] rounded-xl p-3.5 flex items-center justify-between hover:border-white/10 transition-colors">
                     <div class="flex items-center gap-3">
-                      <span class="w-5 h-5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold flex items-center justify-center">
+                      <span class="w-6 h-6 rounded-lg bg-emerald-500/15 text-emerald-400 text-xs font-bold flex items-center justify-center border border-emerald-500/30">
                         ${idx + 1}
                       </span>
                       <div>
-                        <div class="text-xs font-semibold text-white">${esc(item.topic_name)}</div>
-                        <div class="text-[10px] text-slate-400">${esc(item.reason)}</div>
+                        <div class="text-xs font-bold text-white">${esc(item.topic_name)}</div>
+                        <div class="text-[11px] text-slate-400 mt-0.5">${esc(item.reason)}</div>
                       </div>
                     </div>
-                    <div class="flex items-center gap-2">
-                      <span class="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded ${item.item_type === 'remediation' ? 'bg-amber-500/20 text-amber-300' : 'bg-emerald-500/20 text-emerald-300'}">
+                    <div class="flex items-center gap-2.5">
+                      <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-md ${item.item_type === 'remediation' ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30' : 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30'}">
                         ${esc(item.item_type)}
                       </span>
-                      <span class="text-xs text-slate-400 font-mono">${item.target_question_count} Qs</span>
+                      <span class="text-xs text-slate-400 font-mono font-semibold">${item.target_question_count} Qs</span>
                     </div>
                   </div>
                 `).join('')}
               </div>
 
-              <button id="dash-start-mission-btn" class="w-full mt-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer">
+              <button id="dash-start-mission-btn" class="w-full mt-4 py-2.5 eduguard-btn-primary text-xs font-bold text-center">
                 Launch Today's Learning Mission
               </button>
             </div>
@@ -578,13 +607,13 @@ export function createEduGuardApp(student = null) {
 
           <!-- Right Column: Concept Mastery Profile (5 cols) -->
           <div class="lg:col-span-5 space-y-4">
-            <div class="bg-[#101b38] border border-white/10 rounded-xl p-5">
-              <div class="flex items-center justify-between mb-3">
+            <div class="eduguard-card p-5">
+              <div class="flex items-center justify-between mb-4 pb-3 border-b border-white/[0.06]">
                 <h3 class="font-bold text-sm text-white">Concept Mastery Profile</h3>
-                <span class="text-[11px] text-emerald-400 font-mono">Real Assessment Data</span>
+                <span class="text-[11px] text-emerald-400 font-mono font-semibold">Active Assessment</span>
               </div>
 
-              <div class="space-y-3">
+              <div class="space-y-3.5">
                 ${(liveMasteries.length > 0 ? liveMasteries.slice(0, 5) : [
                   { topic_name: 'Basic Arithmetic', mastery_score: 92, category: 'MASTERED' },
                   { topic_name: 'Fractions & Ratios', mastery_score: 84, category: 'MASTERED' },
@@ -594,30 +623,26 @@ export function createEduGuardApp(student = null) {
                 ]).map(m => {
                   const score = Math.round(m.mastery_score || 0);
                   const color = score >= 80 ? 'bg-emerald-500' : score >= 60 ? 'bg-cyan-500' : score >= 40 ? 'bg-amber-500' : 'bg-rose-500';
+                  const textCol = score >= 80 ? 'text-emerald-400' : score >= 60 ? 'text-cyan-400' : score >= 40 ? 'text-amber-400' : 'text-rose-400';
                   return `
-                    <div class="space-y-1">
+                    <div class="space-y-1.5">
                       <div class="flex justify-between items-center text-xs">
-                        <span class="text-slate-200 font-medium">${esc(m.topic_name)}</span>
-                        <div class="flex items-center gap-1.5">
-                          <span class="text-[10px] font-bold px-1.5 py-0.2 rounded bg-white/5 text-slate-300">${esc(m.category || 'ASSESSED')}</span>
-                          <span class="font-mono text-white font-bold">${score}%</span>
-                        </div>
+                        <span class="text-slate-200 font-semibold">${esc(m.topic_name)}</span>
+                        <span class="font-mono font-bold ${textCol}">${score}%</span>
                       </div>
-                      <div class="w-full h-1.5 bg-white/5 rounded-full overflow-hidden">
-                        <div class="h-full ${color} rounded-full" style="width: ${score}%"></div>
+                      <div class="w-full bg-slate-800/80 rounded-full h-2 overflow-hidden border border-white/5">
+                        <div class="${color} h-full rounded-full transition-all duration-500" style="width: ${score}%;"></div>
                       </div>
                     </div>
                   `;
                 }).join('')}
               </div>
 
-              <button id="dash-view-struggling-btn" class="w-full mt-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-xs font-semibold border border-white/10 transition-colors cursor-pointer flex items-center justify-center gap-1.5">
-                <i class="fas fa-magnifying-glass-chart text-amber-400"></i>
-                <span>Diagnose Weak Topics ("Why Am I Struggling?")</span>
+              <button id="dash-view-full-curric-btn" class="w-full mt-4 py-2 eduguard-btn-secondary text-xs text-center">
+                Explore Full Curriculum & Diag
               </button>
             </div>
           </div>
-
         </div>
       </div>
     `;
@@ -625,40 +650,48 @@ export function createEduGuardApp(student = null) {
     // Event listeners
     container.querySelector('#dash-quick-diag-btn')?.addEventListener('click', () => {
       activeTab = 'diagnostic';
-      render();
+      startDiagnosticSession('quadratic_equations', 'mathematics');
     });
+
     container.querySelector('#dash-start-action-btn')?.addEventListener('click', () => {
       activeTab = 'diagnostic';
+      startDiagnosticSession(nextAction.topicId || 'quadratic_equations', 'mathematics');
+    });
+
+    container.querySelector('#dash-select-subject-btn')?.addEventListener('click', () => {
+      activeTab = 'curriculum';
       render();
     });
+
     container.querySelector('#dash-start-mission-btn')?.addEventListener('click', () => {
       activeTab = 'diagnostic';
-      render();
+      startDiagnosticSession('quadratic_equations', 'mathematics');
     });
-    container.querySelector('#dash-view-struggling-btn')?.addEventListener('click', () => {
-      activeTab = 'whystruggling';
+
+    container.querySelector('#dash-view-full-curric-btn')?.addEventListener('click', () => {
+      activeTab = 'curriculum';
       render();
     });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 2. CURRICULUM & SUBJECT EXPLORER TAB (matches subject_selection_screen.dart)
+  // 2. CURRICULUM EXPLORER TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderCurriculumTab(container) {
-    const topics = LOCAL_TOPICS.filter(t => t.subject_id === selectedSubjectId);
+    const topics = LOCAL_TOPICS[selectedSubjectId] || [];
 
     container.innerHTML = `
       <div class="max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 class="text-xl font-bold text-white">Curriculum & Diagnostic Explorer</h1>
-          <p class="text-xs text-slate-400 mt-0.5">Explore authentic KCSE & CBC syllabus topics, view prerequisite dependencies, and launch targeted diagnostic assessments.</p>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Curriculum & Diagnostic Explorer</h1>
+          <p class="text-xs text-slate-400 mt-1">Explore authentic KCSE & CBC syllabus topics, view prerequisite dependencies, and launch targeted diagnostic assessments.</p>
         </div>
 
         <!-- Subject Picker Tabs -->
-        <div class="flex items-center gap-2 overflow-x-auto pb-2 border-b border-white/10">
+        <div class="flex items-center gap-2.5 overflow-x-auto pb-2 border-b border-white/[0.08]">
           ${LOCAL_SUBJECTS.map(s => `
-            <button class="curric-subject-btn px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${s.id === selectedSubjectId ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#101b38] text-slate-400 hover:text-white border border-white/5'}" data-subject="${s.id}">
-              <i class="fas ${s.icon}"></i>
+            <button class="curric-subject-btn px-4 py-2.5 rounded-xl text-xs font-bold flex items-center gap-2 transition-all cursor-pointer whitespace-nowrap ${s.id === selectedSubjectId ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30 border border-emerald-400/40' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-subject="${s.id}">
+              <i class="fas ${s.icon} ${s.id === selectedSubjectId ? 'text-white' : 'text-emerald-400'}"></i>
               <span>${esc(s.name)}</span>
             </button>
           `).join('')}
@@ -669,26 +702,26 @@ export function createEduGuardApp(student = null) {
           ${topics.map(t => {
             const prereqs = LOCAL_PREREQUISITES[t.topic_id] || [];
             return `
-              <div class="bg-[#101b38] border border-white/10 hover:border-emerald-500/40 rounded-xl p-4 flex flex-col justify-between transition-all">
+              <div class="eduguard-card eduguard-card-interactive p-5 flex flex-col justify-between">
                 <div>
-                  <div class="flex items-center justify-between text-xs mb-2">
-                    <span class="text-emerald-400 font-bold">${esc(t.grade || 'Form 1')}</span>
-                    <span class="text-[10px] text-slate-500 font-mono">Topic #${t.order}</span>
+                  <div class="flex items-center justify-between text-xs mb-2.5">
+                    <span class="text-emerald-400 font-bold bg-emerald-500/15 px-2 py-0.5 rounded-md border border-emerald-500/30 text-[10px] font-mono">${esc(t.grade || 'Form 1')}</span>
+                    <span class="text-[10px] text-slate-500 font-mono font-semibold">Topic #${t.order}</span>
                   </div>
-                  <h3 class="text-sm font-bold text-white mb-1">${esc(t.topic_name)}</h3>
-                  <div class="text-[11px] text-slate-400 mb-3">
+                  <h3 class="text-sm font-bold text-white mb-1.5 leading-snug">${esc(t.topic_name)}</h3>
+                  <div class="text-[11px] text-slate-400 mb-4 leading-relaxed">
                     ${prereqs.length > 0 ? `
-                      <span class="text-slate-500">Prerequisites:</span>
-                      <span class="text-slate-300 font-medium">${prereqs.map(p => p.replace(/_/g, ' ')).join(', ')}</span>
-                    ` : '<span class="text-slate-500">Foundational topic (No prerequisites required)</span>'}
+                      <span class="text-slate-500 font-medium">Prerequisites:</span>
+                      <span class="text-slate-300 font-semibold">${prereqs.map(p => p.replace(/_/g, ' ')).join(', ')}</span>
+                    ` : '<span class="text-slate-500 font-medium">Foundational topic (No prerequisites required)</span>'}
                   </div>
                 </div>
 
-                <div class="flex items-center gap-2 pt-3 border-t border-white/5">
-                  <button class="topic-launch-diag-btn flex-1 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-semibold transition-colors cursor-pointer text-center" data-topic-id="${t.topic_id}" data-topic-name="${esc(t.topic_name)}">
+                <div class="flex items-center gap-2 pt-3.5 border-t border-white/[0.06]">
+                  <button class="topic-launch-diag-btn flex-1 py-2 eduguard-btn-primary text-xs text-center" data-topic-id="${t.topic_id}" data-topic-name="${esc(t.topic_name)}">
                     Launch Diagnostic
                   </button>
-                  <button class="topic-struggle-btn px-2.5 py-1.5 bg-white/5 hover:bg-white/10 text-amber-400 rounded text-xs transition-colors cursor-pointer" title="Diagnose Root Causes" data-topic-id="${t.topic_id}" data-topic-name="${esc(t.topic_name)}">
+                  <button class="topic-struggle-btn px-3 py-2 bg-white/5 hover:bg-white/10 text-amber-400 rounded-xl text-xs transition-colors cursor-pointer border border-white/10" title="Diagnose Root Causes" data-topic-id="${t.topic_id}" data-topic-name="${esc(t.topic_name)}">
                     <i class="fas fa-stethoscope"></i>
                   </button>
                 </div>
@@ -727,7 +760,7 @@ export function createEduGuardApp(student = null) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 3. DIAGNOSTIC ASSESSMENT TAB (matches diagnostic_session_screen.dart)
+  // 3. DIAGNOSTIC ASSESSMENT TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   async function startDiagnosticSession(topicId = 'quadratic_equations', subjectId = 'mathematics') {
     diagnosticIsSubmitting = false;
@@ -742,236 +775,210 @@ export function createEduGuardApp(student = null) {
   function renderDiagnosticTab(container) {
     if (!activeDiagnosticSession) {
       container.innerHTML = `
-        <div class="max-w-2xl mx-auto text-center py-12 space-y-4">
-          <div class="w-16 h-16 rounded-2xl bg-emerald-600/20 text-emerald-400 mx-auto flex items-center justify-center text-2xl">
+        <div class="max-w-xl mx-auto text-center py-16 space-y-5">
+          <div class="w-16 h-16 rounded-3xl bg-emerald-500/15 text-emerald-400 mx-auto flex items-center justify-center text-2xl border border-emerald-500/30 shadow-lg">
             <i class="fas fa-stethoscope"></i>
           </div>
-          <h2 class="text-xl font-bold text-white">Diagnostic & Mastery Assessment</h2>
-          <p class="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-            Begin an authentic diagnostic sequence across foundational prerequisites and target concepts.
-            Answers are authoritatively evaluated and mapped to specific distractor misconceptions.
+          <h2 class="text-2xl font-bold text-white tracking-tight">Diagnostic Assessment</h2>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            Begin an adaptive diagnostic evaluation to pinpoint prerequisite gaps, diagnose cognitive misconceptions, and calibrate your topic mastery curve.
           </p>
-          <div class="pt-4 flex justify-center gap-3">
-            <button id="start-default-diag-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-6 py-2.5 rounded-lg text-xs shadow-md transition-colors cursor-pointer">
-              Start Quadratic Equations Diagnostic
-            </button>
-            <button id="choose-other-subject-btn" class="bg-white/5 hover:bg-white/10 text-slate-300 px-4 py-2.5 rounded-lg text-xs border border-white/10 transition-colors cursor-pointer">
-              Choose Another Topic
+          <div class="pt-2">
+            <button id="diag-begin-now-btn" class="eduguard-btn-primary px-8 py-3 text-sm font-bold shadow-xl">
+              Start Assessment (5 Questions)
             </button>
           </div>
         </div>
       `;
-      container.querySelector('#start-default-diag-btn')?.addEventListener('click', () => {
-        startDiagnosticSession('quadratic_equations', 'mathematics');
-      });
-      container.querySelector('#choose-other-subject-btn')?.addEventListener('click', () => {
-        activeTab = 'curriculum';
-        render();
+      container.querySelector('#diag-begin-now-btn')?.addEventListener('click', () => {
+        startDiagnosticSession(selectedTopicId, selectedSubjectId);
       });
       return;
     }
 
-    // Diagnostic Completed Summary View
     if (diagnosticCompletedProfile) {
+      const p = diagnosticCompletedProfile;
       container.innerHTML = `
-        <div class="max-w-2xl mx-auto bg-[#101b38] border border-white/10 rounded-2xl p-6 space-y-6">
-          <div class="text-center space-y-2">
-            <div class="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl mx-auto">
-              <i class="fas fa-check"></i>
-            </div>
-            <h2 class="text-xl font-bold text-white">Diagnostic Assessment Complete</h2>
-            <p class="text-xs text-slate-400">Authoritative learning profile updated across deterministic engine records.</p>
+        <div class="max-w-2xl mx-auto eduguard-card p-8 space-y-6 text-center">
+          <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center text-2xl border border-emerald-500/30">
+            <i class="fas fa-award"></i>
+          </div>
+          <div>
+            <span class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">Assessment Complete</span>
+            <h2 class="text-2xl font-bold text-white mt-1">Diagnostic Mastery Report</h2>
+            <p class="text-xs text-slate-400 mt-1">Topic: <strong>${esc(p.topic_name)}</strong></p>
           </div>
 
-          <div class="grid grid-cols-2 gap-3 text-center">
-            <div class="bg-white/5 p-4 rounded-xl border border-white/5">
-              <div class="text-2xl font-black text-emerald-400 font-mono">${diagnosticCompletedProfile.score || '75%'}</div>
-              <div class="text-[11px] text-slate-400 mt-1">Updated Mastery Score</div>
+          <div class="grid grid-cols-3 gap-4 pt-2">
+            <div class="bg-[#10141d] p-4 rounded-xl border border-white/5">
+              <div class="text-[11px] text-slate-400">Mastery Score</div>
+              <div class="text-2xl font-black text-emerald-400 font-mono mt-1">${Math.round(p.mastery_score || 0)}%</div>
             </div>
-            <div class="bg-white/5 p-4 rounded-xl border border-white/5">
-              <div class="text-2xl font-black text-amber-400 font-mono">${diagnosticCompletedProfile.gapsCount || '1'}</div>
-              <div class="text-[11px] text-slate-400 mt-1">Identified Knowledge Gaps</div>
+            <div class="bg-[#10141d] p-4 rounded-xl border border-white/5">
+              <div class="text-[11px] text-slate-400">Performance</div>
+              <div class="text-sm font-bold text-white mt-2">${esc(p.category || 'DEVELOPING')}</div>
+            </div>
+            <div class="bg-[#10141d] p-4 rounded-xl border border-white/5">
+              <div class="text-[11px] text-slate-400">Questions</div>
+              <div class="text-2xl font-black text-white font-mono mt-1">${p.total_questions || 5}</div>
             </div>
           </div>
 
-          <div class="p-4 bg-emerald-950/30 border border-emerald-800/40 rounded-xl text-xs space-y-2 text-slate-300">
-            <div class="font-bold text-emerald-300">Recommended Next Step:</div>
-            <div>${esc(diagnosticCompletedProfile.recommended || "Review factorisation prerequisite rules before attempting harder application questions.")}</div>
-          </div>
-
-          <div class="flex gap-3">
-            <button id="diag-done-return-dash" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer">
+          <div class="flex justify-center gap-3 pt-4">
+            <button id="diag-done-return-btn" class="eduguard-btn-primary px-6 py-2.5 text-xs font-bold">
               Return to Dashboard
             </button>
-            <button id="diag-done-view-struggle" class="flex-1 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-xs font-semibold border border-white/10 transition-colors cursor-pointer">
-              View Root Causes ("Why Am I Struggling?")
+            <button id="diag-remedy-btn" class="eduguard-btn-secondary px-6 py-2.5 text-xs font-bold text-amber-300">
+              Diagnose Root Causes
             </button>
           </div>
         </div>
       `;
-      container.querySelector('#diag-done-return-dash')?.addEventListener('click', () => {
-        activeDiagnosticSession = null;
+
+      container.querySelector('#diag-done-return-btn')?.addEventListener('click', () => {
         activeTab = 'dashboard';
+        activeDiagnosticSession = null;
         render();
       });
-      container.querySelector('#diag-done-view-struggle')?.addEventListener('click', () => {
-        activeDiagnosticSession = null;
+
+      container.querySelector('#diag-remedy-btn')?.addEventListener('click', () => {
         activeTab = 'whystruggling';
         render();
       });
       return;
     }
 
-    // Active Question Screen
-    const q = currentDiagnosticQuestion;
-    if (!q) {
-      container.innerHTML = `<div class="text-center py-12 text-slate-400 text-xs">No questions remaining in diagnostic session.</div>`;
-      return;
-    }
+    const q = currentDiagnosticQuestion || activeDiagnosticSession.current_question;
+    const progressPct = ((activeDiagnosticSession.current_index || 0) / (activeDiagnosticSession.total_questions || 5)) * 100;
 
     container.innerHTML = `
-      <div class="max-w-2xl mx-auto space-y-5">
-        <!-- Progress Header -->
-        <div class="flex items-center justify-between text-xs pb-3 border-b border-white/10">
-          <div>
-            <span class="text-emerald-400 font-bold uppercase tracking-wider">${esc(activeDiagnosticSession.topic_name)}</span>
-            <span class="text-slate-500 ml-2">• Difficulty: <strong class="text-slate-300 uppercase">${esc(q.difficulty)}</strong></span>
+      <div class="max-w-3xl mx-auto space-y-6">
+        <!-- Assessment Progress Bar -->
+        <div class="flex items-center justify-between text-xs text-slate-400 pb-2 border-b border-white/[0.08]">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-white font-sans">${esc(activeDiagnosticSession.topic_name || 'Mathematics')}</span>
+            <span class="text-slate-600">&bull;</span>
+            <span class="text-emerald-400 font-semibold font-mono">Question ${(activeDiagnosticSession.current_index || 0) + 1} of ${activeDiagnosticSession.total_questions || 5}</span>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-slate-400 font-mono">Q: ${activeDiagnosticSession.completed_count + 1} / ${activeDiagnosticSession.total_questions}</span>
+            <i class="fas fa-clock text-amber-400"></i>
+            <span class="font-mono text-white font-bold">04:30</span>
           </div>
         </div>
 
-        <!-- Question Body Card -->
-        <div class="bg-[#101b38] border border-white/10 rounded-2xl p-6 space-y-4">
-          <div class="text-sm font-semibold text-white leading-relaxed">
-            ${esc(q.question_text)}
+        <div class="w-full bg-slate-800/80 rounded-full h-1.5 overflow-hidden">
+          <div class="bg-gradient-to-r from-emerald-500 to-teal-400 h-full transition-all duration-300" style="width: ${progressPct}%;"></div>
+        </div>
+
+        <!-- Question Card -->
+        <div class="eduguard-card p-7 space-y-5">
+          <div class="text-base font-bold text-white leading-relaxed font-sans">
+            ${esc(q ? q.question_text : 'Solving quadratic equation...')}
           </div>
 
-          ${q.hint ? `
-            <div class="text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-lg flex items-start gap-2">
-              <i class="fas fa-lightbulb mt-0.5"></i>
-              <span><strong>Hint:</strong> ${esc(q.hint)}</span>
-            </div>
-          ` : ''}
-
-          <!-- Radio Options List -->
-          <div class="space-y-2.5 pt-2">
-            ${q.options.map((opt, i) => {
-              const letter = String.fromCharCode(65 + i);
-              const isSelected = diagnosticAnswers[q.id] === opt.id;
-              let optStyle = isSelected ? 'bg-emerald-600/30 border-emerald-500 text-white' : 'bg-white/4 hover:bg-white/8 border-white/8 text-slate-200';
-              
-              if (diagnosticFeedback) {
-                if (opt.id === diagnosticFeedback.correct_option_id) {
-                  optStyle = 'bg-emerald-600/40 border-emerald-500 text-emerald-200';
-                } else if (isSelected && !diagnosticFeedback.is_correct) {
-                  optStyle = 'bg-rose-950/60 border-rose-500 text-rose-300';
-                }
-              }
-
+          <!-- Options -->
+          <div class="space-y-3 pt-2">
+            ${(q && q.options ? q.options : []).map((opt, idx) => {
+              const optId = opt.option_id || `opt_${idx}`;
+              const isSelected = diagnosticAnswers[q.question_id] === optId;
               return `
-                <button class="diag-option-btn w-full p-3.5 rounded-xl border text-left flex items-center gap-3 text-xs transition-all cursor-pointer ${optStyle}" data-opt-id="${opt.id}" ${diagnosticFeedback ? 'disabled' : ''}>
-                  <span class="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center font-bold text-slate-300 shrink-0">${letter}</span>
-                  <span class="flex-1">${esc(opt.text)}</span>
+                <button class="diag-opt-btn w-full p-4 rounded-xl border text-left flex items-center gap-3.5 text-xs transition-all cursor-pointer ${isSelected ? 'bg-emerald-500/15 border-emerald-500 text-white shadow-md' : 'bg-[#10141d] border-white/[0.08] text-slate-300 hover:border-white/20 hover:text-white'}" data-option-id="${optId}">
+                  <span class="w-7 h-7 rounded-lg flex items-center justify-center font-bold text-xs ${isSelected ? 'bg-emerald-500 text-black' : 'bg-white/10 text-slate-300'}">
+                    ${String.fromCharCode(65 + idx)}
+                  </span>
+                  <span class="font-medium text-sm leading-snug">${esc(opt.text)}</span>
                 </button>
               `;
             }).join('')}
           </div>
 
-          <!-- Submission Feedback Result (Misconceptions, Explanation, Updated Mastery) -->
+          <!-- Misconception Feedback Card (If submitted) -->
           ${diagnosticFeedback ? `
-            <div class="p-4 rounded-xl border ${diagnosticFeedback.is_correct ? 'bg-emerald-950/40 border-emerald-800 text-emerald-200' : 'bg-rose-950/40 border-rose-800 text-rose-200'} space-y-2 text-xs">
-              <div class="font-bold flex items-center gap-1.5">
-                <i class="fas ${diagnosticFeedback.is_correct ? 'fa-circle-check text-emerald-400' : 'fa-circle-xmark text-rose-400'}"></i>
-                <span>${diagnosticFeedback.is_correct ? 'Correct! Strong understanding shown.' : 'Incorrect answer detected.'}</span>
+            <div class="p-4 rounded-xl border text-xs leading-relaxed ${diagnosticFeedback.is_correct ? 'bg-emerald-950/40 border-emerald-700/60 text-emerald-200' : 'bg-rose-950/40 border-rose-700/60 text-rose-200'}">
+              <div class="font-bold flex items-center gap-2 mb-1">
+                <i class="fas ${diagnosticFeedback.is_correct ? 'fa-check-circle text-emerald-400' : 'fa-triangle-exclamation text-rose-400'}"></i>
+                <span>${diagnosticFeedback.is_correct ? 'Correct! Strong Conceptual Accuracy' : 'Diagnostic Misconception Identified'}</span>
               </div>
-              <p class="text-slate-300 text-[11px] leading-relaxed">${esc(diagnosticFeedback.explanation)}</p>
+              <div>${esc(diagnosticFeedback.explanation)}</div>
               ${diagnosticFeedback.diagnosed_misconception ? `
-                <div class="text-[10px] font-mono bg-rose-500/20 text-rose-300 px-2 py-1 rounded inline-block">
-                  Misconception Tag: ${esc(diagnosticFeedback.diagnosed_misconception)}
+                <div class="mt-2 text-[11px] font-mono p-2 rounded bg-black/30 border border-white/5">
+                  <strong>Cognitive Gap:</strong> ${esc(diagnosticFeedback.diagnosed_misconception)}
                 </div>
               ` : ''}
-              <div class="text-[10px] text-slate-400 border-t border-white/5 pt-1.5">
-                Updated Topic Mastery: <strong>${diagnosticFeedback.updated_topic_mastery}%</strong>
-              </div>
             </div>
           ` : ''}
 
-          <!-- Action Button: Submit OR Next Question -->
-          <div class="pt-3 flex justify-end">
-            ${!diagnosticFeedback ? `
-              <button id="diag-submit-answer-btn" class="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 disabled:hover:bg-emerald-600 text-white font-bold px-6 py-2.5 rounded-lg text-xs transition-colors cursor-pointer" ${!diagnosticAnswers[q.id] ? 'disabled' : ''}>
-                Submit Answer
-              </button>
-            ` : `
-              <button id="diag-next-question-btn" class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-bold px-6 py-2.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-2">
-                <span>Continue Assessment</span>
-                <i class="fas fa-arrow-right"></i>
-              </button>
-            `}
+          <!-- Action Buttons -->
+          <div class="flex justify-between items-center pt-4 border-t border-white/[0.08]">
+            <button id="diag-abort-btn" class="text-xs text-slate-400 hover:text-white cursor-pointer transition-colors">
+              Exit Assessment
+            </button>
+            <button id="diag-submit-btn" class="eduguard-btn-primary px-7 py-2.5 text-xs font-bold flex items-center gap-2" ${!diagnosticAnswers[q?.question_id] ? 'disabled opacity-50 pointer-events-none' : ''}>
+              <span>${diagnosticFeedback ? 'Next Question' : 'Verify Answer'}</span>
+              <i class="fas fa-arrow-right text-xs"></i>
+            </button>
           </div>
         </div>
       </div>
     `;
 
-    // Radio option select handler
-    container.querySelectorAll('.diag-option-btn').forEach(btn => {
+    // Handlers
+    container.querySelectorAll('.diag-opt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         if (diagnosticFeedback) return;
-        diagnosticAnswers[q.id] = btn.getAttribute('data-opt-id');
+        const optId = btn.getAttribute('data-option-id');
+        diagnosticAnswers[q.question_id] = optId;
         renderDiagnosticTab(container);
       });
     });
 
-    // Submit Answer Handler
-    container.querySelector('#diag-submit-answer-btn')?.addEventListener('click', async () => {
-      const selectedOptId = diagnosticAnswers[q.id];
-      if (!selectedOptId) return;
-
-      diagnosticFeedback = await client.submitAttempt(
-        q.id,
-        selectedOptId,
-        activeDiagnosticSession.diagnostic_id,
-        15000,
-        activeDiagnosticSession.selected_topic_id
-      );
-
-      // Refresh masteries list in background
-      client.getMasteryOverview().then(m => { liveMasteries = m; });
-      renderDiagnosticTab(container);
+    container.querySelector('#diag-abort-btn')?.addEventListener('click', () => {
+      activeDiagnosticSession = null;
+      render();
     });
 
-    // Next Question Handler
-    container.querySelector('#diag-next-question-btn')?.addEventListener('click', async () => {
-      activeDiagnosticSession.completed_count++;
-      diagnosticFeedback = null;
-
-      // Check if diagnostic session has further questions
-      if (activeDiagnosticSession.questions && activeDiagnosticSession.completed_count < activeDiagnosticSession.questions.length) {
-        currentDiagnosticQuestion = activeDiagnosticSession.questions[activeDiagnosticSession.completed_count];
-        renderDiagnosticTab(container);
-      } else {
-        // Conclude diagnostic session
-        const profile = await client.completeDiagnostic(activeDiagnosticSession.diagnostic_id);
-        diagnosticCompletedProfile = {
-          score: profile.overall_score || '72%',
-          gapsCount: profile.knowledge_gaps ? profile.knowledge_gaps.length : 1,
-          recommended: profile.recommended_focus || 'Practise Factorisation prerequisite concepts.'
-        };
-        renderDiagnosticTab(container);
+    container.querySelector('#diag-submit-btn')?.addEventListener('click', async () => {
+      if (diagnosticFeedback) {
+        // Move to next question or complete
+        diagnosticFeedback = null;
+        if (activeDiagnosticSession.current_index >= (activeDiagnosticSession.total_questions || 5) - 1) {
+          diagnosticCompletedProfile = await client.getDiagnosticResults(activeDiagnosticSession.session_id);
+          renderDiagnosticTab(container);
+        } else {
+          activeDiagnosticSession.current_index = (activeDiagnosticSession.current_index || 0) + 1;
+          renderDiagnosticTab(container);
+        }
+        return;
       }
+
+      const selectedOptId = diagnosticAnswers[q.question_id];
+      if (!selectedOptId) return;
+
+      const opt = (q.options || []).find(o => o.option_id === selectedOptId);
+      diagnosticFeedback = {
+        is_correct: opt ? !!opt.is_correct : false,
+        explanation: opt?.explanation || 'Evaluation completed.',
+        diagnosed_misconception: opt?.misconception || null
+      };
+
+      await client.submitDiagnosticAnswer({
+        session_id: activeDiagnosticSession.session_id,
+        question_id: q.question_id,
+        selected_option_id: selectedOptId
+      });
+
+      renderDiagnosticTab(container);
     });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 4. "WHY AM I STRUGGLING?" ROOT-CAUSE ANALYZER (matches why_struggling_screen.dart)
+  // 4. "WHY AM I STRUGGLING?" ROOT CAUSE ANALYZER
   // ═══════════════════════════════════════════════════════════════════════════════
-  async function loadWhyStrugglingData(topicId = selectedTopicId) {
+  async function loadStruggleDiagnosis(topicId = selectedTopicId) {
     whyIsLoading = true;
     render();
     try {
-      whyDiagnosis = await client.getWhyStruggling(topicId);
+      whyDiagnosis = await client.diagnoseStruggle(topicId);
     } catch (_) {}
     whyIsLoading = false;
     render();
@@ -979,230 +986,264 @@ export function createEduGuardApp(student = null) {
 
   function renderWhyStrugglingTab(container) {
     if (!whyDiagnosis && !whyIsLoading) {
-      loadWhyStrugglingData(selectedTopicId);
+      loadStruggleDiagnosis(selectedTopicId);
+      return;
+    }
+
+    if (whyIsLoading) {
+      container.innerHTML = `
+        <div class="max-w-xl mx-auto text-center py-24 space-y-4">
+          <i class="fas fa-spinner fa-spin text-3xl text-emerald-400"></i>
+          <h3 class="text-base font-bold text-white">Analyzing Prerequisite DAG & Student Response Clusters...</h3>
+          <p class="text-xs text-slate-400">Synthesizing difficulty cliff thresholds and cognitive misconceptions.</p>
+        </div>
+      `;
       return;
     }
 
     const diag = whyDiagnosis || {
       topic_name: 'Quadratic Equations',
-      topic_mastery: 51,
       primary_cause: 'prerequisite_gap',
-      prerequisite_gaps: ['factorisation'],
-      recommended_action: 'Practise Factorisation before retesting Quadratic Equations.'
+      human_explanation: 'Factorisation of Binomial Expressions is at 43% mastery. Without strong factoring fluency, quadratic equation roots cannot be verified.',
+      prerequisite_gaps: [
+        { topic_name: 'Factorisation', mastery: 43, required: 70, status: 'GAP' },
+        { topic_name: 'Algebraic Manipulation', mastery: 78, required: 70, status: 'SATISFIED' }
+      ],
+      difficulty_accuracies: { basic: 70, medium: 50, hard: 30, application: 20 },
+      prescribed_remediation: [
+        'Review binomial factor pairing rules (sum-product method)',
+        'Complete 5 targeted practice drills on monic quadratic factoring',
+        'Verify roots using substitution back into original polynomial'
+      ]
     };
 
     container.innerHTML = `
-      <div class="max-w-4xl mx-auto space-y-6">
-        <!-- Header -->
-        <div class="flex items-center justify-between pb-3 border-b border-white/10">
-          <div class="flex items-center gap-3">
-            <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg">
-              <i class="fas fa-stethoscope"></i>
-            </div>
-            <div>
-              <h1 class="text-xl font-bold text-white">Why am I struggling with ${esc(diag.topic_name)}?</h1>
-              <p class="text-xs text-slate-400">Deterministic learning analytics & prerequisite graph analysis</p>
-            </div>
+      <div class="max-w-5xl mx-auto space-y-6">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
+          <div>
+            <h1 class="text-2xl font-bold text-white tracking-tight">"Why Am I Struggling?" Root Cause Analyzer</h1>
+            <p class="text-xs text-slate-400 mt-1">Deep cognitive diagnosis mapping topic friction back to foundational prerequisite deficiencies.</p>
           </div>
-
-          <!-- Topic Selector -->
-          <select id="why-topic-picker" class="bg-[#101b38] text-xs text-slate-200 border border-white/15 rounded-lg px-3 py-1.5 cursor-pointer outline-none">
-            ${LOCAL_TOPICS.map(t => `
-              <option value="${t.topic_id}" ${t.topic_id === selectedTopicId ? 'selected' : ''}>${esc(t.topic_name)}</option>
-            `).join('')}
-          </select>
+          <div class="flex items-center gap-2">
+            <label class="text-xs text-slate-400 font-medium">Topic:</label>
+            <select id="why-topic-selector" class="bg-[#151922] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none cursor-pointer">
+              <option value="quadratic_equations" ${selectedTopicId === 'quadratic_equations' ? 'selected' : ''}>Quadratic Equations</option>
+              <option value="cell_physiology" ${selectedTopicId === 'cell_physiology' ? 'selected' : ''}>Cell Physiology</option>
+              <option value="chemical_bonding" ${selectedTopicId === 'chemical_bonding' ? 'selected' : ''}>Chemical Bonding</option>
+              <option value="kinematics" ${selectedTopicId === 'kinematics' ? 'selected' : ''}>Kinematics</option>
+            </select>
+          </div>
         </div>
 
-        ${whyIsLoading ? `
-          <div class="py-16 text-center text-xs text-slate-400 space-y-2">
-            <i class="fas fa-spinner fa-spin text-2xl text-emerald-400"></i>
-            <div>Inspecting prerequisite graphs and historical student attempts...</div>
+        <!-- Primary Obstacle Diagnosis Banner -->
+        <div class="eduguard-card p-6 bg-gradient-to-r from-rose-950/30 via-[#151922] to-[#151922] border-rose-500/30">
+          <div class="flex items-start gap-4">
+            <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl shrink-0 border border-rose-500/30">
+              <i class="fas fa-microscope"></i>
+            </div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-2">
+                <span class="text-[10px] font-extrabold uppercase font-mono px-2.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  Primary Root Cause Detected
+                </span>
+                <span class="text-xs font-bold text-white">${esc(diag.primary_cause.replace(/_/g, ' ').toUpperCase())}</span>
+              </div>
+              <p class="text-sm text-slate-200 leading-relaxed font-medium">${esc(diag.human_explanation)}</p>
+            </div>
           </div>
-        ` : `
-          <!-- Primary Root Cause Identified Card -->
-          <div class="bg-[#101b38] border border-amber-500/30 rounded-2xl p-6 space-y-3">
-            <span class="text-[10px] font-bold tracking-wider text-amber-400 uppercase">Primary Root Cause Identified</span>
-            <h3 class="text-lg font-bold text-white">
-              ${diag.primary_cause === 'prerequisite_gap' ? `Prerequisite Knowledge Gap: ${(diag.prerequisite_gaps && diag.prerequisite_gaps[0] ? diag.prerequisite_gaps[0].replace(/_/g, ' ') : 'Foundations')}` : 'Systematic Misconception Pattern'}
+        </div>
+
+        <!-- 2-Column Diagnostic Drilldown -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          
+          <!-- Prerequisite Dependency Audit -->
+          <div class="eduguard-card p-5 space-y-4">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="fas fa-sitemap text-emerald-400"></i> Prerequisite Dependency Audit
             </h3>
-            <p class="text-xs text-slate-300 leading-relaxed">
-              Your historical performance log indicates that difficulty with <strong>${esc(diag.topic_name)}</strong> (current mastery: ${diag.topic_mastery || 51}%) is rooted in an unmastered prerequisite concept. When solving multi-step problems, errors occur in the foundational algebra rather than the final concept logic.
-            </p>
-          </div>
-
-          <!-- Prerequisite Dependency Chain Visualization -->
-          <div class="bg-[#101b38] border border-white/10 rounded-2xl p-6 space-y-4">
-            <h3 class="text-sm font-bold text-white">Prerequisite Dependency Chain</h3>
-            <div class="flex flex-col sm:flex-row sm:items-center gap-3">
-              <div class="flex-1 bg-white/5 p-3 rounded-xl border border-white/10 text-center">
-                <div class="text-xs font-bold text-white">Algebraic Manipulation</div>
-                <div class="text-[11px] text-emerald-400 font-mono mt-0.5">78% Mastery (Solid)</div>
-              </div>
-              <div class="text-slate-500 text-center sm:text-left"><i class="fas fa-arrow-right hidden sm:inline"></i><i class="fas fa-arrow-down sm:hidden"></i></div>
-              <div class="flex-1 bg-amber-500/10 p-3 rounded-xl border border-amber-500/40 text-center">
-                <div class="text-xs font-bold text-amber-300">Factorisation</div>
-                <div class="text-[11px] text-amber-400 font-mono mt-0.5">43% Mastery (Weak Link)</div>
-              </div>
-              <div class="text-slate-500 text-center sm:text-left"><i class="fas fa-arrow-right hidden sm:inline"></i><i class="fas fa-arrow-down sm:hidden"></i></div>
-              <div class="flex-1 bg-white/5 p-3 rounded-xl border border-white/10 text-center">
-                <div class="text-xs font-bold text-slate-300">${esc(diag.topic_name)}</div>
-                <div class="text-[11px] text-slate-400 font-mono mt-0.5">${diag.topic_mastery || 51}% Mastery (Current)</div>
-              </div>
+            <div class="space-y-3">
+              ${(diag.prerequisite_gaps || []).map(p => `
+                <div class="p-3.5 rounded-xl bg-[#10141d] border ${p.status === 'GAP' ? 'border-rose-500/30' : 'border-emerald-500/30'} flex items-center justify-between">
+                  <div>
+                    <div class="text-xs font-bold text-white">${esc(p.topic_name)}</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">Required: ${p.required}% &bull; Current: <strong class="${p.status === 'GAP' ? 'text-rose-400' : 'text-emerald-400'}">${p.mastery}%</strong></div>
+                  </div>
+                  <span class="text-[10px] font-extrabold font-mono px-2 py-0.5 rounded ${p.status === 'GAP' ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}">
+                    ${p.status === 'GAP' ? 'FOUNDATIONAL GAP' : 'SATISFIED'}
+                  </span>
+                </div>
+              `).join('')}
             </div>
           </div>
 
-          <!-- Recommended Adaptive Action -->
-          <div class="bg-gradient-to-r from-emerald-950/60 to-[#101b38] border border-emerald-500/30 rounded-2xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div class="space-y-1">
-              <div class="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                <i class="fas fa-bullseye"></i> Recommended Adaptive Action
-              </div>
-              <p class="text-xs text-slate-300 max-w-xl">${esc(diag.recommended_action)}</p>
+          <!-- Difficulty Cliff Breakdown -->
+          <div class="eduguard-card p-5 space-y-4">
+            <h3 class="text-sm font-bold text-white flex items-center gap-2">
+              <i class="fas fa-chart-line text-cyan-400"></i> Difficulty Cliff Breakdown
+            </h3>
+            <div class="space-y-3">
+              ${Object.entries(diag.difficulty_accuracies || { basic: 70, medium: 50, hard: 30, application: 20 }).map(([tier, acc]) => `
+                <div class="space-y-1">
+                  <div class="flex justify-between items-center text-xs">
+                    <span class="text-slate-300 capitalize font-medium">${tier} Tier</span>
+                    <span class="font-mono font-bold ${acc >= 60 ? 'text-emerald-400' : acc >= 40 ? 'text-amber-400' : 'text-rose-400'}">${acc}% accuracy</span>
+                  </div>
+                  <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden border border-white/5">
+                    <div class="h-full rounded-full ${acc >= 60 ? 'bg-emerald-500' : acc >= 40 ? 'bg-amber-500' : 'bg-rose-500'}" style="width: ${acc}%;"></div>
+                  </div>
+                </div>
+              `).join('')}
             </div>
-            <button id="why-launch-remedy-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-lg text-xs transition-colors shrink-0 cursor-pointer shadow-md">
-              Start Targeted Prerequisite Practice
-            </button>
           </div>
-        `}
+        </div>
+
+        <!-- Prescribed Remediation Plan -->
+        <div class="eduguard-card p-6 space-y-4 border-emerald-500/30">
+          <h3 class="text-sm font-bold text-white flex items-center gap-2">
+            <i class="fas fa-route text-emerald-400"></i> Prescribed Cognitive Remediation Roadmap
+          </h3>
+          <div class="space-y-2.5">
+            ${(diag.prescribed_remediation || []).map((step, idx) => `
+              <div class="flex items-start gap-3 p-3 rounded-xl bg-[#10141d] border border-white/5">
+                <span class="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 text-xs font-bold flex items-center justify-center shrink-0">
+                  ${idx + 1}
+                </span>
+                <span class="text-xs text-slate-200 leading-relaxed font-medium">${esc(step)}</span>
+              </div>
+            `).join('')}
+          </div>
+          <button id="why-remedy-start-btn" class="eduguard-btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2">
+            <span>Begin Prescribed Recovery Session</span>
+            <i class="fas fa-play text-xs"></i>
+          </button>
+        </div>
       </div>
     `;
 
-    // Event listener for topic picker
-    container.querySelector('#why-topic-picker')?.addEventListener('change', (e) => {
+    container.querySelector('#why-topic-selector')?.addEventListener('change', (e) => {
       selectedTopicId = e.target.value;
-      const topicObj = LOCAL_TOPICS.find(t => t.topic_id === selectedTopicId);
-      selectedTopicName = topicObj ? topicObj.topic_name : selectedTopicId;
-      loadWhyStrugglingData(selectedTopicId);
+      loadStruggleDiagnosis(selectedTopicId);
     });
 
-    container.querySelector('#why-launch-remedy-btn')?.addEventListener('click', () => {
+    container.querySelector('#why-remedy-start-btn')?.addEventListener('click', () => {
       activeTab = 'diagnostic';
       startDiagnosticSession('factorisation', 'mathematics');
     });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 5. RETENTION CENTER TAB (matches retention_center_screen.dart)
+  // 5. RETENTION CENTER TAB (Ebbinghaus Spaced Repetition)
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderRetentionTab(container) {
-    const list = retentionData[activeRetentionTab] || [];
+    const items = retentionData[activeRetentionTab] || [];
 
     container.innerHTML = `
       <div class="max-w-5xl mx-auto space-y-6">
         <div>
-          <h1 class="text-xl font-bold text-white">Spaced Retention Center</h1>
-          <p class="text-xs text-slate-400 mt-0.5">Ebbinghaus forgetting curve tracking. Review decaying concepts to maintain long-term memory retrieval strength.</p>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Retention Center & Spaced Memory Engine</h1>
+          <p class="text-xs text-slate-400 mt-1">Grounded in the Ebbinghaus forgetting curve. Automatically schedules active retrieval before concepts decay.</p>
         </div>
 
-        <!-- 4 Retention Category Tabs -->
-        <div class="flex items-center gap-2 border-b border-white/10 pb-2">
-          <button class="ret-tab-btn px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${activeRetentionTab === 'due' ? 'bg-rose-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="due">
-            <i class="fas fa-triangle-exclamation"></i>
-            <span>Review Due (${(retentionData.due || []).length})</span>
+        <!-- Retention Filter Tabs -->
+        <div class="flex items-center gap-2 pb-2 border-b border-white/[0.08]">
+          <button class="retention-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeRetentionTab === 'due' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="due">
+            Due for Review (${retentionData.due?.length || 0})
           </button>
-          <button class="ret-tab-btn px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${activeRetentionTab === 'at_risk' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="at_risk">
-            <i class="fas fa-clock"></i>
-            <span>At Risk (${(retentionData.at_risk || []).length})</span>
+          <button class="retention-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeRetentionTab === 'at_risk' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="at_risk">
+            At Risk (<48h) (${retentionData.at_risk?.length || 0})
           </button>
-          <button class="ret-tab-btn px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${activeRetentionTab === 'stable' ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="stable">
-            <i class="fas fa-shield"></i>
-            <span>Stable (${(retentionData.stable || []).length})</span>
+          <button class="retention-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeRetentionTab === 'stable' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="stable">
+            Stable Memory (${retentionData.stable?.length || 0})
           </button>
-          <button class="ret-tab-btn px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 cursor-pointer transition-colors ${activeRetentionTab === 'fresh' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="fresh">
-            <i class="fas fa-sparkles"></i>
-            <span>Fresh (${(retentionData.fresh || []).length})</span>
+          <button class="retention-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${activeRetentionTab === 'fresh' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="fresh">
+            Recently Mastered (${retentionData.fresh?.length || 0})
           </button>
         </div>
 
-        <!-- Retention Cards List -->
-        <div class="space-y-3">
-          ${list.length > 0 ? list.map(item => `
-            <div class="bg-[#101b38] border border-white/10 rounded-xl p-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2">
-                  <span class="text-sm font-bold text-white">${esc(item.topic_name)}</span>
-                  <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-white/5 text-slate-300">Half-life: ${item.half_life_days} days</span>
-                </div>
-                <div class="text-xs text-slate-400">
-                  Recall Probability: <strong class="text-white">${Math.round((item.current_retention || 0.6) * 100)}%</strong> • Retrieval streak: ${item.retrieval_streak || 0}
-                </div>
+        <!-- Concept Cards Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          ${items.length > 0 ? items.map(item => `
+            <div class="eduguard-card p-5 space-y-3">
+              <div class="flex items-center justify-between text-xs">
+                <span class="font-bold text-white text-sm">${esc(item.topic_name)}</span>
+                <span class="text-[10px] font-mono px-2 py-0.5 rounded ${activeRetentionTab === 'due' ? 'bg-rose-500/20 text-rose-300' : 'bg-emerald-500/20 text-emerald-300'}">
+                  Half-life: ${item.half_life_days || 3} days
+                </span>
               </div>
-              <button class="ret-session-btn bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-2 rounded-lg text-xs font-bold transition-colors cursor-pointer shrink-0" data-topic-id="${item.topic_id}" data-topic-name="${esc(item.topic_name)}">
-                <i class="fas fa-rotate mr-1"></i> Start Retrieval Session
-              </button>
+              <p class="text-xs text-slate-300 leading-relaxed">${esc(item.reason || 'Memory stability declining. Active retrieval required.')}</p>
+              <div class="pt-2 flex justify-between items-center border-t border-white/[0.06]">
+                <span class="text-[11px] text-slate-500 font-mono">Retrievability: ${(item.retrievability || 0.65) * 100}%</span>
+                <button class="retention-review-btn eduguard-btn-primary px-4 py-1.5 text-xs font-semibold" data-topic-id="${item.topic_id}">
+                  Review Concept
+                </button>
+              </div>
             </div>
           `).join('') : `
-            <div class="text-center py-12 bg-[#101b38] border border-white/10 rounded-xl text-slate-400 text-xs">
-              <i class="fas fa-circle-check text-2xl text-emerald-400 mb-2"></i>
-              <div>No topics currently categorized in this retention status.</div>
+            <div class="col-span-2 eduguard-card p-8 text-center text-xs text-slate-400">
+              No concepts currently in this memory category. Great job keeping your KCSE revision active!
             </div>
           `}
         </div>
       </div>
     `;
 
-    container.querySelectorAll('.ret-tab-btn').forEach(btn => {
+    container.querySelectorAll('.retention-tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         activeRetentionTab = btn.getAttribute('data-tab');
         renderRetentionTab(container);
       });
     });
 
-    container.querySelectorAll('.ret-session-btn').forEach(btn => {
+    container.querySelectorAll('.retention-review-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        const tid = btn.getAttribute('data-topic-id');
-        startDiagnosticSession(tid, 'mathematics');
+        const topicId = btn.getAttribute('data-topic-id');
         activeTab = 'diagnostic';
+        startDiagnosticSession(topicId, 'mathematics');
       });
     });
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 6. KNOWLEDGE MAP TAB (matches knowledge_map_screen.dart)
+  // 6. KNOWLEDGE MAP TAB (Interactive DAG)
   // ═══════════════════════════════════════════════════════════════════════════════
-  function renderKnowledgeMapTab(container) {
-    const nodes = [
-      { id: 'arithmetic', name: 'Arithmetic Operations', subject: 'Mathematics', mastery: 92, x: 80, y: 150 },
-      { id: 'fractions', name: 'Fractions & Decimals', subject: 'Mathematics', mastery: 84, x: 250, y: 150 },
-      { id: 'algebraic_manipulation', name: 'Algebraic Manipulation', subject: 'Mathematics', mastery: 78, x: 420, y: 150 },
-      { id: 'factorisation', name: 'Factorisation', subject: 'Mathematics', mastery: 52, x: 590, y: 90 },
-      { id: 'quadratic_equations', name: 'Quadratic Equations', subject: 'Mathematics', mastery: 48, x: 760, y: 90 },
-      { id: 'vectors', name: 'Vectors & Components', subject: 'Physics', mastery: 70, x: 590, y: 230 },
-      { id: 'kinematics', name: 'Linear Kinematics', subject: 'Physics', mastery: 45, x: 760, y: 230 }
+  async function renderKnowledgeMapTab(container) {
+    const graph = await client.getKnowledgeGraph('mathematics');
+    const nodes = graph.nodes || [
+      { id: 'arithmetic', name: 'Arithmetic & Number Sense', x: 80, y: 140, mastery: 95, subject: 'Mathematics' },
+      { id: 'fractions', name: 'Fractions & Ratios', x: 260, y: 70, mastery: 88, subject: 'Mathematics' },
+      { id: 'algebraic_manipulation', name: 'Algebraic Expressions', x: 260, y: 210, mastery: 82, subject: 'Mathematics' },
+      { id: 'linear_equations', name: 'Linear Equations', x: 440, y: 70, mastery: 74, subject: 'Mathematics' },
+      { id: 'factorisation', name: 'Factorisation of Binomials', x: 440, y: 210, mastery: 52, subject: 'Mathematics' },
+      { id: 'quadratic_equations', name: 'Quadratic Equations', x: 640, y: 140, mastery: 48, subject: 'Mathematics' },
+      { id: 'polynomials', name: 'Polynomial Functions', x: 820, y: 140, mastery: 25, subject: 'Mathematics' }
     ];
 
-    const edges = [
+    const edges = graph.edges || [
       { from: 'arithmetic', to: 'fractions' },
-      { from: 'fractions', to: 'algebraic_manipulation' },
+      { from: 'arithmetic', to: 'algebraic_manipulation' },
+      { from: 'fractions', to: 'linear_equations' },
+      { from: 'algebraic_manipulation', to: 'linear_equations' },
       { from: 'algebraic_manipulation', to: 'factorisation' },
+      { from: 'linear_equations', to: 'quadratic_equations' },
       { from: 'factorisation', to: 'quadratic_equations' },
-      { from: 'algebraic_manipulation', to: 'vectors' },
-      { from: 'vectors', to: 'kinematics' }
+      { from: 'quadratic_equations', to: 'polynomials' }
     ];
 
-    const selNode = nodes.find(n => n.id === selectedTopicId) || nodes[4];
+    const selNode = nodes.find(n => n.id === selectedTopicId) || nodes[5];
 
     container.innerHTML = `
-      <div class="max-w-6xl mx-auto space-y-6">
-        <div class="flex items-center justify-between">
-          <div>
-            <h1 class="text-xl font-bold text-white">Interactive Knowledge Graph DAG</h1>
-            <p class="text-xs text-slate-400 mt-0.5">Directed Acyclic Graph displaying cross-subject prerequisite links and live mastery state.</p>
-          </div>
-          <div class="flex items-center gap-3 text-xs text-slate-300">
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-500"></span> Mastered (≥80%)</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-cyan-500"></span> Proficient (60-79%)</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-500"></span> Developing (40-59%)</span>
-            <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span> Critical (&lt;40%)</span>
-          </div>
+      <div class="max-w-5xl mx-auto space-y-6">
+        <div>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Curriculum Knowledge Map (Prerequisite DAG)</h1>
+          <p class="text-xs text-slate-400 mt-1">Interactive topological graph representation of authentic KCSE learning dependencies.</p>
         </div>
 
         <!-- SVG Graph Canvas -->
-        <div class="bg-[#070d1d] border border-white/10 rounded-2xl p-4 overflow-x-auto shadow-inner">
-          <svg viewBox="0 0 880 320" class="w-full min-w-[700px] h-64">
+        <div class="eduguard-card p-5 overflow-x-auto shadow-inner bg-[#0b0e17]">
+          <svg viewBox="0 0 920 300" class="w-full min-w-[760px] h-72">
             <defs>
               <marker id="arrow" viewBox="0 0 10 10" refX="22" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill="#334155" />
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#475569" />
               </marker>
             </defs>
 
@@ -1210,6 +1251,7 @@ export function createEduGuardApp(student = null) {
             ${edges.map(e => {
               const fromN = nodes.find(n => n.id === e.from);
               const toN = nodes.find(n => n.id === e.to);
+              if (!fromN || !toN) return '';
               return `<line x1="${fromN.x}" y1="${fromN.y}" x2="${toN.x}" y2="${toN.y}" stroke="#334155" stroke-width="2" marker-end="url(#arrow)" />`;
             }).join('')}
 
@@ -1219,8 +1261,8 @@ export function createEduGuardApp(student = null) {
               const fill = n.mastery >= 80 ? '#10b981' : n.mastery >= 60 ? '#06b6d4' : n.mastery >= 40 ? '#f59e0b' : '#ef4444';
               return `
                 <g class="graph-node-group cursor-pointer" data-node-id="${n.id}">
-                  <circle cx="${n.x}" cy="${n.y}" r="${isSelected ? 22 : 18}" fill="${fill}" fill-opacity="${isSelected ? 1 : 0.85}" stroke="${isSelected ? '#ffffff' : '#070d1d'}" stroke-width="${isSelected ? 3 : 2}" />
-                  <text x="${n.x}" y="${n.y + 35}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle">${esc(n.name.split(' ')[0])}</text>
+                  <circle cx="${n.x}" cy="${n.y}" r="${isSelected ? 22 : 18}" fill="${fill}" fill-opacity="${isSelected ? 1 : 0.85}" stroke="${isSelected ? '#ffffff' : '#0b0e17'}" stroke-width="${isSelected ? 3 : 2}" />
+                  <text x="${n.x}" y="${n.y + 36}" fill="#cbd5e1" font-size="11" font-weight="600" text-anchor="middle">${esc(n.name.split(' ')[0])}</text>
                   <text x="${n.x}" y="${n.y + 4}" fill="#000000" font-size="10" font-weight="800" text-anchor="middle">${n.mastery}%</text>
                 </g>
               `;
@@ -1229,21 +1271,21 @@ export function createEduGuardApp(student = null) {
         </div>
 
         <!-- Selected Node Details Drawer -->
-        <div class="bg-[#101b38] border border-white/10 rounded-2xl p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="eduguard-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4 border-emerald-500/30">
           <div class="space-y-1">
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2.5">
               <span class="text-base font-bold text-white">${esc(selNode.name)}</span>
               <span class="text-[10px] font-mono px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-bold">${selNode.subject}</span>
             </div>
             <p class="text-xs text-slate-300">
-              Current mastery level: <strong>${selNode.mastery}%</strong> • Prerequisite verification and transfer evaluation active.
+              Current mastery level: <strong class="text-emerald-400 font-mono">${selNode.mastery}%</strong> &bull; Prerequisite verification and transfer evaluation active.
             </p>
           </div>
-          <div class="flex items-center gap-2">
-            <button id="map-remedy-btn" class="bg-amber-600 hover:bg-amber-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors cursor-pointer">
+          <div class="flex items-center gap-2.5">
+            <button id="map-remedy-btn" class="eduguard-btn-secondary text-xs text-amber-300">
               Diagnose Root Causes
             </button>
-            <button id="map-diag-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-lg text-xs transition-colors cursor-pointer">
+            <button id="map-diag-btn" class="eduguard-btn-primary text-xs">
               Launch Diagnostic
             </button>
           </div>
@@ -1272,7 +1314,7 @@ export function createEduGuardApp(student = null) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 7. LEARNING TIMELINE TAB (matches learning_history_screen.dart)
+  // 7. LEARNING TIMELINE TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   async function renderTimelineTab(container) {
     const timeline = await client.getTimeline();
@@ -1280,20 +1322,20 @@ export function createEduGuardApp(student = null) {
     container.innerHTML = `
       <div class="max-w-4xl mx-auto space-y-6">
         <div>
-          <h1 class="text-xl font-bold text-white">Chronological Learning Timeline</h1>
-          <p class="text-xs text-slate-400 mt-0.5">Persistent audit log of assessments, mastery shifts, and diagnostic milestones.</p>
+          <h1 class="text-2xl font-bold text-white tracking-tight">Chronological Learning Timeline</h1>
+          <p class="text-xs text-slate-400 mt-1">Audit log of assessments, mastery shifts, and diagnostic milestones.</p>
         </div>
 
         <div class="relative border-l-2 border-white/10 ml-4 space-y-6 py-2">
           ${timeline.map(item => `
             <div class="relative pl-6">
-              <span class="absolute -left-2.5 top-1.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0b1329]"></span>
-              <div class="bg-[#101b38] border border-white/10 rounded-xl p-4 space-y-1">
+              <span class="absolute -left-2.5 top-1.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[#0d1017]"></span>
+              <div class="eduguard-card p-4 space-y-1">
                 <div class="flex items-center justify-between text-xs">
                   <span class="font-bold text-white">${esc(item.title)}</span>
-                  <span class="text-[10px] text-slate-400 font-mono">${new Date(item.timestamp).toLocaleTimeString()}</span>
+                  <span class="text-[10px] text-slate-400 font-mono">${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                 </div>
-                <p class="text-xs text-slate-300">${esc(item.details)}</p>
+                <p class="text-xs text-slate-300 leading-relaxed">${esc(item.details)}</p>
                 <div class="text-[10px] text-emerald-400 font-mono pt-1">Category: ${esc(item.category)}</div>
               </div>
             </div>
@@ -1304,7 +1346,7 @@ export function createEduGuardApp(student = null) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 8. AI SOCRATIC TUTOR TAB (matches ai_tutor_screen.dart)
+  // 8. AI SOCRATIC TUTOR TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderTutorTab(container) {
     const quickActions = [
@@ -1317,121 +1359,119 @@ export function createEduGuardApp(student = null) {
     ];
 
     container.innerHTML = `
-      <div class="flex flex-col h-full bg-[#0b1329] -m-6 p-6">
+      <div class="flex flex-col h-full -m-8 p-8 bg-[#0d1017]">
         <!-- Tutor Header -->
-        <div class="flex items-center justify-between pb-3 border-b border-white/10 shrink-0">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl bg-emerald-600/30 text-emerald-400 flex items-center justify-center text-lg">
+        <div class="flex items-center justify-between pb-4 border-b border-white/[0.08] shrink-0">
+          <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-lg shadow-inner">
               <i class="fas fa-robot"></i>
             </div>
             <div>
-              <h2 class="text-sm font-bold text-white">AI Socratic Tutor — ${esc(tutorTopicTitle)}</h2>
-              <p class="text-[11px] text-slate-400">Context-aware pedagogical guidance powered by FastAPI backend & Gemini AI</p>
+              <h2 class="text-base font-bold text-white">AI Socratic Academic Tutor — ${esc(tutorTopicTitle)}</h2>
+              <p class="text-xs text-slate-400">Context-aware pedagogical guidance powered by FastAPI & KCSE Curriculum Knowledge</p>
             </div>
           </div>
-          <span class="text-[11px] text-emerald-400 font-mono px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800">
-            Pedagogical Mode Active
+          <span class="text-[11px] text-emerald-300 font-mono px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-800">
+            Pedagogical Socratic Mode
           </span>
         </div>
 
         <!-- Quick Action Prompt Chips -->
-        <div class="flex items-center gap-1.5 overflow-x-auto py-2.5 shrink-0 border-b border-white/5">
-          <span class="text-[10px] text-slate-500 uppercase tracking-wider font-bold shrink-0">Actions:</span>
+        <div class="flex items-center gap-2 overflow-x-auto py-3 shrink-0 border-b border-white/[0.06]">
+          <span class="text-[10px] text-slate-500 uppercase tracking-wider font-extrabold shrink-0 font-mono">Quick Prompts:</span>
           ${quickActions.map(qa => `
-            <button class="tutor-quick-prompt-btn px-2.5 py-1 bg-white/4 hover:bg-white/10 text-slate-300 rounded-lg text-xs whitespace-nowrap transition-colors cursor-pointer border border-white/8" data-prompt="${esc(qa.prompt)}">
+            <button class="tutor-quick-prompt-btn px-3 py-1.5 bg-[#151922] hover:bg-white/10 text-slate-300 rounded-xl text-xs whitespace-nowrap transition-colors cursor-pointer border border-white/10" data-prompt="${esc(qa.prompt)}">
               ${qa.label}
             </button>
           `).join('')}
         </div>
 
         <!-- Messages Scroll Area -->
-        <div id="tutor-chat-messages" class="flex-1 overflow-y-auto py-4 space-y-4">
+        <div id="tutor-chat-messages" class="flex-1 overflow-y-auto py-5 space-y-4 pr-1">
           ${chatMessages.map(msg => `
-            <div class="flex items-start gap-3 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}">
+            <div class="flex items-start gap-3.5 ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}">
               ${msg.sender === 'ai' ? `
-                <div class="w-7 h-7 rounded-lg bg-emerald-600/30 text-emerald-400 flex items-center justify-center text-xs shrink-0 mt-0.5">
-                  <i class="fas fa-robot"></i>
+                <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 text-white flex items-center justify-center text-xs shrink-0 shadow-md">
+                  <i class="fas fa-brain"></i>
                 </div>
               ` : ''}
-              <div class="max-w-2xl p-3.5 rounded-2xl text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-emerald-600 text-white rounded-br-none shadow' : 'bg-[#101b38] border border-white/10 text-slate-200 rounded-bl-none'}">
+              <div class="max-w-xl rounded-2xl p-4 text-xs leading-relaxed ${msg.sender === 'user' ? 'bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md' : 'eduguard-card text-slate-200 border-white/[0.08]'}">
                 <div class="whitespace-pre-wrap">${esc(msg.text)}</div>
+                <div class="text-[10px] ${msg.sender === 'user' ? 'text-emerald-200' : 'text-slate-500'} font-mono mt-1 text-right">${msg.time}</div>
               </div>
             </div>
           `).join('')}
           ${tutorIsLoading ? `
-            <div class="flex items-center gap-2 text-xs text-emerald-400 py-2">
-              <i class="fas fa-spinner fa-spin"></i>
-              <span>EduGuard AI is formulating pedagogical guidance...</span>
+            <div class="flex items-center gap-3">
+              <div class="w-8 h-8 rounded-xl bg-emerald-600/30 text-emerald-400 flex items-center justify-center text-xs">
+                <i class="fas fa-spinner fa-spin"></i>
+              </div>
+              <div class="text-xs text-slate-400 italic">EduGuard Tutor is reflecting on syllabus prerequisites...</div>
             </div>
           ` : ''}
         </div>
 
-        <!-- Input Bar -->
-        <div class="pt-3 border-t border-white/10 shrink-0 flex gap-2">
-          <input id="tutor-input-box" type="text" placeholder="Ask a question about ${esc(tutorTopicTitle)}..." class="flex-1 bg-[#101b38] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500" />
-          <button id="tutor-send-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer flex items-center gap-1.5">
-            <span>Ask Tutor</span>
-            <i class="fas fa-paper-plane"></i>
-          </button>
+        <!-- Chat Input Bar -->
+        <div class="pt-3 border-t border-white/[0.08] shrink-0">
+          <form id="tutor-chat-form" class="flex items-center gap-2">
+            <input type="text" id="tutor-chat-input" placeholder="Ask a question or explain your reasoning step-by-step..."
+              autocomplete="off" class="flex-1 bg-[#151922] border border-white/10 rounded-xl px-4 py-3 text-xs text-white placeholder-slate-500 outline-none focus:border-emerald-500 transition-colors">
+            <button type="submit" class="eduguard-btn-primary px-5 py-3 text-xs font-bold flex items-center gap-2 shadow-md">
+              <span>Send</span>
+              <i class="fas fa-paper-plane text-xs"></i>
+            </button>
+          </form>
         </div>
       </div>
     `;
 
-    const chatArea = container.querySelector('#tutor-chat-messages');
-    if (chatArea) chatArea.scrollTop = chatArea.scrollHeight;
-
-    const sendMsg = async (text) => {
-      if (!text.trim() || tutorIsLoading) return;
-      chatMessages.push({ sender: 'user', text, time: 'Just now' });
-      tutorIsLoading = true;
-      renderTutorTab(container);
-
-      try {
-        const response = await client.askTutor(text);
-        chatMessages.push({ sender: 'ai', text: response, time: 'Just now' });
-      } catch (err) {
-        chatMessages.push({
-          sender: 'ai',
-          text: `Here is a structured explanation: Break the problem into its foundational components. For ${tutorTopicTitle}, verify your prerequisites first, expand any bracketed terms, and isolate unknowns using inverse operations.`,
-          time: 'Just now'
-        });
-      }
-      tutorIsLoading = false;
-      renderTutorTab(container);
-    };
-
-    container.querySelector('#tutor-send-btn')?.addEventListener('click', () => {
-      const box = container.querySelector('#tutor-input-box');
-      if (box) {
-        sendMsg(box.value);
-        box.value = '';
-      }
-    });
-
-    container.querySelector('#tutor-input-box')?.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        sendMsg(e.target.value);
-        e.target.value = '';
-      }
-    });
+    // Tutor event listeners
+    const chatContainer = container.querySelector('#tutor-chat-messages');
+    if (chatContainer) chatContainer.scrollTop = chatContainer.scrollHeight;
 
     container.querySelectorAll('.tutor-quick-prompt-btn').forEach(btn => {
       btn.addEventListener('click', () => {
-        sendMsg(btn.getAttribute('data-prompt'));
+        const prompt = btn.getAttribute('data-prompt');
+        sendTutorMessage(prompt);
       });
     });
+
+    container.querySelector('#tutor-chat-form')?.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const input = container.querySelector('#tutor-chat-input');
+      const val = input ? input.value.trim() : '';
+      if (val) {
+        input.value = '';
+        sendTutorMessage(val);
+      }
+    });
+
+    async function sendTutorMessage(text) {
+      chatMessages.push({ sender: 'user', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      tutorIsLoading = true;
+      renderTutorTab(container);
+
+      const aiReply = await client.askTutor(text, {
+        topicId: tutorTopicId,
+        subjectId: selectedSubjectId
+      });
+
+      chatMessages.push({ sender: 'ai', text: aiReply.text || aiReply.reply || "Let's review the core definition carefully.", time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+      tutorIsLoading = false;
+      renderTutorTab(container);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 9. LECTURE NOTES & FLASHCARD COACH TAB (matches notes_analyzer_screen.dart)
+  // 9. LECTURE NOTES & FLASHCARD COACH TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderNotesTab(container) {
     if (notesIsLoading) {
       container.innerHTML = `
-        <div class="py-20 text-center text-xs text-slate-400 space-y-3">
-          <i class="fas fa-spinner fa-spin text-3xl text-cyan-400"></i>
-          <h2 class="text-sm font-bold text-white">Analyzing Study Notes with EduGuard AI...</h2>
-          <p class="text-[11px] text-slate-500">Extracting key concepts, synthesizing interactive flashcards, and generating practice questions.</p>
+        <div class="max-w-xl mx-auto text-center py-24 space-y-4">
+          <i class="fas fa-wand-magic-sparkles fa-spin text-3xl text-cyan-400"></i>
+          <h3 class="text-base font-bold text-white">Extracting Core Pedagogical Concepts & Generating Flashcards...</h3>
+          <p class="text-xs text-slate-400">Synthesizing KCSE definitions, formulas, and test questions.</p>
         </div>
       `;
       return;
@@ -1439,18 +1479,22 @@ export function createEduGuardApp(student = null) {
 
     if (!analyzedNotesResult) {
       container.innerHTML = `
-        <div class="max-w-3xl mx-auto space-y-5">
+        <div class="max-w-3xl mx-auto space-y-6">
           <div>
-            <h1 class="text-xl font-bold text-white">AI Lecture Notes & Flashcard Coach</h1>
-            <p class="text-xs text-slate-400 mt-0.5">Paste revision notes or textbook excerpts to automatically generate structured flashcards, concept summaries, and self-test questions.</p>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Lecture Notes & Smart Flashcard Coach</h1>
+            <p class="text-xs text-slate-400 mt-1">Paste your classroom notes or textbook summaries. EduGuard extracts key concepts, generates interactive flashcards, and checks for prerequisite dependencies.</p>
           </div>
 
-          <div class="bg-[#101b38] border border-white/10 rounded-2xl p-5 space-y-4">
-            <textarea id="notes-raw-textarea" rows="8" class="w-full bg-[#070d1d] border border-white/10 rounded-xl p-4 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono leading-relaxed" placeholder="Paste your study notes here...">${esc(notesInputText)}</textarea>
+          <div class="eduguard-card p-6 space-y-4">
+            <label class="text-xs font-bold text-slate-300 flex items-center justify-between">
+              <span>Your Classroom Study Notes:</span>
+              <span class="text-slate-500 text-[11px] font-mono">Form 2 Mathematics Example</span>
+            </label>
+            <textarea id="notes-raw-textarea" rows="8" class="w-full bg-[#10141d] border border-white/10 rounded-xl p-4 text-xs text-slate-200 outline-none focus:border-cyan-500 font-mono leading-relaxed resize-none">${notesInputText}</textarea>
             
-            <div class="flex justify-between items-center">
+            <div class="flex justify-between items-center pt-2">
               <span class="text-[11px] text-slate-500 font-mono">Minimum 10 characters required</span>
-              <button id="notes-analyze-btn" class="bg-cyan-600 hover:bg-cyan-500 text-white font-bold px-6 py-2.5 rounded-lg text-xs transition-colors cursor-pointer flex items-center gap-2 shadow-md">
+              <button id="notes-analyze-btn" class="eduguard-btn-primary px-6 py-2.5 text-xs font-bold flex items-center gap-2 shadow-lg">
                 <i class="fas fa-wand-magic-sparkles"></i>
                 <span>Analyze Notes & Generate Flashcards</span>
               </button>
@@ -1483,69 +1527,69 @@ export function createEduGuardApp(student = null) {
     const activeCard = cards[currentFlashcardIndex] || { front: 'No card', back: 'No back' };
 
     container.innerHTML = `
-      <div class="max-w-4xl mx-auto space-y-5">
-        <div class="flex items-center justify-between pb-3 border-b border-white/10">
+      <div class="max-w-4xl mx-auto space-y-6">
+        <div class="flex items-center justify-between pb-3 border-b border-white/[0.08]">
           <div>
-            <h1 class="text-xl font-bold text-white">${esc(r.topic_name || 'Study Notes Analysis')}</h1>
-            <p class="text-xs text-slate-400">${esc(r.summary)}</p>
+            <h1 class="text-2xl font-bold text-white tracking-tight">${esc(r.topic_name || 'Study Notes Analysis')}</h1>
+            <p class="text-xs text-slate-400 mt-1">${esc(r.summary)}</p>
           </div>
-          <button id="notes-reset-btn" class="bg-white/5 hover:bg-white/10 text-slate-300 px-3 py-1.5 rounded-lg text-xs border border-white/10 transition-colors cursor-pointer">
+          <button id="notes-reset-btn" class="eduguard-btn-secondary text-xs">
             <i class="fas fa-rotate-left mr-1"></i> Analyze New Notes
           </button>
         </div>
 
         <!-- 4 Result Tabs: Concepts | Flashcards | Questions | Prerequisites -->
-        <div class="flex items-center gap-2 border-b border-white/10 pb-2">
-          <button class="notes-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${notesActiveTab === 'concepts' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="concepts">
+        <div class="flex items-center gap-2 border-b border-white/[0.08] pb-2">
+          <button class="notes-tab-btn px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${notesActiveTab === 'concepts' ? 'bg-cyan-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="concepts">
             Key Concepts (${(r.key_concepts || []).length})
           </button>
-          <button class="notes-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${notesActiveTab === 'flashcards' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="flashcards">
+          <button class="notes-tab-btn px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${notesActiveTab === 'flashcards' ? 'bg-cyan-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="flashcards">
             Interactive Flashcards (${cards.length})
           </button>
-          <button class="notes-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${notesActiveTab === 'questions' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="questions">
+          <button class="notes-tab-btn px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${notesActiveTab === 'questions' ? 'bg-cyan-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="questions">
             Practice Questions (${(r.practice_questions || []).length})
           </button>
-          <button class="notes-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${notesActiveTab === 'prereqs' ? 'bg-cyan-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="prereqs">
-            Detected Prerequisites
+          <button class="notes-tab-btn px-4 py-2 rounded-xl text-xs font-bold cursor-pointer transition-colors ${notesActiveTab === 'prereqs' ? 'bg-cyan-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="prereqs">
+            Prerequisites
           </button>
         </div>
 
         <!-- Tab Content View -->
         ${notesActiveTab === 'concepts' ? `
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             ${(r.key_concepts || []).map(c => `
-              <div class="bg-[#101b38] border border-white/10 rounded-xl p-4 space-y-1.5">
+              <div class="eduguard-card p-5 space-y-2">
                 <div class="flex items-center justify-between">
                   <span class="font-bold text-sm text-white">${esc(c.concept)}</span>
-                  <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded ${c.importance === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-cyan-500/20 text-cyan-300'}">${esc(c.importance)}</span>
+                  <span class="text-[10px] font-bold uppercase px-2 py-0.5 rounded font-mono ${c.importance === 'high' ? 'bg-rose-500/20 text-rose-300' : 'bg-cyan-500/20 text-cyan-300'}">${esc(c.importance)}</span>
                 </div>
                 <p class="text-xs text-slate-300 leading-relaxed">${esc(c.summary)}</p>
               </div>
             `).join('')}
           </div>
         ` : notesActiveTab === 'flashcards' ? `
-          <div class="max-w-xl mx-auto space-y-4 text-center">
-            <div id="flashcard-flip-box" class="min-h-[220px] bg-[#101b38] border-2 ${isFlashcardFlipped ? 'border-cyan-500 bg-cyan-950/20' : 'border-white/10'} rounded-2xl p-8 flex flex-col justify-between items-center cursor-pointer transition-all shadow-lg hover:border-cyan-400">
-              <span class="text-[10px] uppercase font-bold tracking-wider text-slate-500">
-                ${isFlashcardFlipped ? 'ANSWER (CLICK TO FLIP)' : 'QUESTION / PROMPT (CLICK TO REVEAL)'}
+          <div class="max-w-xl mx-auto space-y-5 text-center">
+            <div id="flashcard-flip-box" class="min-h-[240px] eduguard-card border-2 ${isFlashcardFlipped ? 'border-cyan-500 bg-cyan-950/20' : 'border-white/10'} p-8 flex flex-col justify-between items-center cursor-pointer transition-all shadow-xl hover:border-cyan-400">
+              <span class="text-[10px] uppercase font-bold tracking-wider text-slate-500 font-mono">
+                ${isFlashcardFlipped ? 'ANSWER (CLICK TO FLIP BACK)' : 'QUESTION / PROMPT (CLICK TO REVEAL)'}
               </span>
-              <div class="text-base font-semibold text-white my-auto px-4">
+              <div class="text-base font-bold text-white my-auto px-4 leading-relaxed">
                 ${esc(isFlashcardFlipped ? activeCard.back : activeCard.front)}
               </div>
-              <span class="text-[11px] text-cyan-400 font-mono">
+              <span class="text-[11px] text-cyan-400 font-mono font-bold">
                 Card ${currentFlashcardIndex + 1} of ${cards.length}
               </span>
             </div>
 
             <!-- Flashcard Carousel Controls -->
             <div class="flex items-center justify-center gap-3">
-              <button id="flashcard-prev-btn" class="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white flex items-center justify-center text-xs transition-colors cursor-pointer" ${currentFlashcardIndex === 0 ? 'disabled opacity-30' : ''}>
+              <button id="flashcard-prev-btn" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white flex items-center justify-center text-xs transition-colors cursor-pointer" ${currentFlashcardIndex === 0 ? 'disabled opacity-30' : ''}>
                 <i class="fas fa-arrow-left"></i>
               </button>
-              <button id="flashcard-flip-btn" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer">
+              <button id="flashcard-flip-btn" class="px-5 py-2.5 eduguard-btn-primary text-xs font-bold">
                 Flip Card
               </button>
-              <button id="flashcard-next-btn" class="w-9 h-9 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white flex items-center justify-center text-xs transition-colors cursor-pointer" ${currentFlashcardIndex >= cards.length - 1 ? 'disabled opacity-30' : ''}>
+              <button id="flashcard-next-btn" class="w-10 h-10 rounded-full bg-white/5 hover:bg-white/10 border border-white/10 text-white flex items-center justify-center text-xs transition-colors cursor-pointer" ${currentFlashcardIndex >= cards.length - 1 ? 'disabled opacity-30' : ''}>
                 <i class="fas fa-arrow-right"></i>
               </button>
             </div>
@@ -1553,28 +1597,28 @@ export function createEduGuardApp(student = null) {
         ` : notesActiveTab === 'questions' ? `
           <div class="space-y-4">
             ${(r.practice_questions || []).map((pq, qIdx) => `
-              <div class="bg-[#101b38] border border-white/10 rounded-xl p-5 space-y-3">
-                <div class="font-bold text-xs text-white">Q${qIdx + 1}: ${esc(pq.question)}</div>
-                <div class="space-y-1.5">
+              <div class="eduguard-card p-5 space-y-3">
+                <div class="font-bold text-sm text-white">Q${qIdx + 1}: ${esc(pq.question)}</div>
+                <div class="space-y-2">
                   ${(pq.options || []).map((optText, oIdx) => `
-                    <div class="p-2.5 rounded-lg border text-xs ${oIdx === pq.correct_index ? 'bg-emerald-950/40 border-emerald-800 text-emerald-200' : 'bg-white/4 border-white/5 text-slate-300'}">
+                    <div class="p-3 rounded-xl border text-xs font-medium ${oIdx === pq.correct_index ? 'bg-emerald-950/40 border-emerald-600 text-emerald-200 font-bold' : 'bg-white/5 border-white/5 text-slate-300'}">
                       ${String.fromCharCode(65 + oIdx)}. ${esc(optText)}
                     </div>
                   `).join('')}
                 </div>
-                <div class="text-[11px] text-slate-400 bg-white/4 p-2.5 rounded border border-white/5">
-                  <strong>Explanation:</strong> ${esc(pq.explanation)}
+                <div class="text-[11px] text-slate-300 bg-[#10141d] p-3 rounded-xl border border-white/5 leading-relaxed">
+                  <strong class="text-emerald-400">Explanation:</strong> ${esc(pq.explanation)}
                 </div>
               </div>
             `).join('')}
           </div>
         ` : `
           <!-- Prerequisites Tab -->
-          <div class="bg-[#101b38] border border-white/10 rounded-xl p-5 space-y-3">
-            <h3 class="font-bold text-xs text-white">Prerequisites Detected in These Notes</h3>
-            <ul class="space-y-1.5 text-xs text-slate-300">
+          <div class="eduguard-card p-6 space-y-4">
+            <h3 class="font-bold text-sm text-white">Prerequisites Detected in These Notes</h3>
+            <ul class="space-y-2 text-xs text-slate-300">
               ${(r.prerequisites_detected || ['Basic Algebra', 'Operations']).map(p => `
-                <li class="flex items-center gap-2"><i class="fas fa-check text-emerald-400"></i> ${esc(p)}</li>
+                <li class="flex items-center gap-2.5"><i class="fas fa-check-circle text-emerald-400"></i> ${esc(p)}</li>
               `).join('')}
             </ul>
           </div>
@@ -1623,7 +1667,7 @@ export function createEduGuardApp(student = null) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 10. TEACHER CLASS HUB TAB (matches teacher_class_screen.dart)
+  // 10. TEACHER CLASS HUB TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   async function loadTeacherData(subjectId = teacherSubject) {
     teacherIsLoading = true;
@@ -1646,64 +1690,58 @@ export function createEduGuardApp(student = null) {
 
     container.innerHTML = `
       <div class="max-w-6xl mx-auto space-y-6">
-        <div class="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-white/10">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-white/[0.08]">
           <div>
-            <h1 class="text-xl font-bold text-white">Teacher Analytics & Cohort Hub</h1>
-            <p class="text-xs text-slate-400 mt-0.5">Authoritative class-wide learning intelligence across all students, misconceptions, and topics.</p>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Teacher & Proctor Analytics Hub</h1>
+            <p class="text-xs text-slate-400 mt-1">Form 1 East Cohort Diagnostics, Common Misconception Clusters, & At-Risk Early Interventions.</p>
           </div>
           <div class="flex items-center gap-2">
-            <span class="text-xs text-slate-400">Subject:</span>
-            <select id="teacher-subject-picker" class="bg-[#101b38] text-xs text-white border border-white/10 rounded-lg px-3 py-1.5 cursor-pointer outline-none">
+            <label class="text-xs text-slate-400 font-medium">Subject Cohort:</label>
+            <select id="teacher-subject-picker" class="bg-[#151922] border border-white/10 rounded-xl px-3 py-1.5 text-xs text-white outline-none cursor-pointer">
               <option value="mathematics" ${teacherSubject === 'mathematics' ? 'selected' : ''}>Mathematics</option>
               <option value="biology" ${teacherSubject === 'biology' ? 'selected' : ''}>Biology</option>
-              <option value="physics" ${teacherSubject === 'physics' ? 'selected' : ''}>Physics</option>
               <option value="chemistry" ${teacherSubject === 'chemistry' ? 'selected' : ''}>Chemistry</option>
+              <option value="physics" ${teacherSubject === 'physics' ? 'selected' : ''}>Physics</option>
             </select>
           </div>
         </div>
 
-        <!-- 4 Educator View Tabs -->
-        <div class="flex items-center gap-2 border-b border-white/10 pb-2">
-          <button class="teacher-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${teacherActiveTab === 'heatmap' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="heatmap">
-            Class Heatmap
+        <!-- 4 Sub-Tabs -->
+        <div class="flex items-center gap-2 pb-2 border-b border-white/[0.08]">
+          <button class="teacher-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${teacherActiveTab === 'heatmap' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="heatmap">
+            Class Heatmap Matrix
           </button>
-          <button class="teacher-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${teacherActiveTab === 'misconceptions' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="misconceptions">
-            Misconception Clusters
+          <button class="teacher-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${teacherActiveTab === 'misconceptions' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="misconceptions">
+            Misconception Clusters (${teacherMisconceptions?.clusters?.length || 0})
           </button>
-          <button class="teacher-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${teacherActiveTab === 'atrisk' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="atrisk">
-            At-Risk Students
+          <button class="teacher-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${teacherActiveTab === 'atrisk' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="atrisk">
+            At-Risk Students (${teacherAtRisk?.students?.length || 0})
           </button>
-          <button class="teacher-tab-btn px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-colors ${teacherActiveTab === 'difficulty' ? 'bg-amber-600 text-white' : 'bg-white/5 text-slate-400 hover:text-white'}" data-tab="difficulty">
-            Topic Difficulty Profiles
+          <button class="teacher-tab-btn px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${teacherActiveTab === 'difficulty' ? 'bg-emerald-600 text-white shadow-md' : 'bg-[#151922] text-slate-400 hover:text-white border border-white/5'}" data-tab="difficulty">
+            Topic Difficulty Cliffs
           </button>
         </div>
 
-        ${teacherIsLoading ? `
-          <div class="py-16 text-center text-xs text-slate-400 space-y-2">
-            <i class="fas fa-spinner fa-spin text-2xl text-amber-400"></i>
-            <div>Aggregating cohort assessment records...</div>
-          </div>
-        ` : teacherActiveTab === 'heatmap' ? `
-          <!-- Class Heatmap Table -->
-          <div class="bg-[#101b38] border border-white/10 rounded-2xl p-5 overflow-x-auto space-y-4">
-            <div class="text-xs text-slate-300">${esc(teacherHeatmap ? teacherHeatmap.summary : '')}</div>
-            <table class="w-full text-xs text-left border-collapse">
+        <!-- Heatmap View -->
+        ${teacherActiveTab === 'heatmap' ? `
+          <div class="eduguard-card overflow-x-auto p-4">
+            <table class="w-full text-left text-xs border-collapse">
               <thead>
-                <tr class="border-b border-white/10 text-slate-400">
-                  <th class="py-2.5 px-3">Student Name</th>
-                  ${(teacherHeatmap && teacherHeatmap.topic_names ? teacherHeatmap.topic_names : []).map(tn => `
-                    <th class="py-2.5 px-3 text-center">${esc(tn)}</th>
+                <tr class="border-b border-white/[0.08] text-slate-400 text-[11px] font-mono">
+                  <th class="py-3 px-4 font-bold">Student Name</th>
+                  ${(teacherHeatmap && teacherHeatmap.topics ? teacherHeatmap.topics : ['Arithmetic', 'Fractions', 'Algebra', 'Factoring', 'Quadratics']).map(top => `
+                    <th class="py-3 px-4 font-bold text-center">${esc(top)}</th>
                   `).join('')}
                 </tr>
               </thead>
-              <tbody class="divide-y divide-white/5">
-                ${(teacherHeatmap && teacherHeatmap.student_names ? teacherHeatmap.student_names : []).map((sname, sIdx) => `
-                  <tr class="hover:bg-white/4">
-                    <td class="py-2.5 px-3 font-medium text-white">${esc(sname)}</td>
-                    ${(teacherHeatmap.topic_ids || []).map((tid, tIdx) => {
+              <tbody class="divide-y divide-white/[0.04]">
+                ${(teacherHeatmap && teacherHeatmap.student_names ? teacherHeatmap.student_names : ['Brian Ochieng', 'Alice Mwangi', 'Faith Muthoni', 'David Kariuki']).map((sname, sIdx) => `
+                  <tr class="hover:bg-white/[0.02] transition-colors">
+                    <td class="py-3 px-4 font-semibold text-white">${esc(sname)}</td>
+                    ${(teacherHeatmap && teacherHeatmap.topic_ids ? teacherHeatmap.topic_ids : [1, 2, 3, 4, 5]).map((tid, tIdx) => {
                       const score = Math.max(30, Math.min(96, Math.round(75 + ((sIdx * 7 + tIdx * 11) % 40) - 20)));
-                      const bg = score >= 80 ? 'bg-emerald-500/30 text-emerald-300' : score >= 60 ? 'bg-cyan-500/30 text-cyan-300' : score >= 40 ? 'bg-amber-500/30 text-amber-300' : 'bg-rose-500/30 text-rose-300';
-                      return `<td class="py-2.5 px-3 text-center"><span class="px-2 py-0.5 rounded font-mono font-bold ${bg}">${score}%</span></td>`;
+                      const bg = score >= 80 ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : score >= 60 ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/30' : score >= 40 ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30';
+                      return `<td class="py-3 px-4 text-center"><span class="px-2.5 py-1 rounded-md font-mono font-bold text-xs ${bg}">${score}%</span></td>`;
                     }).join('')}
                   </tr>
                 `).join('')}
@@ -1714,13 +1752,13 @@ export function createEduGuardApp(student = null) {
           <!-- Misconception Clusters -->
           <div class="space-y-4">
             ${(teacherMisconceptions && teacherMisconceptions.clusters ? teacherMisconceptions.clusters : []).map(cl => `
-              <div class="bg-[#101b38] border border-white/10 rounded-xl p-5 space-y-2">
+              <div class="eduguard-card p-5 space-y-2.5">
                 <div class="flex items-center justify-between text-xs">
                   <span class="font-bold text-white text-sm">${esc(cl.topic_name)}: ${esc(cl.error_tag.replace(/_/g, ' '))}</span>
-                  <span class="text-rose-400 font-bold bg-rose-500/10 px-2 py-0.5 rounded">${cl.prevalence_percent}% Prevalence</span>
+                  <span class="text-rose-400 font-bold bg-rose-500/15 border border-rose-500/30 px-2.5 py-0.5 rounded-md font-mono">${cl.prevalence_percent}% Prevalence</span>
                 </div>
-                <div class="text-xs text-slate-300">${esc(cl.recommended_intervention)}</div>
-                <div class="text-[11px] text-slate-500 font-mono">Affected: ${(cl.example_students || []).join(', ')}</div>
+                <div class="text-xs text-slate-300 leading-relaxed">${esc(cl.recommended_intervention)}</div>
+                <div class="text-[11px] text-slate-400 font-mono border-t border-white/[0.06] pt-2">Affected Cohort: ${(cl.example_students || []).join(', ')}</div>
               </div>
             `).join('')}
           </div>
@@ -1728,13 +1766,13 @@ export function createEduGuardApp(student = null) {
           <!-- At-Risk Students -->
           <div class="space-y-4">
             ${(teacherAtRisk && teacherAtRisk.students ? teacherAtRisk.students : []).map(st => `
-              <div class="bg-[#101b38] border border-rose-500/30 rounded-xl p-5 space-y-2">
+              <div class="eduguard-card p-5 space-y-2.5 border-rose-500/30">
                 <div class="flex items-center justify-between text-xs">
                   <span class="font-bold text-white text-sm">${esc(st.student_name)}</span>
-                  <span class="text-rose-300 font-bold bg-rose-500/20 px-2 py-0.5 rounded uppercase">${esc(st.risk_level)}</span>
+                  <span class="text-rose-300 font-bold bg-rose-500/20 border border-rose-500/30 px-2.5 py-0.5 rounded-md uppercase font-mono">${esc(st.risk_level)}</span>
                 </div>
-                <div class="text-xs text-slate-300">Weakest Concept: <strong>${esc(st.weakest_topic_name)}</strong> (Average: ${st.average_mastery}%)</div>
-                <div class="text-[11px] text-amber-300 bg-amber-500/10 p-2 rounded">${esc(st.recommended_action)}</div>
+                <div class="text-xs text-slate-300">Weakest Concept: <strong>${esc(st.weakest_topic_name)}</strong> (Average: <span class="text-rose-400 font-mono font-bold">${st.average_mastery}%</span>)</div>
+                <div class="text-[11px] text-amber-300 bg-amber-500/10 border border-amber-500/20 p-2.5 rounded-xl">${esc(st.recommended_action)}</div>
               </div>
             `).join('')}
           </div>
@@ -1742,16 +1780,16 @@ export function createEduGuardApp(student = null) {
           <!-- Topic Difficulty Profiles -->
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             ${(teacherDifficulty && teacherDifficulty.profiles ? teacherDifficulty.profiles : []).map(p => `
-              <div class="bg-[#101b38] border border-white/10 rounded-xl p-5 space-y-2">
+              <div class="eduguard-card p-5 space-y-3">
                 <div class="font-bold text-sm text-white">${esc(p.topic_name)}</div>
-                <div class="text-xs text-slate-300">Class Average: <strong class="text-white">${p.class_average_mastery}%</strong></div>
-                <div class="text-[11px] text-slate-400 space-y-1">
-                  <div>Basic Tier: ${p.basic_accuracy}%</div>
-                  <div>Medium Tier: ${p.medium_accuracy}%</div>
-                  <div>Hard Tier: ${p.hard_accuracy}%</div>
+                <div class="text-xs text-slate-300">Class Average: <strong class="text-emerald-400 font-mono font-bold">${p.class_average_mastery}%</strong></div>
+                <div class="text-[11px] text-slate-400 space-y-1.5 font-mono">
+                  <div>Basic Tier: <b class="text-white">${p.basic_accuracy}%</b></div>
+                  <div>Medium Tier: <b class="text-white">${p.medium_accuracy}%</b></div>
+                  <div>Hard Tier: <b class="text-white">${p.hard_accuracy}%</b></div>
                 </div>
                 ${p.difficulty_cliff_detected ? `
-                  <div class="text-[10px] text-rose-400 font-bold bg-rose-500/20 px-2 py-1 rounded">
+                  <div class="text-[10px] text-rose-300 font-bold bg-rose-500/20 border border-rose-500/30 px-2 py-1 rounded-md">
                     Difficulty Cliff Detected (Drop between basic & application)
                   </div>
                 ` : ''}
@@ -1776,95 +1814,100 @@ export function createEduGuardApp(student = null) {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 11. EXAM GUARD PROCTORING TAB (KSEF Integrity Shield)
+  // 11. EXAM GUARD PROCTORING TAB
   // ═══════════════════════════════════════════════════════════════════════════════
   function renderProctorTab(container) {
     const q = EXAM_QUESTIONS[examCurrentIndex];
 
     container.innerHTML = `
       <div class="max-w-4xl mx-auto space-y-6">
-        <div class="flex items-center justify-between pb-3 border-b border-white/10">
-          <div class="flex items-center gap-3">
-            <div class="w-9 h-9 rounded-xl ${proctorActive ? 'bg-rose-600' : 'bg-slate-700'} text-white flex items-center justify-center text-lg shadow-md">
+        <div class="flex items-center justify-between pb-3 border-b border-white/[0.08]">
+          <div class="flex items-center gap-3.5">
+            <div class="w-10 h-10 rounded-2xl ${proctorActive ? 'bg-rose-600 shadow-rose-600/30' : 'bg-slate-800'} text-white flex items-center justify-center text-lg shadow-md border border-white/10">
               <i class="fas fa-shield-halved"></i>
             </div>
             <div>
-              <h1 class="text-xl font-bold text-white">Exam Guard & Proctoring Shield</h1>
-              <p class="text-xs text-slate-400">Anti-Cheat Focus Loss Tracking, Clipboard Guard, & Integrity Scoring</p>
+              <h1 class="text-2xl font-bold text-white tracking-tight">Exam Guard & Proctoring Shield</h1>
+              <p class="text-xs text-slate-400 mt-1">Anti-Cheat Focus Loss Tracking, Clipboard Guard, & Integrity Scoring</p>
             </div>
           </div>
-          <div class="flex items-center gap-3">
-            <div class="text-right">
-              <div class="text-[10px] text-slate-400">Integrity Score</div>
-              <div class="text-sm font-mono font-black ${integrityScore >= 80 ? 'text-emerald-400' : integrityScore >= 50 ? 'text-amber-400' : 'text-rose-400'}">${integrityScore}%</div>
-            </div>
+          <div class="text-right">
+            <div class="text-[11px] text-slate-400 font-medium">Session Integrity Score</div>
+            <div class="text-base font-mono font-black ${integrityScore >= 80 ? 'text-emerald-400' : integrityScore >= 50 ? 'text-amber-400' : 'text-rose-400'}">${integrityScore}%</div>
           </div>
         </div>
 
         ${!proctorActive && !examCompleted ? `
-          <div class="bg-[#101b38] border border-white/10 rounded-2xl p-8 text-center space-y-4">
-            <h2 class="text-lg font-bold text-white">Official KSEF National Assessment Session</h2>
+          <div class="eduguard-card p-10 text-center space-y-5">
+            <div class="w-16 h-16 rounded-3xl bg-rose-500/15 text-rose-400 mx-auto flex items-center justify-center text-2xl border border-rose-500/30 shadow-lg">
+              <i class="fas fa-shield-halved"></i>
+            </div>
+            <h2 class="text-xl font-bold text-white">Official KSEF National Assessment Session</h2>
             <p class="text-xs text-slate-300 max-w-lg mx-auto leading-relaxed">
               When started, Exam Guard monitors window focus loss, desktop multi-tasking, clipboard events, and tab switches. Violations penalize your real-time Integrity Score.
             </p>
-            <button id="proctor-start-exam-btn" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-8 py-3 rounded-xl text-xs shadow-lg shadow-rose-600/30 transition-all cursor-pointer">
-              Begin Proctored Exam (10 Mins)
-            </button>
+            <div class="pt-2">
+              <button id="proctor-start-exam-btn" class="bg-rose-600 hover:bg-rose-500 text-white font-bold px-8 py-3 rounded-xl text-xs shadow-lg shadow-rose-600/30 transition-all cursor-pointer">
+                Begin Proctored Exam (10 Mins)
+              </button>
+            </div>
           </div>
         ` : examCompleted ? `
-          <div class="bg-[#101b38] border border-white/10 rounded-2xl p-8 text-center space-y-4">
-            <div class="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl mx-auto">
+          <div class="eduguard-card p-10 text-center space-y-5">
+            <div class="w-16 h-16 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl mx-auto border border-emerald-500/30">
               <i class="fas fa-award"></i>
             </div>
-            <h2 class="text-xl font-bold text-white">Exam Completed Successfully</h2>
-            <p class="text-xs text-slate-300">Final Proctored Integrity Score: <strong class="font-mono text-emerald-400">${integrityScore}%</strong></p>
-            <button id="proctor-reset-btn" class="bg-white/5 hover:bg-white/10 text-slate-300 px-6 py-2.5 rounded-lg text-xs border border-white/10 transition-colors cursor-pointer">
-              Reset Session
-            </button>
+            <h2 class="text-2xl font-bold text-white">Exam Completed Successfully</h2>
+            <p class="text-xs text-slate-300">Final Proctored Integrity Score: <strong class="font-mono text-emerald-400 text-base">${integrityScore}%</strong></p>
+            <div class="pt-2">
+              <button id="proctor-reset-btn" class="eduguard-btn-secondary px-6 py-2.5 text-xs">
+                Reset Session
+              </button>
+            </div>
           </div>
         ` : `
           <!-- Active Proctored Exam Runner -->
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
-            <div class="lg:col-span-8 bg-[#101b38] border border-white/10 rounded-2xl p-6 space-y-4">
-              <div class="flex items-center justify-between text-xs pb-2 border-b border-white/5">
-                <span class="text-emerald-400 font-bold">${esc(q.subject)}: ${esc(q.topic)}</span>
-                <span class="text-slate-400 font-mono">Q ${examCurrentIndex + 1} of ${EXAM_QUESTIONS.length}</span>
+            <div class="lg:col-span-8 eduguard-card p-6 space-y-5">
+              <div class="flex items-center justify-between text-xs pb-3 border-b border-white/[0.06]">
+                <span class="text-emerald-400 font-bold font-mono">${esc(q.subject)}: ${esc(q.topic)}</span>
+                <span class="text-slate-400 font-mono font-semibold">Q ${examCurrentIndex + 1} of ${EXAM_QUESTIONS.length}</span>
               </div>
-              <div class="text-sm font-semibold text-white leading-relaxed">${esc(q.question)}</div>
-              <div class="space-y-2 pt-2">
+              <div class="text-sm font-bold text-white leading-relaxed font-sans">${esc(q.question)}</div>
+              <div class="space-y-3 pt-2">
                 ${q.options.map((opt, i) => `
-                  <button class="exam-opt-btn w-full p-3 rounded-xl border text-left flex items-center gap-3 text-xs transition-all cursor-pointer ${examAnswers[q.id] === i ? 'bg-emerald-600/30 border-emerald-500 text-white' : 'bg-white/4 border-white/5 text-slate-300'}" data-index="${i}">
-                    <span class="w-5 h-5 rounded bg-white/10 flex items-center justify-center font-bold text-slate-300">${String.fromCharCode(65 + i)}</span>
-                    <span>${esc(opt)}</span>
+                  <button class="exam-opt-btn w-full p-3.5 rounded-xl border text-left flex items-center gap-3.5 text-xs transition-all cursor-pointer ${examAnswers[q.id] === i ? 'bg-emerald-500/15 border-emerald-500 text-white font-bold shadow-md' : 'bg-[#10141d] border-white/[0.08] text-slate-300 hover:border-white/20'}" data-index="${i}">
+                    <span class="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center font-bold ${examAnswers[q.id] === i ? 'bg-emerald-500 text-black' : 'text-slate-300'}">${String.fromCharCode(65 + i)}</span>
+                    <span class="text-sm leading-snug">${esc(opt)}</span>
                   </button>
                 `).join('')}
               </div>
-              <div class="flex justify-between pt-4 border-t border-white/5">
-                <button id="exam-prev-btn" class="px-4 py-2 bg-white/5 hover:bg-white/10 text-slate-300 rounded text-xs transition-colors cursor-pointer" ${examCurrentIndex === 0 ? 'disabled opacity-30' : ''}>
+              <div class="flex justify-between pt-4 border-t border-white/[0.06]">
+                <button id="exam-prev-btn" class="eduguard-btn-secondary px-4 py-2 text-xs" ${examCurrentIndex === 0 ? 'disabled opacity-30' : ''}>
                   Previous
                 </button>
-                <button id="exam-next-btn" class="px-5 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-xs font-bold transition-colors cursor-pointer">
+                <button id="exam-next-btn" class="eduguard-btn-primary px-5 py-2 text-xs font-bold">
                   ${examCurrentIndex >= EXAM_QUESTIONS.length - 1 ? 'Finish & Submit Exam' : 'Next Question'}
                 </button>
               </div>
             </div>
 
             <!-- Integrity Log Sidebar -->
-            <div class="lg:col-span-4 bg-[#070d1d] border border-white/10 rounded-2xl p-4 space-y-3">
-              <h3 class="text-xs font-bold text-white flex items-center gap-1.5">
+            <div class="lg:col-span-4 eduguard-card p-4 space-y-3 bg-[#0a0d14]">
+              <h3 class="text-xs font-bold text-white flex items-center gap-2 pb-2 border-b border-white/[0.06]">
                 <i class="fas fa-eye text-rose-400"></i> Live Proctor Audit Trail
               </h3>
-              <div class="space-y-2 max-h-64 overflow-y-auto pr-1">
+              <div class="space-y-2 max-h-72 overflow-y-auto pr-1">
                 ${integrityViolations.length > 0 ? integrityViolations.map(v => `
-                  <div class="bg-rose-950/40 border border-rose-900/50 p-2.5 rounded-lg text-[11px] text-rose-200">
+                  <div class="bg-rose-950/40 border border-rose-900/50 p-2.5 rounded-xl text-[11px] text-rose-200">
                     <div class="font-bold flex justify-between">
-                      <span>-${v.penalty}% Penalty</span>
+                      <span class="font-mono">-${v.penalty}% Penalty</span>
                       <span class="text-slate-500 font-mono">${v.time}</span>
                     </div>
                     <div class="text-slate-300 mt-0.5">${esc(v.reason)}</div>
                   </div>
                 `).join('') : `
-                  <div class="text-center py-8 text-xs text-slate-500">
+                  <div class="text-center py-12 text-xs text-slate-500">
                     No integrity violations recorded. System focus secure.
                   </div>
                 `}

@@ -328,8 +328,8 @@ function startDawamuOS() {
           title: 'EduGuard - AI Learning Intelligence & Exam Guard',
           icon: '<i class="fas fa-shield-halved text-emerald-400"></i>',
           content: () => createEduGuardApp(currentStudent),
-          width: 1060,
-          height: 680
+          width: 1140,
+          height: 720
         });
       }
     },
