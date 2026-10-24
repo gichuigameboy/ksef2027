@@ -647,6 +647,10 @@ video {
   -webkit-user-drag: none;
 }
 
+[draggable="true"], .file-item, .draggable {
+  -webkit-user-drag: element !important;
+}
+
 body, html, input, button, select, textarea {
   font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
   letter-spacing: -0.01em;

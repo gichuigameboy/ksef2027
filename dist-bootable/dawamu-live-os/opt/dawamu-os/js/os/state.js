@@ -261,6 +261,46 @@ export function inferVFSFileIconAndType(fileName = '', explicitType = '') {
   return { type: explicitType || 'doc', icon: 'fas fa-file-word text-blue-500' };
 }
 
+export function formatFileSize(bytes = 0) {
+  if (!bytes || isNaN(bytes)) return '1 KB';
+  if (bytes > 1024 * 1024) {
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  }
+  return Math.max(1, Math.round(bytes / 1024)) + ' KB';
+}
+
+export function readDroppedFile(file) {
+  return new Promise((resolve) => {
+    if (!file) {
+      resolve('');
+      return;
+    }
+    const isImage = file.type?.startsWith('image/') || /\.(png|jpe?g|gif|svg|webp|bmp|ico)$/i.test(file.name);
+    const isText = file.type?.startsWith('text/') || /\.(txt|md|csv|tsv|json|html|htm|xml|js|py|css|sql|sh|bat|log|env|yaml|yml)$/i.test(file.name);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      resolve(event.target.result || '');
+    };
+    reader.onerror = () => {
+      resolve('');
+    };
+
+    if (isImage) {
+      reader.readAsDataURL(file);
+    } else if (isText) {
+      reader.readAsText(file);
+    } else {
+      if (/\.(docx|xlsx|pdf|bin|dat|zip)$/i.test(file.name)) {
+        reader.readAsDataURL(file);
+      } else {
+        reader.readAsText(file);
+      }
+    }
+  });
+}
+
+
 function getDefaultStudentData(admNo = '1001', name = 'Student') {
   return {
     assignments: [

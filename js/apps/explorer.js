@@ -1,14 +1,18 @@
 /**
- * Dawamu OS - Windows-Style File Explorer ("This PC / My Files")
- * Complete Implementation:
+ * Dawamu OS - Windows-Style File Explorer ("This PC / My PC / My Files")
+ * Complete Implementation with Comprehensive Drag-and-Drop:
  * - Persistent per-student Virtual File System (VFS) via stateStore
  * - Navigable folders, custom subfolders, and drive hierarchies
- * - Drag-and-drop file/folder moving onto sidebar folders or grid folders
- * - "Move To..." modal, Cut, Copy, Paste, Rename, Delete, New Folder, New Document
+ * - Full Drag-and-Drop file import from host OS (Windows/Mac/Linux) into My PC
+ * - Drag-and-drop file/folder moving or copying (with Ctrl key) onto sidebar folders, grid folders, and breadcrumbs
+ * - Visual drop overlay & drop cues with animated indicators
+ * - Clipboard paste (Ctrl+V) for external files, screenshots, and text notes
+ * - "Import / Drop File" toolbar button with native file picker fallback
+ * - "Move To..." modal, Cut, Copy, Paste, Rename, Delete (with Del key), New Folder, New Document
  * - Working file-type associations with DawamuOS applications (Word, Sheets, Database, Docs, Offline Library)
  */
 
-import { stateStore } from '../os/state.js';
+import { stateStore, inferVFSFileIconAndType, readDroppedFile, formatFileSize } from '../os/state.js';
 import { dawamuDialogs } from '../os/dialogs.js';
 
 export function createExplorerApp(options = {}) {
@@ -21,6 +25,7 @@ export function createExplorerApp(options = {}) {
   let selectedFile = null;
   let clipboard = null; // { action: 'cut'|'copy', file, sourceFolder }
   let searchQuery = '';
+  let containerDragCounter = 0;
 
   const QUICK_ACCESS_KEYS = ['desktop', 'downloads', 'documents', 'books844', 'schoolwork', 'pictures'];
   const DRIVE_ITEMS = [
@@ -109,6 +114,86 @@ export function createExplorerApp(options = {}) {
     }
   }
 
+  // ── Drag & Drop Core Action: Import External Files into a VFS Folder ──
+  async function handleExternalFilesDrop(fileList, targetFolderKey = currentFolder) {
+    if (!fileList || fileList.length === 0) return;
+    const destMeta = stateStore.getFolderMeta(targetFolderKey);
+    const files = Array.from(fileList);
+    let successCount = 0;
+    let lastSaved = null;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        const content = await readDroppedFile(file);
+        const sizeFormatted = formatFileSize(file.size);
+        const { type } = inferVFSFileIconAndType(file.name, file.type);
+        const saved = stateStore.saveFileToVFS(targetFolderKey, {
+          name: file.name,
+          size: sizeFormatted,
+          type: type,
+          content: content,
+          date: 'Imported just now'
+        });
+        lastSaved = saved;
+        successCount++;
+
+        if (window.electronAPI && typeof window.electronAPI.saveDownloadFile === 'function' && targetFolderKey === 'downloads') {
+          window.electronAPI.saveDownloadFile({
+            filename: file.name,
+            content: typeof content === 'string' ? content : JSON.stringify(content)
+          }).catch(() => {});
+        }
+      } catch (err) {
+        console.error('Failed to import dropped file:', file.name, err);
+      }
+    }
+
+    if (successCount === 1) {
+      dawamuDialogs.toast(`Imported "${files[0].name}" into ${destMeta.name}`, 'success');
+      if (targetFolderKey === currentFolder && lastSaved) {
+        selectedFile = lastSaved;
+      }
+    } else if (successCount > 1) {
+      dawamuDialogs.toast(`Imported ${successCount} files into ${destMeta.name}`, 'success');
+    }
+
+    if (targetFolderKey === currentFolder) {
+      render();
+    }
+  }
+
+  // ── Drag & Drop Core Action: Move or Copy Internal VFS Items ──
+  function handleInternalDrop(draggedName, sourceFolder, targetFolderKey, isCopy = false) {
+    if (!draggedName || !targetFolderKey) return;
+    if (sourceFolder === targetFolderKey) {
+      return;
+    }
+    const destMeta = stateStore.getFolderMeta(targetFolderKey);
+    if (isCopy) {
+      const copied = stateStore.copyItemInVFS(sourceFolder, targetFolderKey, draggedName);
+      if (copied) {
+        dawamuDialogs.toast(`Copied "${draggedName}" to ${destMeta.name}`, 'success');
+        if (targetFolderKey === currentFolder) {
+          selectedFile = copied;
+          render();
+        }
+      }
+    } else {
+      const ok = stateStore.moveItemInVFS(sourceFolder, targetFolderKey, draggedName);
+      if (ok) {
+        dawamuDialogs.toast(`Moved "${draggedName}" to ${destMeta.name}`, 'success');
+        if (targetFolderKey === currentFolder) {
+          const files = stateStore.getFolderFiles(currentFolder);
+          selectedFile = files.find(f => f.name === draggedName) || null;
+        } else if (sourceFolder === currentFolder) {
+          selectedFile = null;
+        }
+        render();
+      }
+    }
+  }
+
   function render() {
     const vfs = stateStore.getVFS();
     const rawFiles = stateStore.getFolderFiles(currentFolder);
@@ -130,6 +215,10 @@ export function createExplorerApp(options = {}) {
           <button id="exp-new-folder-btn" class="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 text-amber-300 flex items-center gap-1.5 font-semibold text-xs transition-all active:scale-95 cursor-pointer">
             <i class="fas fa-folder-plus text-amber-400 text-[10px]"></i> New Folder
           </button>
+          <label id="exp-upload-label" class="px-3 py-1.5 rounded-xl bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/30 text-sky-300 flex items-center gap-1.5 font-semibold text-xs transition-all active:scale-95 cursor-pointer" title="Import / drop files from your computer into this folder">
+            <i class="fas fa-cloud-arrow-up text-sky-400 text-[10px]"></i> Import / Drop File
+            <input type="file" id="exp-file-input" multiple class="hidden">
+          </label>
           <div class="h-4 w-[1px] bg-white/10 mx-0.5"></div>
           <button id="exp-cut-btn" class="px-2.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 text-slate-300 hover:text-white flex items-center gap-1.5 text-xs transition-colors cursor-pointer ${!selectedFile ? 'opacity-40 pointer-events-none' : ''}">
             <i class="fas fa-cut text-[10px]"></i> Cut
@@ -162,7 +251,7 @@ export function createExplorerApp(options = {}) {
           <button id="exp-back-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer ${!canGoBack ? 'opacity-40 cursor-not-allowed' : ''}" title="Back">
             <i class="fas fa-arrow-left"></i>
           </button>
-          <button id="exp-up-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer" title="Up to Parent Folder">
+          <button id="exp-up-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer" title="Up to Parent Folder (Drag & drop target)">
             <i class="fas fa-arrow-up"></i>
           </button>
           <button id="exp-refresh-btn" class="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 border border-white/5 flex items-center justify-center text-xs text-slate-300 transition-all cursor-pointer" title="Refresh">
@@ -172,7 +261,7 @@ export function createExplorerApp(options = {}) {
 
         <div class="flex-1 bg-[#0f172a] border border-white/10 focus-within:border-emerald-500 rounded-xl px-3.5 py-1.5 flex items-center gap-2 text-xs text-slate-200 transition-all">
           <i class="fas fa-laptop text-emerald-400 text-xs"></i>
-          <span class="text-slate-400 hover:text-white cursor-pointer" id="bread-root">This PC</span>
+          <span class="text-slate-400 hover:text-white cursor-pointer transition-colors" id="bread-root" title="Click to go to Local Disk, or drop files here">This PC</span>
           <span class="text-slate-600">&gt;</span>
           <span class="font-semibold text-emerald-300">${currentMeta.name}</span>
         </div>
@@ -188,12 +277,15 @@ export function createExplorerApp(options = {}) {
         <!-- Sidebar Navigation Tree -->
         <div class="w-56 bg-[#080d16] border-r border-white/5 p-3 space-y-4 overflow-y-auto text-xs shrink-0 select-none">
           <div>
-            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">Quick Access (Drop Target)</div>
+            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5 flex items-center justify-between">
+              <span>Quick Access</span>
+              <span class="text-[9px] text-emerald-400/80 font-normal"><i class="fas fa-arrows-alt text-[8px]"></i> Drop Target</span>
+            </div>
             <div class="space-y-1">
               ${QUICK_ACCESS_KEYS.map(k => {
                 const qa = stateStore.getFolderMeta(k);
                 return `
-                  <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === qa.key ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${qa.key}">
+                  <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === qa.key ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${qa.key}" title="Drop files here to move or import into ${qa.name}">
                     <i class="${qa.icon} w-4 text-center"></i>
                     <span class="truncate">${qa.name}</span>
                   </div>
@@ -207,7 +299,7 @@ export function createExplorerApp(options = {}) {
               <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">My Folders</div>
               <div class="space-y-1">
                 ${customFolders.map(cf => `
-                  <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === cf.key ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${cf.key}">
+                  <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === cf.key ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${cf.key}" title="Drop files here to move or import into ${cf.name}">
                     <i class="${cf.icon} w-4 text-center"></i>
                     <span class="truncate">${cf.name}</span>
                   </div>
@@ -220,7 +312,7 @@ export function createExplorerApp(options = {}) {
             <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">This PC Drives</div>
             <div class="space-y-1">
               ${DRIVE_ITEMS.map(d => `
-                <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === d.target ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${d.target}">
+                <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === d.target ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${d.target}" title="Drop files here to move or import into ${d.name}">
                   <i class="${d.icon} w-4 text-center"></i>
                   <span class="truncate">${d.name}</span>
                 </div>
@@ -229,8 +321,17 @@ export function createExplorerApp(options = {}) {
           </div>
         </div>
 
-        <!-- Files & Folders Grid -->
-        <div class="flex-1 bg-[#0b111c] p-5 overflow-y-auto" id="files-container">
+        <!-- Files & Folders Grid Area -->
+        <div class="flex-1 bg-[#0b111c] p-5 overflow-y-auto relative" id="files-container">
+          <!-- Visual Drop Overlay for External OS Files Drag-and-Drop -->
+          <div id="exp-drop-overlay" class="hidden absolute inset-3 z-30 bg-[#061715]/95 backdrop-blur-md border-2 border-dashed border-emerald-400 rounded-2xl flex flex-col items-center justify-center pointer-events-none transition-all shadow-2xl">
+            <div class="w-16 h-16 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-3xl mb-3 shadow-lg ring-1 ring-emerald-400/50 animate-bounce">
+              <i class="fas fa-cloud-arrow-up"></i>
+            </div>
+            <div class="text-base font-bold text-white tracking-wide">Drop files to import into ${currentMeta.name}</div>
+            <div class="text-xs text-emerald-300/80 mt-1">Accepts documents, spreadsheets, PDFs, code, notes, and media</div>
+          </div>
+
           <div class="grid grid-cols-4 gap-3.5" id="files-grid">
             ${files.map((f, idx) => `
               <div class="file-item p-4 rounded-2xl ${selectedFile?.name === f.name ? 'bg-emerald-600/25 border-emerald-500/50 ring-1 ring-emerald-500/40' : 'bg-[#0f172a]/70 hover:bg-[#1e293b] border-white/5'} border hover:border-emerald-500/40 transition-all cursor-pointer flex flex-col items-center text-center group shadow-sm hover:shadow-lg hover:-translate-y-0.5"
@@ -238,7 +339,8 @@ export function createExplorerApp(options = {}) {
                    data-idx="${idx}"
                    data-name="${f.name}"
                    data-type="${f.type || 'doc'}"
-                   data-target-folder="${f.target || ''}">
+                   data-target-folder="${f.target || ''}"
+                   title="${f.type === 'folder' ? `Folder: ${f.name} (Drag files onto this folder)` : `${f.name} • Double-click to open, drag to move/copy`}">
                 <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-2xl mb-2.5 group-hover:scale-110 transition-transform shadow-inner">
                   <i class="${f.icon || 'fas fa-file text-blue-400'}"></i>
                 </div>
@@ -250,7 +352,9 @@ export function createExplorerApp(options = {}) {
               <div class="col-span-4 text-center py-16 text-slate-500 text-xs">
                 <i class="fas fa-folder-open text-4xl mb-3 block text-slate-600"></i>
                 <div class="font-bold text-slate-400 text-sm">This folder is empty</div>
-                <div class="text-[11px] text-slate-500 mt-1">Click "New File", "New Folder", or drag/paste files here.</div>
+                <div class="text-[11px] text-slate-400 mt-1.5 flex items-center justify-center gap-1.5">
+                  <i class="fas fa-cloud-arrow-up text-emerald-400"></i> Drag &amp; drop files from your computer here, or click "Import / Drop File" above.
+                </div>
               </div>` : ''}
           </div>
         </div>
@@ -263,7 +367,13 @@ export function createExplorerApp(options = {}) {
           <span>${files.length} item${files.length === 1 ? '' : 's'}</span>
           ${selectedFile ? `<span class="border-l border-white/10 pl-2 text-emerald-300 font-medium">Selected: ${selectedFile.name}</span>` : ''}
         </div>
-        <div class="text-[10px] text-slate-500">Drag &amp; drop items onto folders or sidebar • Double-click any item to open</div>
+        <div class="text-[10px] text-slate-400 flex items-center gap-2">
+          <span><i class="fas fa-arrows-up-down-left-right text-emerald-400"></i> Drag &amp; drop files from PC or between folders</span>
+          <span class="text-slate-600">•</span>
+          <span>Hold <kbd class="px-1 py-0.5 bg-white/10 rounded text-[9px] text-slate-300">Ctrl</kbd> to copy</span>
+          <span class="text-slate-600">•</span>
+          <span><kbd class="px-1 py-0.5 bg-white/10 rounded text-[9px] text-slate-300">Ctrl+V</kbd> to paste</span>
+        </div>
       </div>
     `;
 
@@ -271,7 +381,7 @@ export function createExplorerApp(options = {}) {
   }
 
   function attachEvents() {
-    // Sidebar nav items + drag-and-drop target
+    // ── 1. Sidebar Navigation Items + Drag-and-Drop Drop Target ──
     root.querySelectorAll('.exp-nav-item').forEach(el => {
       const targetFolderKey = el.dataset.folder;
       el.addEventListener('click', () => {
@@ -280,38 +390,158 @@ export function createExplorerApp(options = {}) {
 
       el.addEventListener('dragover', (e) => {
         e.preventDefault();
-        el.classList.add('ring-2', 'ring-emerald-400');
+        e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+        el.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-500/25');
       });
       el.addEventListener('dragleave', () => {
-        el.classList.remove('ring-2', 'ring-emerald-400');
+        el.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-500/25');
       });
-      el.addEventListener('drop', (e) => {
+      el.addEventListener('drop', async (e) => {
         e.preventDefault();
-        el.classList.remove('ring-2', 'ring-emerald-400');
-        const draggedName = e.dataTransfer?.getData('text/plain');
-        if (draggedName && targetFolderKey && targetFolderKey !== currentFolder) {
-          const ok = stateStore.moveItemInVFS(currentFolder, targetFolderKey, draggedName);
-          if (ok) {
-            const destMeta = stateStore.getFolderMeta(targetFolderKey);
-            dawamuDialogs.toast(`Moved "${draggedName}" to ${destMeta.name}`, 'success');
-          }
+        el.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-500/25');
+
+        // External files dropped onto a sidebar folder
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          await handleExternalFilesDrop(e.dataTransfer.files, targetFolderKey);
+          return;
+        }
+
+        // Internal file dragged onto sidebar folder
+        const draggedJson = e.dataTransfer?.getData('application/json');
+        let draggedInfo = null;
+        try {
+          if (draggedJson) draggedInfo = JSON.parse(draggedJson);
+        } catch (_) {}
+
+        const draggedName = draggedInfo?.name || e.dataTransfer?.getData('text/plain') || window.__dawamuDraggingItem?.name;
+        const sourceFolder = draggedInfo?.sourceFolder || window.__dawamuDraggingItem?.sourceFolder || currentFolder;
+
+        if (draggedName && targetFolderKey) {
+          handleInternalDrop(draggedName, sourceFolder, targetFolderKey, e.ctrlKey || e.altKey);
         }
       });
     });
 
-    // History buttons
-    root.querySelector('#exp-back-btn')?.addEventListener('click', goBack);
-    root.querySelector('#exp-up-btn')?.addEventListener('click', goUp);
-    root.querySelector('#bread-root')?.addEventListener('click', () => navigateTo('c_drive'));
+    // ── 2. Files Container Drag & Drop (External Files Drop Zone & Empty Area Drop) ──
+    const filesContainer = root.querySelector('#files-container');
+    const dropOverlay = root.querySelector('#exp-drop-overlay');
 
-    // Refresh
+    if (filesContainer) {
+      filesContainer.addEventListener('dragenter', (e) => {
+        e.preventDefault();
+        containerDragCounter++;
+        const isExternal = (e.dataTransfer?.types && Array.from(e.dataTransfer.types).includes('Files')) || !window.__dawamuDraggingItem;
+        if (isExternal && dropOverlay) {
+          dropOverlay.classList.remove('hidden');
+        }
+      });
+
+      filesContainer.addEventListener('dragleave', (e) => {
+        e.preventDefault();
+        containerDragCounter--;
+        if (containerDragCounter <= 0) {
+          containerDragCounter = 0;
+          if (dropOverlay) dropOverlay.classList.add('hidden');
+        }
+      });
+
+      filesContainer.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        if (e.dataTransfer) {
+          e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : (window.__dawamuDraggingItem ? 'move' : 'copy');
+        }
+      });
+
+      filesContainer.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        containerDragCounter = 0;
+        if (dropOverlay) dropOverlay.classList.add('hidden');
+
+        // Case A: External files dropped into current folder
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          await handleExternalFilesDrop(e.dataTransfer.files, currentFolder);
+          return;
+        }
+
+        // Case B: Internal item dropped into empty space of folder
+        const draggedJson = e.dataTransfer?.getData('application/json');
+        let draggedInfo = null;
+        try {
+          if (draggedJson) draggedInfo = JSON.parse(draggedJson);
+        } catch (_) {}
+
+        const draggedName = draggedInfo?.name || e.dataTransfer?.getData('text/plain') || window.__dawamuDraggingItem?.name;
+        const sourceFolder = draggedInfo?.sourceFolder || window.__dawamuDraggingItem?.sourceFolder;
+
+        if (draggedName && sourceFolder && sourceFolder !== currentFolder) {
+          handleInternalDrop(draggedName, sourceFolder, currentFolder, e.ctrlKey || e.altKey);
+        }
+      });
+    }
+
+    // ── 3. Breadcrumb & Up Button Drop Targets ──
+    const upBtn = root.querySelector('#exp-up-btn');
+    if (upBtn) {
+      upBtn.addEventListener('click', goUp);
+      upBtn.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        upBtn.classList.add('ring-2', 'ring-emerald-400', 'bg-emerald-500/30');
+      });
+      upBtn.addEventListener('dragleave', () => {
+        upBtn.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-500/30');
+      });
+      upBtn.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        upBtn.classList.remove('ring-2', 'ring-emerald-400', 'bg-emerald-500/30');
+        const parentTarget = stateStore.getFolderMeta(currentFolder)?.parent || 'documents';
+
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          await handleExternalFilesDrop(e.dataTransfer.files, parentTarget);
+          return;
+        }
+
+        const draggedName = e.dataTransfer?.getData('text/plain') || window.__dawamuDraggingItem?.name;
+        const sourceFolder = window.__dawamuDraggingItem?.sourceFolder || currentFolder;
+        if (draggedName) {
+          handleInternalDrop(draggedName, sourceFolder, parentTarget, e.ctrlKey);
+        }
+      });
+    }
+
+    const breadRoot = root.querySelector('#bread-root');
+    if (breadRoot) {
+      breadRoot.addEventListener('click', () => navigateTo('c_drive'));
+      breadRoot.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        breadRoot.classList.add('text-emerald-300', 'underline');
+      });
+      breadRoot.addEventListener('dragleave', () => {
+        breadRoot.classList.remove('text-emerald-300', 'underline');
+      });
+      breadRoot.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        breadRoot.classList.remove('text-emerald-300', 'underline');
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          await handleExternalFilesDrop(e.dataTransfer.files, 'c_drive');
+          return;
+        }
+        const draggedName = e.dataTransfer?.getData('text/plain') || window.__dawamuDraggingItem?.name;
+        const sourceFolder = window.__dawamuDraggingItem?.sourceFolder || currentFolder;
+        if (draggedName) {
+          handleInternalDrop(draggedName, sourceFolder, 'c_drive', e.ctrlKey);
+        }
+      });
+    }
+
+    // ── 4. History & Refresh Buttons ──
+    root.querySelector('#exp-back-btn')?.addEventListener('click', goBack);
     root.querySelector('#exp-refresh-btn')?.addEventListener('click', () => {
       loadRealDownloads();
       render();
       dawamuDialogs.toast('Folder refreshed.', 'info');
     });
 
-    // Search bar
+    // ── 5. Search Bar ──
     const searchInput = root.querySelector('#exp-search');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
@@ -325,7 +555,15 @@ export function createExplorerApp(options = {}) {
       });
     }
 
-    // New File button
+    // ── 6. Import / Drop File Picker Input ──
+    root.querySelector('#exp-file-input')?.addEventListener('change', async (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        await handleExternalFilesDrop(e.target.files, currentFolder);
+        e.target.value = '';
+      }
+    });
+
+    // ── 7. New File Button ──
     root.querySelector('#exp-new-btn')?.addEventListener('click', async () => {
       const docName = await dawamuDialogs.prompt({
         title: 'Create New Document / File',
@@ -350,7 +588,7 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    // New Folder button
+    // ── 8. New Folder Button ──
     root.querySelector('#exp-new-folder-btn')?.addEventListener('click', async () => {
       const folderName = await dawamuDialogs.prompt({
         title: 'Create New Folder',
@@ -366,7 +604,7 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    // Cut / Copy / Paste handlers
+    // ── 9. Cut / Copy / Paste handlers ──
     root.querySelector('#exp-copy-btn')?.addEventListener('click', () => {
       if (selectedFile) {
         clipboard = { action: 'copy', file: { ...selectedFile }, sourceFolder: currentFolder };
@@ -383,7 +621,7 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    root.querySelector('#exp-paste-btn')?.addEventListener('click', () => {
+    const handlePasteClipboard = () => {
       if (clipboard && clipboard.file) {
         if (clipboard.action === 'cut') {
           const ok = stateStore.moveItemInVFS(clipboard.sourceFolder, currentFolder, clipboard.file.name);
@@ -399,9 +637,10 @@ export function createExplorerApp(options = {}) {
         }
         render();
       }
-    });
+    };
+    root.querySelector('#exp-paste-btn')?.addEventListener('click', handlePasteClipboard);
 
-    // Move To... button
+    // ── 10. Move To... button ──
     root.querySelector('#exp-move-btn')?.addEventListener('click', async () => {
       if (!selectedFile) return;
       const allFolders = stateStore.getAllFoldersList().filter(f => f.key !== currentFolder && f.key !== selectedFile.target);
@@ -424,7 +663,7 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    // Rename button
+    // ── 11. Rename button ──
     root.querySelector('#exp-rename-btn')?.addEventListener('click', async () => {
       if (!selectedFile) return;
       const newName = await dawamuDialogs.prompt({
@@ -441,7 +680,7 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    // Delete button
+    // ── 12. Delete button ──
     root.querySelector('#exp-delete-btn')?.addEventListener('click', async () => {
       if (!selectedFile) return;
       const ok = await dawamuDialogs.confirm({
@@ -459,7 +698,7 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    // File selection, double click, and drag-and-drop onto folder items
+    // ── 13. Grid Items: Selection, Double-Click, Drag Start & Folder Drop Target ──
     const rawFiles = stateStore.getFolderFiles(currentFolder);
     const currentFiles = searchQuery.trim()
       ? rawFiles.filter(f => f.name.toLowerCase().includes(searchQuery.toLowerCase().trim()))
@@ -481,38 +720,129 @@ export function createExplorerApp(options = {}) {
         executeOpenFile(file);
       });
 
+      // Drag Start: Set payload and visual dragging style
       el.addEventListener('dragstart', (e) => {
-        e.dataTransfer?.setData('text/plain', file.name);
+        selectedFile = file;
+        window.__dawamuDraggingItem = {
+          name: file.name,
+          sourceFolder: currentFolder,
+          type: file.type,
+          file
+        };
+        if (e.dataTransfer) {
+          e.dataTransfer.effectAllowed = 'copyMove';
+          e.dataTransfer.setData('text/plain', file.name);
+          e.dataTransfer.setData('application/json', JSON.stringify({
+            name: file.name,
+            sourceFolder: currentFolder,
+            type: file.type
+          }));
+        }
+        el.classList.add('opacity-40', 'scale-95', 'ring-2', 'ring-emerald-400');
       });
 
-      // If this grid card is a folder, allow dropping files onto it!
+      el.addEventListener('dragend', () => {
+        window.__dawamuDraggingItem = null;
+        el.classList.remove('opacity-40', 'scale-95', 'ring-2', 'ring-emerald-400');
+      });
+
+      // If this grid card is a folder, allow dropping external files OR internal items onto it!
       if (file.type === 'folder' && file.target) {
         el.addEventListener('dragover', (e) => {
           e.preventDefault();
-          el.classList.add('ring-2', 'ring-amber-400');
+          e.stopPropagation();
+          if (e.dataTransfer) {
+            e.dataTransfer.dropEffect = e.ctrlKey ? 'copy' : 'move';
+          }
+          el.classList.add('ring-2', 'ring-amber-400', 'bg-amber-500/20', 'scale-105');
         });
-        el.addEventListener('dragleave', () => {
-          el.classList.remove('ring-2', 'ring-amber-400');
+
+        el.addEventListener('dragleave', (e) => {
+          e.stopPropagation();
+          el.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-500/20', 'scale-105');
         });
-        el.addEventListener('drop', (e) => {
+
+        el.addEventListener('drop', async (e) => {
           e.preventDefault();
           e.stopPropagation();
-          el.classList.remove('ring-2', 'ring-amber-400');
-          const draggedName = e.dataTransfer?.getData('text/plain');
+          el.classList.remove('ring-2', 'ring-amber-400', 'bg-amber-500/20', 'scale-105');
+
+          // Case A: External files dropped onto subfolder
+          if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+            await handleExternalFilesDrop(e.dataTransfer.files, file.target);
+            return;
+          }
+
+          // Case B: Internal item dragged into subfolder
+          const draggedJson = e.dataTransfer?.getData('application/json');
+          let draggedInfo = null;
+          try {
+            if (draggedJson) draggedInfo = JSON.parse(draggedJson);
+          } catch (_) {}
+
+          const draggedName = draggedInfo?.name || e.dataTransfer?.getData('text/plain') || window.__dawamuDraggingItem?.name;
+          const sourceFolder = draggedInfo?.sourceFolder || window.__dawamuDraggingItem?.sourceFolder || currentFolder;
+
           if (draggedName && draggedName !== file.name) {
-            const ok = stateStore.moveItemInVFS(currentFolder, file.target, draggedName);
-            if (ok) {
-              dawamuDialogs.toast(`Moved "${draggedName}" into folder "${file.name}"`, 'success');
-            }
+            handleInternalDrop(draggedName, sourceFolder, file.target, e.ctrlKey || e.altKey);
           }
         });
       }
     });
 
-    // Click outside to deselect
+    // ── 14. Click Outside to Deselect ──
     root.querySelector('#files-container')?.addEventListener('click', () => {
       if (selectedFile) {
         selectedFile = null;
+        render();
+      }
+    });
+
+    // ── 15. Global Paste (Ctrl+V) & Delete Key Shortcuts in Explorer ──
+    root.tabIndex = 0; // Focusable for key handling
+    root.addEventListener('keydown', (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+      if (e.key === 'Delete' || e.key === 'Del') {
+        if (selectedFile) {
+          e.preventDefault();
+          root.querySelector('#exp-delete-btn')?.click();
+        }
+      } else if (e.key === 'Escape') {
+        if (selectedFile) {
+          selectedFile = null;
+          render();
+        }
+      }
+    });
+
+    root.addEventListener('paste', async (e) => {
+      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+      // 1. Files copied to clipboard (e.g. from OS file explorer or screenshot)
+      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+        e.preventDefault();
+        await handleExternalFilesDrop(e.clipboardData.files, currentFolder);
+        return;
+      }
+
+      // 2. Internal cut/copy clipboard
+      if (clipboard && clipboard.file) {
+        e.preventDefault();
+        handlePasteClipboard();
+        return;
+      }
+
+      // 3. Plain text snippet
+      const text = e.clipboardData?.getData('text/plain');
+      if (text && text.trim()) {
+        e.preventDefault();
+        const snippetName = `Pasted_Note_${Date.now().toString().slice(-4)}.txt`;
+        const saved = stateStore.saveFileToVFS(currentFolder, {
+          name: snippetName,
+          content: text,
+          type: 'txt'
+        });
+        dawamuDialogs.toast(`Pasted text note as "${saved.name}"`, 'success');
         render();
       }
     });
@@ -526,6 +856,7 @@ export function createExplorerApp(options = {}) {
     },
     onDestroy: () => {
       window.removeEventListener('dawamu-vfs-updated', onVfsUpdated);
+      window.__dawamuDraggingItem = null;
     }
   };
 

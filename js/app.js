@@ -2,7 +2,7 @@
  * Dawamu OS - Master Application Entry Point
  */
 
-import { stateStore } from './os/state.js';
+import { stateStore, readDroppedFile, formatFileSize } from './os/state.js';
 import { restrictionManager } from './os/restrictionManager.js';
 import { windowManager } from './os/windowManager.js';
 import { shelf } from './os/shelf.js';
@@ -260,14 +260,14 @@ function startDawamuOS() {
   const appRegistry = [
     {
       id: 'explorer',
-      title: 'This PC (File Explorer)',
+      title: 'This PC / My PC (File Explorer)',
       icon: '<i class="fas fa-folder-open text-blue-400"></i>',
       bgColor: 'bg-blue-700',
-      keywords: ['files', 'folders', 'documents', 'c drive', 'pc', 'explorer', 'my computer', 'downloads'],
+      keywords: ['files', 'folders', 'documents', 'c drive', 'pc', 'explorer', 'my pc', 'my computer', 'downloads'],
       launch: (opts = {}) => {
         windowManager.createWindow({
           id: 'explorer',
-          title: 'This PC - Dawamu File Explorer',
+          title: opts && opts.folderKey ? `${stateStore.getFolderMeta(opts.folderKey).name} - This PC / My PC` : 'This PC / My PC - Dawamu File Explorer',
           icon: '<i class="fas fa-folder-open text-blue-400"></i>',
           content: () => createExplorerApp(opts),
           appOptions: opts && Object.keys(opts).length ? opts : undefined,
@@ -543,7 +543,7 @@ function startDawamuOS() {
   if (!desktopShellListenersBound) {
     desktopShellListenersBound = true;
 
-    // Desktop Icons Click Handler (Windows Style)
+    // Desktop Icons Click Handler & Drag-and-Drop (Windows Style)
     const desktopIconsContainer = document.getElementById('desktop-icons');
     if (desktopIconsContainer) {
       desktopIconsContainer.addEventListener('click', (e) => {
@@ -552,6 +552,75 @@ function startDawamuOS() {
         const appId = iconEl.dataset.appId;
         const app = appRegistry.find(a => a.id === appId);
         if (app) app.launch();
+      });
+
+      // Drag and drop files onto the "This PC" / My PC desktop icon
+      const explorerIcon = desktopIconsContainer.querySelector('.desktop-icon[data-app-id="explorer"]');
+      if (explorerIcon) {
+        explorerIcon.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+          explorerIcon.classList.add('ring-2', 'ring-blue-400', 'bg-blue-500/20', 'rounded-2xl', 'scale-105');
+        });
+        explorerIcon.addEventListener('dragleave', () => {
+          explorerIcon.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-500/20', 'rounded-2xl', 'scale-105');
+        });
+        explorerIcon.addEventListener('drop', async (e) => {
+          e.preventDefault();
+          explorerIcon.classList.remove('ring-2', 'ring-blue-400', 'bg-blue-500/20', 'rounded-2xl', 'scale-105');
+          const files = e.dataTransfer?.files;
+          if (files && files.length > 0) {
+            let count = 0;
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const content = await readDroppedFile(file);
+              const formattedSize = formatFileSize(file.size);
+              stateStore.saveFileToVFS('documents', {
+                name: file.name,
+                size: formattedSize,
+                type: file.type,
+                content: content,
+                date: 'Imported just now'
+              });
+              count++;
+            }
+            dawamuDialogs.toast(`Imported ${count} file${count > 1 ? 's' : ''} to This PC (Documents)`, 'success');
+            const explorerApp = appRegistry.find(a => a.id === 'explorer');
+            if (explorerApp) explorerApp.launch({ folderKey: 'documents' });
+          }
+        });
+      }
+    }
+
+    // Drop files onto desktop wallpaper to save to Desktop folder in VFS
+    const desktopCanvas = document.getElementById('desktop');
+    if (desktopCanvas) {
+      desktopCanvas.addEventListener('dragover', (e) => {
+        if (e.target === desktopCanvas || e.target.id === 'desktop-icons') {
+          e.preventDefault();
+          if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+        }
+      });
+      desktopCanvas.addEventListener('drop', async (e) => {
+        if (e.target === desktopCanvas || e.target.id === 'desktop-icons') {
+          e.preventDefault();
+          const files = e.dataTransfer?.files;
+          if (files && files.length > 0) {
+            for (let i = 0; i < files.length; i++) {
+              const file = files[i];
+              const content = await readDroppedFile(file);
+              const formattedSize = formatFileSize(file.size);
+              stateStore.saveFileToVFS('desktop', {
+                name: file.name,
+                size: formattedSize,
+                type: file.type,
+                content: content,
+                date: 'Imported just now'
+              });
+            }
+            dawamuDialogs.toast(`Saved ${files.length} file${files.length > 1 ? 's' : ''} to Desktop in My PC`, 'success');
+          }
+        }
       });
     }
 
