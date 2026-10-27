@@ -14,6 +14,10 @@ class Shelf {
   constructor() {
     this.shelfEl = null;
     this.apps = [];
+    this.hotzoneEl = null;
+    this._hideDockTimer = null;
+    this._isHoveringShelf = false;
+    this._autoHideBound = false;
   }
 
   init(shelfElement, appRegistry) {
@@ -23,14 +27,116 @@ class Shelf {
     this.render();
     this.startClock();
     this.setupBattery();
+    this.setupFullscreenAutoHide();
 
-    // Subscribe to window changes to update dynamic running tasks and active pills
+    // Subscribe to window changes to update dynamic running tasks, active pills, and fullscreen dock auto-hide
     windowManager.subscribe(() => {
       this.updateTaskbarApps();
       this.updateAppIndicators();
+      this.syncFullscreenDockState();
     });
 
     stateStore.subscribe(() => this.updateStatusTray());
+    this.syncFullscreenDockState();
+  }
+
+  setupFullscreenAutoHide() {
+    if (typeof document === 'undefined') return;
+
+    let hotzone = document.getElementById('dock-hotzone');
+    if (!hotzone) {
+      hotzone = document.createElement('div');
+      hotzone.id = 'dock-hotzone';
+      hotzone.setAttribute('aria-hidden', 'true');
+      document.body.appendChild(hotzone);
+    }
+    this.hotzoneEl = hotzone;
+
+    if (this._autoHideBound) return;
+    this._autoHideBound = true;
+
+    const onBottomEdgeTrigger = () => {
+      if (document.body.classList.contains('has-fullscreen-window')) {
+        this.revealDock();
+      }
+    };
+
+    this.hotzoneEl.addEventListener('mouseenter', onBottomEdgeTrigger);
+    this.hotzoneEl.addEventListener('mousemove', onBottomEdgeTrigger, { passive: true });
+
+    this.shelfEl?.addEventListener('mouseenter', () => {
+      this._isHoveringShelf = true;
+      if (document.body.classList.contains('has-fullscreen-window')) {
+        this.revealDock();
+      }
+    });
+
+    this.shelfEl?.addEventListener('mouseleave', () => {
+      this._isHoveringShelf = false;
+      if (document.body.classList.contains('has-fullscreen-window')) {
+        this.scheduleHideDock(240);
+      }
+    });
+
+    window.addEventListener('mousemove', (e) => {
+      if (!document.body.classList.contains('has-fullscreen-window')) return;
+      const distFromBottom = window.innerHeight - e.clientY;
+      if (distFromBottom <= 14) {
+        this.revealDock();
+      } else if (document.body.classList.contains('dock-revealed')) {
+        if (distFromBottom <= 82 || this._isHoveringShelf) {
+          clearTimeout(this._hideDockTimer);
+        } else {
+          this.scheduleHideDock(220);
+        }
+      }
+    }, { passive: true });
+
+    window.addEventListener('wheel', (e) => {
+      if (!document.body.classList.contains('has-fullscreen-window')) return;
+      const distFromBottom = window.innerHeight - e.clientY;
+      if (e.deltaY > 0 && distFromBottom <= 96) {
+        this.revealDock();
+      }
+    }, { passive: true });
+  }
+
+  revealDock() {
+    if (!document.body.classList.contains('has-fullscreen-window')) return;
+    clearTimeout(this._hideDockTimer);
+    document.body.classList.add('dock-revealed');
+    this.shelfEl?.classList.add('dock-revealed');
+  }
+
+  scheduleHideDock(delay = 220) {
+    clearTimeout(this._hideDockTimer);
+    this._hideDockTimer = setTimeout(() => {
+      if (!document.body.classList.contains('has-fullscreen-window')) return;
+      const launcherOpen = document.getElementById('launcher-overlay')?.classList.contains('open');
+      const qsOpen = document.getElementById('quick-settings-overlay')?.classList.contains('open');
+      if (launcherOpen || qsOpen || this._isHoveringShelf) return;
+      document.body.classList.remove('dock-revealed');
+      this.shelfEl?.classList.remove('dock-revealed');
+    }, delay);
+  }
+
+  syncFullscreenDockState() {
+    if (typeof document === 'undefined') return;
+    const isFullscreen = windowManager.hasFullscreenWindow();
+    const wasFullscreen = document.body.classList.contains('has-fullscreen-window');
+
+    document.body.classList.toggle('has-fullscreen-window', isFullscreen);
+    this.shelfEl?.classList.toggle('dock-autohide', isFullscreen);
+
+    if (!isFullscreen) {
+      clearTimeout(this._hideDockTimer);
+      document.body.classList.remove('dock-revealed');
+      this.shelfEl?.classList.remove('dock-revealed');
+    } else if (!wasFullscreen && isFullscreen) {
+      clearTimeout(this._hideDockTimer);
+      document.body.classList.remove('dock-revealed');
+      this.shelfEl?.classList.remove('dock-revealed');
+    }
   }
 
   render() {

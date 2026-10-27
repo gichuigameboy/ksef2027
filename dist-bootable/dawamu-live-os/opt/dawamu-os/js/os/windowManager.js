@@ -23,7 +23,23 @@ class WindowManager {
       window.addEventListener('resize', () => {
         this.clampWindowsToViewport();
       });
+      document.addEventListener('fullscreenchange', () => {
+        this.notify();
+      });
     }
+  }
+
+  hasFullscreenWindow() {
+    let hasMax = false;
+    this.windows.forEach((w) => {
+      if (!w.minimized && w.maximized) {
+        hasMax = true;
+      }
+    });
+    if (!hasMax && typeof document !== 'undefined' && document.fullscreenElement) {
+      hasMax = true;
+    }
+    return hasMax;
   }
 
   clampWindowsToViewport() {
@@ -287,6 +303,7 @@ class WindowManager {
           element.classList.remove('maximized');
           const maxIcon = element.querySelector('.maximize-btn i');
           if (maxIcon) maxIcon.className = 'far fa-square';
+          this.notify();
 
           initialLeft = Math.round(moveEvent.clientX - restoredW * ratio);
           initialTop = Math.max(8, moveEvent.clientY - 22);
@@ -487,6 +504,8 @@ class WindowManager {
       win.element.classList.add('maximized');
       const maxIcon = win.element.querySelector('.maximize-btn i');
       if (maxIcon) maxIcon.className = 'far fa-clone';
+      document.body?.classList.remove('dock-revealed');
+      document.getElementById('shelf')?.classList.remove('dock-revealed');
     } else {
       win.maximized = false;
       win.element.classList.remove('maximized');

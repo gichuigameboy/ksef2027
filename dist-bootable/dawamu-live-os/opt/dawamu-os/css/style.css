@@ -961,11 +961,12 @@ body.window-dragging-active webview {
 }
 
 .cros-window.maximized {
-  top: 6px !important;
-  left: 8px !important;
-  width: calc(100vw - 16px) !important;
-  height: calc(100vh - var(--shelf-h) - 6px) !important;
-  border-radius: 18px !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  border-radius: 0 !important;
+  border: none !important;
 }
 
 /* macOS Liquid Glass Window Titlebar */
@@ -1259,11 +1260,26 @@ body.window-dragging-active webview {
    macOS FLOATING LIQUID GLASS DOCK (#shelf)
 ───────────────────────────────────────────── */
 
+#dock-hotzone {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  width: 100vw;
+  height: 10px;
+  z-index: 99997;
+  background: transparent;
+  pointer-events: none;
+}
+
+body.has-fullscreen-window:not(.dock-revealed) #dock-hotzone {
+  pointer-events: auto;
+}
+
 #shelf {
   position: fixed;
   bottom: 10px;
   left: 50%;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(0);
   width: max-content;
   max-width: calc(100vw - 20px);
   height: 58px;
@@ -1283,7 +1299,24 @@ body.window-dragging-active webview {
     0 6px 18px rgba(0, 0, 0, 0.4),
     inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.52),
     inset 0 -1px 1px 0 rgba(255, 255, 255, 0.14);
-  transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.22s ease, box-shadow 0.25s var(--ease);
+}
+
+/* macOS Fullscreen Auto-Hide Dock State */
+body.has-fullscreen-window #shelf,
+#shelf.dock-autohide {
+  transform: translateX(-50%) translateY(calc(100% + 26px));
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Reappear when mouse moves to the bottom of the window in fullscreen mode */
+body.has-fullscreen-window.dock-revealed #shelf,
+#shelf.dock-autohide.dock-revealed,
+body.has-fullscreen-window #shelf:hover {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
+  pointer-events: auto;
 }
 
 .win-start-btn {
