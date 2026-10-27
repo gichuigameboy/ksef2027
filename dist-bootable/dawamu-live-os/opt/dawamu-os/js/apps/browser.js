@@ -2,17 +2,22 @@
  * Dawamu OS - Ultra-Fast School Browser with Offline Support
  *
  * KEY DESIGN:
- * - Each tab has ONE persistent <webview> that is NEVER destroyed.
- * - Navigation just sets webview.src — no renderer process respawning.
+ * - Each tab has ONE persistent <webview> (in Electron) or sandboxed proxy <iframe> (in Web mode).
+ * - Navigation just sets webview/iframe.src — no renderer process respawning.
  * - Start Page is a lightweight HTML overlay shown ON TOP of the webview.
+ * - Encached Curriculum Knowledgebase: 30+ KCSE offline articles, Wikipedia portals,
+ *   Khan Academy STEM lessons, NASA space guides, and offline educational search.
+ * - In Web Mode, external web requests route through EduGuard Safe Proxy (port 8000),
+ *   bypassing X-Frame-Options blocks while enforcing school safety filters.
  * - Persistent session partition = cached DNS + SSL across all tabs.
  * - All student restriction enforcement runs before any navigation fires.
- * - OFFLINE MODE: Built-in educational tools accessible without internet.
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
 import { stateStore } from '../os/state.js';
 import { dawamuDialogs } from '../os/dialogs.js';
+import { OFFLINE_ARTICLES, STUDY_QUIZZES } from './offlineContent.js';
+import { OFFLINE_WEB_DB } from './offlineBrowser.js';
 
 const IS_ELECTRON = !!(window.electronAPI && window.electronAPI.isElectron);
 
@@ -26,11 +31,11 @@ let engine = 'google';
 
 const BOOKMARKS = [
   { label: 'Google',       icon: 'fab fa-google text-blue-400',           url: 'https://www.google.com' },
-  { label: 'Bing',         icon: 'fab fa-microsoft text-cyan-400',         url: 'https://www.bing.com' },
-  { label: 'Brave',        icon: 'fas fa-shield-alt text-amber-500',       url: 'https://search.brave.com' },
+  { label: 'Wikipedia',    icon: 'fab fa-wikipedia-w text-slate-200',     url: 'https://www.wikipedia.org' },
   { label: 'Khan Academy', icon: 'fas fa-leaf text-emerald-400',           url: 'https://www.khanacademy.org' },
-  { label: 'NASA',         icon: 'fas fa-rocket text-indigo-400',          url: 'https://www.nasa.gov' },
+  { label: 'NASA Space',   icon: 'fas fa-rocket text-rose-400',           url: 'https://www.nasa.gov' },
   { label: 'Math Is Fun',  icon: 'fas fa-square-root-alt text-amber-400',  url: 'https://www.mathsisfun.com' },
+  { label: 'Brave Safe',   icon: 'fas fa-shield-alt text-amber-500',       url: 'https://search.brave.com' },
 ];
 
 /* ─── TAB STATE ─── */
@@ -57,7 +62,123 @@ const OFFLINE_TOOLS = {
   'dawamu://offline': { title: 'You are Offline', builder: buildOfflinePage },
 };
 
-function isOfflineTool(url) { return url && url.startsWith('dawamu://'); }
+function isOfflineTool(url) { return url && url.startsWith('dawamu://') && !url.startsWith('dawamu://search'); }
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/* ═══════════════════════════════════════════════════
+   OFFLINE KNOWLEDGEBASE & PORTAL RESOLUTION
+═══════════════════════════════════════════════════ */
+function findOfflineArticleOrPage(url) {
+  if (!url) return null;
+  const clean = url.trim();
+
+  const db = (typeof OFFLINE_WEB_DB !== 'undefined') ? OFFLINE_WEB_DB : {};
+  const art = (typeof OFFLINE_ARTICLES !== 'undefined') ? OFFLINE_ARTICLES : {};
+
+  // Exact match
+  if (db[clean]) return db[clean];
+  if (art[clean]) return art[clean];
+
+  // Match without trailing slash
+  const noSlash = clean.replace(/\/$/, '');
+  if (db[noSlash]) return db[noSlash];
+  if (art[noSlash]) return art[noSlash];
+
+  // Match https vs http
+  const withHttps = clean.replace(/^http:\/\//, 'https://');
+  if (db[withHttps]) return db[withHttps];
+  if (art[withHttps]) return art[withHttps];
+
+  // Match Wikipedia Portals
+  if (clean === 'https://www.wikipedia.org' || clean === 'https://www.wikipedia.org/' ||
+      clean === 'https://en.wikipedia.org' || clean === 'https://en.wikipedia.org/' ||
+      clean === 'http://www.wikipedia.org' || clean === 'http://en.wikipedia.org') {
+    return {
+      title: 'Wikipedia - Educational Library',
+      render: renderWikipediaPortal
+    };
+  }
+
+  // Match Khan Academy Portal
+  if (clean === 'https://www.khanacademy.org' || clean === 'https://www.khanacademy.org/' ||
+      clean === 'https://khanacademy.org' || clean === 'http://www.khanacademy.org') {
+    return {
+      title: 'Khan Academy - Secondary Curriculum Hub',
+      render: renderKhanAcademyPortal
+    };
+  }
+
+  // Match NASA Space Exploration Portal
+  if (clean === 'https://www.nasa.gov' || clean === 'https://www.nasa.gov/' ||
+      clean === 'https://nasa.gov' || clean === 'http://www.nasa.gov') {
+    return {
+      title: 'NASA Space Exploration Hub',
+      render: renderNasaPortal
+    };
+  }
+
+  // Match path slug (e.g. /wiki/Cell_biology)
+  try {
+    const parsed = new URL(clean.startsWith('http') ? clean : 'https://' + clean);
+    const pathSlug = parsed.pathname.toLowerCase().replace(/\/$/, '');
+    if (pathSlug && pathSlug.length > 2) {
+      const combined = { ...db, ...art };
+      for (const [key, item] of Object.entries(combined)) {
+        try {
+          const itemUrl = new URL(key);
+          if (itemUrl.pathname.toLowerCase().replace(/\/$/, '') === pathSlug) {
+            return item;
+          }
+        } catch (_) {}
+      }
+    }
+  } catch (_) {}
+
+  return null;
+}
+
+function searchAllOfflineArticles(query) {
+  const terms = query.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  if (!terms.length) return [];
+
+  const combined = {
+    ...(typeof OFFLINE_WEB_DB !== 'undefined' ? OFFLINE_WEB_DB : {}),
+    ...(typeof OFFLINE_ARTICLES !== 'undefined' ? OFFLINE_ARTICLES : {})
+  };
+
+  const results = [];
+  for (const [url, item] of Object.entries(combined)) {
+    if (url === 'dawamu://home' || url === 'dawamu://search') continue;
+    let score = 0;
+    const title = (item.title || '').toLowerCase();
+    const cat = (item.category || '').toLowerCase();
+    const sum = (item.summary || '').toLowerCase();
+    const u = url.toLowerCase();
+
+    for (const term of terms) {
+      if (title.includes(term)) score += 6;
+      if (cat.includes(term)) score += 3;
+      if (sum.includes(term)) score += 2;
+      if (u.includes(term)) score += 2;
+    }
+
+    if (score > 0) {
+      results.push({
+        url,
+        title: item.title || urlTitle(url),
+        category: item.category || 'Curriculum',
+        summary: item.summary || 'Verified KCSE syllabus revision resource.',
+        score
+      });
+    }
+  }
+
+  return results.sort((a, b) => b.score - a.score);
+}
 
 /* ═══════════════════════════════════════════════════
    ENTRY POINT
@@ -124,7 +245,7 @@ function buildChrome() {
       </div>
       <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
              class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-400 min-w-0 font-medium"
-             placeholder="Search Google or enter school URL...">
+             placeholder="Search Google, Wikipedia, or enter URL...">
       <div class="flex items-center gap-1.5 shrink-0">
         <span class="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
@@ -133,7 +254,7 @@ function buildChrome() {
       </div>
     </div>
 
-    <!-- Downloads Drawer Button -->
+    <!-- Save Page & Downloads Drawer Button -->
     <button id="btn-save-page" class="px-2.5 h-[30px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0" title="Save Current Web Page to This PC > Downloads"><i class="fas fa-file-download text-xs"></i><span>Save Page</span></button>
     <button id="btn-downloads" class="nb relative" title="Downloads (Stored in This PC > Downloads)">
       <i class="fas fa-arrow-down text-xs text-slate-300"></i>
@@ -210,6 +331,8 @@ function buildChrome() {
     .start-overlay.hidden { display:none !important; }
     .offline-tool { position:absolute; inset:0; z-index:11; overflow-y:auto; background:#0b1322; }
     .offline-tool.hidden { display:none !important; }
+    .offline-article-body { color:#e2e8f0; line-height:1.7; }
+    .offline-article-body a { color:#38bdf8; text-decoration:underline; }
   </style>`;
 }
 
@@ -230,6 +353,13 @@ function buildTabDOM(root, tabId) {
   wrap.id = `tw-${tabId}`;
   wrap.className = 'tab-wrap hidden';
 
+  // 1. External website sandbox diagnostic banner (rendered at the top of tab)
+  const banner = document.createElement('div');
+  banner.id = `ext-banner-${tabId}`;
+  banner.className = 'hidden shrink-0 z-20';
+  wrap.appendChild(banner);
+
+  // 2. Main web renderer (webview in Electron, iframe in Web mode)
   if (IS_ELECTRON) {
     const wv = document.createElement('webview');
     wv.id = `wv-${tabId}`;
@@ -241,32 +371,26 @@ function buildTabDOM(root, tabId) {
   } else {
     const fr = document.createElement('iframe');
     fr.id = `wv-${tabId}`;
-    fr.style.cssText = 'width:100%;height:100%;border:none;display:block;';
+    fr.style.cssText = 'flex: 1 1 0%; width: 100%; height: 100%; border: none; display: block;';
     fr.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
     fr.allow = 'fullscreen';
     fr.addEventListener('load', () => progress(root, tabId, false));
     wrap.appendChild(fr);
   }
 
-  // Offline tool overlay (for dawamu:// pages)
+  // 3. Offline tool / article overlay (absolute overlay for dawamu:// and offline articles)
   const toolOverlay = document.createElement('div');
   toolOverlay.id = `ot-${tabId}`;
   toolOverlay.className = 'offline-tool hidden';
   wrap.appendChild(toolOverlay);
 
-  // Start page overlay
+  // 4. Start page overlay
   const overlay = document.createElement('div');
   overlay.id = `sp-${tabId}`;
   overlay.className = 'start-overlay bg-[#202124]';
   overlay.innerHTML = startPageHTML(tabId);
   wireStartPage(root, tabId, overlay);
   wrap.appendChild(overlay);
-
-  // External website sandbox diagnostic banner
-  const banner = document.createElement('div');
-  banner.id = `ext-banner-${tabId}`;
-  banner.className = 'hidden shrink-0 z-20';
-  wrap.appendChild(banner);
 
   canvas.appendChild(wrap);
 }
@@ -391,27 +515,42 @@ function renderTabStrip(root) {
    NAVIGATION
 ═══════════════════════════════════════════════════ */
 function loadUrl(root, tabId, url, pushHistory = true) {
-  // Handle internal dawamu:// URLs (always offline)
+  // 1. Internal dawamu:// URLs (always offline tools)
   if (isOfflineTool(url)) {
     showOfflineTool(root, tabId, url);
     return;
   }
 
-  // Check if offline and trying to load a web URL
+  // 2. Search query route
+  if (url.startsWith('dawamu://search')) {
+    const q = decodeURIComponent(url.split('?q=')[1] || '').trim();
+    showSearchResults(root, tabId, q);
+    return;
+  }
+
+  // 3. Offline Encyclopedia / Educational Article match
+  const offlineMatch = findOfflineArticleOrPage(url);
+  if (offlineMatch) {
+    showOfflineArticle(root, tabId, url, offlineMatch);
+    return;
+  }
+
+  // 4. Policy Access Check (Restrictions, Blocklists, Curfew)
+  const access = restrictionManager.checkUrlAccess(url);
+  if (!access.allowed) {
+    showBlock(root, tabId, url, access.reason);
+    return;
+  }
+
+  // 5. Offline network check
   if (!navigator.onLine) {
     showOfflineTool(root, tabId, 'dawamu://offline', url);
     return;
   }
 
-  const access = restrictionManager.checkUrlAccess(url);
-  if (!access.allowed) { showBlock(root, tabId, url, access.reason); return; }
-
-  // Hide overlays, show webview
+  // 6. Online Live Web Browsing
   root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
   root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
-
-  const view = root.querySelector(`#wv-${tabId}`);
-  if (view) view.src = url;
 
   const tab = tabs.find(t => t.id === tabId);
   if (tab) {
@@ -425,21 +564,41 @@ function loadUrl(root, tabId, url, pushHistory = true) {
     }
   }
 
-  // If outside Electron and accessing external web, show sandbox notice banner
   const banner = root.querySelector(`#ext-banner-${tabId}`);
-  if (banner) {
-    const isLocal = url.includes('127.0.0.1') || url.includes('localhost') || url.startsWith('dawamu://');
-    if (!IS_ELECTRON && !isLocal) {
+
+  if (IS_ELECTRON) {
+    // Native Electron <webview>
+    const wv = root.querySelector(`#wv-${tabId}`);
+    if (wv) {
+      wv.classList.remove('hidden');
+      wv.src = url;
+    }
+    banner?.classList.add('hidden');
+  } else {
+    // Web Application Mode (Chrome / Edge / Safari / Browser)
+    const fr = root.querySelector(`#wv-${tabId}`);
+    if (fr) {
+      fr.classList.remove('hidden');
+      // Route through local EduGuard Safe Proxy on port 8000
+      const proxyUrl = `http://127.0.0.1:8000/api/v1/proxy?url=${encodeURIComponent(url)}`;
+      fr.src = proxyUrl;
+    }
+
+    if (banner) {
       try {
         const parsed = new URL(url);
         banner.innerHTML = `
-          <div class="flex items-center justify-between text-xs py-1.5 px-3 bg-slate-900/95 border-b border-white/10 text-slate-300">
+          <div class="flex items-center justify-between text-xs py-1.5 px-3 bg-slate-900/95 border-b border-emerald-500/30 text-slate-300">
             <span class="flex items-center gap-2 truncate">
-              <i class="fas fa-info-circle text-sky-400"></i>
-              <span><b>${parsed.hostname}</b> (Web Sandbox Mode)</span>
+              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="text-white font-semibold">${parsed.hostname}</span>
+              <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/40 px-2 py-0.5 rounded-full font-mono">Safe Web Active</span>
             </span>
             <div class="flex items-center gap-2 shrink-0">
-              <button class="ext-open-btn px-2.5 py-1 rounded bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer">
+              <button class="ext-wiki-btn px-2.5 py-1 rounded-lg bg-emerald-900/50 hover:bg-emerald-800 text-emerald-300 hover:text-white font-semibold text-[10px] flex items-center gap-1 cursor-pointer transition-all">
+                <i class="fas fa-book-open"></i> Offline Library
+              </button>
+              <button class="ext-open-btn px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-[10px] flex items-center gap-1 cursor-pointer transition-all shadow-sm">
                 <i class="fas fa-external-link-alt"></i> Open in External Window
               </button>
             </div>
@@ -450,11 +609,13 @@ function loadUrl(root, tabId, url, pushHistory = true) {
           e.stopPropagation();
           window.open(url, '_blank');
         });
+        banner.querySelector('.ext-wiki-btn')?.addEventListener('click', (e) => {
+          e.stopPropagation();
+          loadUrl(root, tabId, 'https://www.wikipedia.org');
+        });
       } catch (_) {
         banner.classList.add('hidden');
       }
-    } else {
-      banner.classList.add('hidden');
     }
   }
 
@@ -473,13 +634,23 @@ function navigate(root, tabId, raw) {
     return;
   }
 
+  // Check if it matches an offline educational article or topic
+  if (findOfflineArticleOrPage(url)) {
+    loadUrl(root, tabId, url);
+    return;
+  }
+
+  // Check if it's a URL (contains a dot with no spaces, or starts with http:// or https://)
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     if (/\.\w{2,}/.test(url) && !url.includes(' ')) {
       url = 'https://' + url;
     } else {
+      // It's a search query! Check policy
       const q = restrictionManager.inspectSearchQuery(url);
       if (!q.safe) { showBlock(root, tabId, url, q.reason); return; }
-      url = ENGINES[engine].url + encodeURIComponent(url);
+
+      loadUrl(root, tabId, `dawamu://search?q=${encodeURIComponent(url)}`);
+      return;
     }
   }
 
@@ -487,13 +658,309 @@ function navigate(root, tabId, raw) {
 }
 
 /* ═══════════════════════════════════════════════════
+   OFFLINE ARTICLE & SEARCH RENDERING
+═══════════════════════════════════════════════════ */
+function showOfflineArticle(root, tabId, url, article) {
+  progress(root, tabId, false);
+  root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
+
+  const toolOverlay = root.querySelector(`#ot-${tabId}`);
+  if (!toolOverlay) return;
+
+  const contentHtml = typeof article.render === 'function' ? article.render() : article.render;
+  toolOverlay.innerHTML = `
+    <div class="p-6 max-w-4xl mx-auto">
+      <div class="flex items-center justify-between pb-3 mb-4 border-b border-white/10 text-xs">
+        <div class="flex items-center gap-2 truncate">
+          <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
+          <span class="text-emerald-400 font-bold uppercase text-[10px] tracking-wider font-mono shrink-0">Encached Resource</span>
+          <span class="text-slate-500 font-mono text-[11px] truncate">${escapeHtml(url)}</span>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          <button class="art-back-btn px-2.5 py-1 rounded bg-white/5 hover:bg-white/10 text-slate-300 text-[11px] font-semibold cursor-pointer">
+            <i class="fas fa-home mr-1"></i> Start
+          </button>
+          <a href="${url}" target="_blank" class="px-2.5 py-1 rounded bg-blue-600/30 hover:bg-blue-600 text-blue-300 hover:text-white text-[11px] font-semibold transition-all">
+            <i class="fas fa-external-link-alt mr-1"></i> External
+          </a>
+        </div>
+      </div>
+      <div class="offline-article-body">
+        ${contentHtml}
+      </div>
+    </div>
+  `;
+  toolOverlay.classList.remove('hidden');
+
+  // Wire links inside the rendered article
+  toolOverlay.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const href = a.getAttribute('href');
+      if (href && !href.startsWith('#') && a.getAttribute('target') !== '_blank') {
+        e.preventDefault();
+        loadUrl(root, tabId, href);
+      }
+    });
+  });
+
+  toolOverlay.querySelector('.art-back-btn')?.addEventListener('click', () => {
+    showStartPage(root, tabId);
+  });
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) {
+    tab.url = url;
+    tab.title = article.title || 'Educational Resource';
+  }
+  if (tabId === activeTabId) root.querySelector('#omnibox').value = url;
+  renderTabStrip(root);
+}
+
+function showSearchResults(root, tabId, query) {
+  progress(root, tabId, false);
+  root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
+
+  const toolOverlay = root.querySelector(`#ot-${tabId}`);
+  if (!toolOverlay) return;
+
+  const results = searchAllOfflineArticles(query);
+  const liveEngineUrl = ENGINES[engine].url + encodeURIComponent(query);
+
+  toolOverlay.innerHTML = `
+    <div class="p-6 max-w-4xl mx-auto space-y-6">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div>
+          <div class="text-[10px] text-emerald-400 font-bold uppercase tracking-widest font-mono">Dawamu Safe Search</div>
+          <h2 class="text-xl font-bold text-white mt-0.5">Results for: <span class="text-emerald-400">"${escapeHtml(query)}"</span></h2>
+        </div>
+        <div class="text-xs text-slate-400 font-mono">${results.length} verified curriculum matches</div>
+      </div>
+
+      <!-- Quick Action: Search Live Web via Safe Proxy / Webview -->
+      <div class="bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/30 p-4 rounded-2xl flex items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-lg">
+            <i class="fas fa-globe"></i>
+          </div>
+          <div>
+            <div class="text-xs font-bold text-white">Live Safe Web Search</div>
+            <div class="text-[11px] text-slate-400">Query Google / Bing with automated school policy & SafeSearch filtering</div>
+          </div>
+        </div>
+        <button id="srch-live-btn" class="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 py-2 rounded-xl shrink-0 transition-all cursor-pointer shadow-md">
+          Search Live Web &rarr;
+        </button>
+      </div>
+
+      <!-- Offline Matched Articles List -->
+      ${results.length === 0 ? `
+        <div class="bg-slate-900/60 p-8 rounded-2xl text-center space-y-3 border border-slate-800">
+          <i class="fas fa-search text-3xl text-slate-600"></i>
+          <h3 class="text-sm font-bold text-white">No local curriculum match for "${escapeHtml(query)}"</h3>
+          <p class="text-xs text-slate-400 max-w-md mx-auto">
+            Try searching for fundamental topics like <b>Photosynthesis</b>, <b>Cell Biology</b>, <b>History of Kenya</b>, <b>Solar System</b>, <b>Electricity</b>, or <b>Algebra</b>.
+          </p>
+        </div>
+      ` : `
+        <div class="space-y-3">
+          ${results.map(r => `
+            <div class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 transition-all cursor-pointer srch-result-card" data-url="${r.url}">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[9px] bg-emerald-950 text-emerald-300 border border-emerald-700/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">${r.category || 'Curriculum'}</span>
+                <span class="text-[10px] text-slate-400 font-mono truncate">${r.url}</span>
+              </div>
+              <h3 class="text-sm font-bold text-white group-hover:text-emerald-400">${r.title}</h3>
+              <p class="text-xs text-slate-300 mt-1 line-clamp-2 leading-relaxed">${r.summary || 'Click to view the complete lesson and curriculum article.'}</p>
+            </div>
+          `).join('')}
+        </div>
+      `}
+
+      <div class="pt-4 border-t border-white/10 flex justify-between items-center text-xs">
+        <button id="srch-home-btn" class="text-slate-400 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5">
+          <i class="fas fa-home"></i> Return to Browser Start Page
+        </button>
+        <span class="text-[10px] text-emerald-400 font-mono">Protected Student Session</span>
+      </div>
+    </div>
+  `;
+  toolOverlay.classList.remove('hidden');
+
+  toolOverlay.querySelector('#srch-live-btn')?.addEventListener('click', () => {
+    loadUrl(root, tabId, liveEngineUrl);
+  });
+  toolOverlay.querySelector('#srch-home-btn')?.addEventListener('click', () => {
+    showStartPage(root, tabId);
+  });
+  toolOverlay.querySelectorAll('.srch-result-card').forEach(card => {
+    card.addEventListener('click', () => {
+      loadUrl(root, tabId, card.dataset.url);
+    });
+  });
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) {
+    tab.url = `dawamu://search?q=${encodeURIComponent(query)}`;
+    tab.title = `Search: ${query}`;
+  }
+  if (tabId === activeTabId) root.querySelector('#omnibox').value = query;
+  renderTabStrip(root);
+}
+
+/* ═══════════════════════════════════════════════════
+   EDUCATIONAL PORTALS (WIKIPEDIA, KHAN, NASA)
+═══════════════════════════════════════════════════ */
+function renderWikipediaPortal() {
+  const articles = [
+    { title: 'Photosynthesis', cat: 'Biology', url: 'https://en.wikipedia.org/wiki/Photosynthesis', desc: 'Light-dependent reactions, Calvin cycle & chemical equation.', icon: 'fa-leaf text-emerald-400' },
+    { title: 'Cell Biology', cat: 'Biology', url: 'https://en.wikipedia.org/wiki/Cell_biology', desc: 'Cellular ultrastructure, organelles, membranes & mitosis.', icon: 'fa-dna text-teal-400' },
+    { title: 'Circulatory System', cat: 'Biology', url: 'https://en.wikipedia.org/wiki/Circulatory_system', desc: 'Heart anatomy, pulmonary circulation & blood vessels.', icon: 'fa-heart-pulse text-rose-400' },
+    { title: 'History of Kenya', cat: 'History', url: 'https://en.wikipedia.org/wiki/History_of_Kenya', desc: 'From Cradle of Humankind to 1963 Independence & 2010 Constitution.', icon: 'fa-landmark text-amber-400' },
+    { title: 'Constitution of Kenya', cat: 'Government', url: 'https://en.wikipedia.org/wiki/Constitution_of_Kenya', desc: 'Bill of Rights, devolution & governance structure.', icon: 'fa-scale-balanced text-yellow-400' },
+    { title: 'Solar System', cat: 'Astronomy', url: 'https://en.wikipedia.org/wiki/Solar_System', desc: 'Planetary mechanics, inner/outer planets & orbital laws.', icon: 'fa-sun text-orange-400' },
+    { title: 'Electricity & Ohm\'s Law', cat: 'Physics', url: 'https://en.wikipedia.org/wiki/Electricity', desc: 'Charge, voltage, current, resistance & series/parallel circuits.', icon: 'fa-bolt text-yellow-400' },
+    { title: 'Periodic Table & Trends', cat: 'Chemistry', url: 'https://en.wikipedia.org/wiki/Periodic_table', desc: 'Electronegativity, ionization energy & atomic radii trends.', icon: 'fa-atom text-purple-400' },
+    { title: 'Chemical Bonding', cat: 'Chemistry', url: 'https://en.wikipedia.org/wiki/Chemical_bonding', desc: 'Ionic, covalent, metallic & hydrogen bonding.', icon: 'fa-flask text-sky-400' },
+    { title: 'Plate Tectonics & Rift Valley', cat: 'Geography', url: 'https://en.wikipedia.org/wiki/Plate_tectonics', desc: 'Continental drift, faulting & East African Rift System.', icon: 'fa-mountain text-emerald-400' },
+    { title: 'Computer Programming', cat: 'Computer Science', url: 'https://en.wikipedia.org/wiki/Computer_programming', desc: 'Logic, data structures, variables & control flow.', icon: 'fa-code text-blue-400' },
+    { title: 'Algorithms & Big-O', cat: 'Computer Science', url: 'https://en.wikipedia.org/wiki/Algorithms_and_complexity', desc: 'Searching, sorting & computational complexity.', icon: 'fa-network-wired text-indigo-400' },
+  ];
+
+  return `
+    <div class="max-w-4xl mx-auto py-8 px-4 font-sans">
+      <div class="border-b border-white/10 pb-5 mb-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-2xl text-slate-100">
+            <i class="fab fa-wikipedia-w"></i>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white">Wikipedia Educational Library</h1>
+            <p class="text-xs text-slate-400">Curated, syllabus-aligned encyclopedia articles for secondary school studies</p>
+          </div>
+        </div>
+        <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/50 px-2.5 py-1 rounded-full font-bold">100% Offline Ready</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        ${articles.map(a => `
+          <a href="${a.url}" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/40 transition-all flex items-start gap-3.5 no-underline group">
+            <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-lg shrink-0 group-hover:scale-110 transition-transform">
+              <i class="fas ${a.icon}"></i>
+            </div>
+            <div>
+              <div class="flex items-center gap-2 mb-0.5">
+                <span class="text-[9px] font-bold uppercase tracking-wider text-emerald-400 font-mono">${a.cat}</span>
+              </div>
+              <h3 class="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">${a.title}</h3>
+              <p class="text-xs text-slate-400 mt-1 leading-relaxed">${a.desc}</p>
+            </div>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderKhanAcademyPortal() {
+  const courses = [
+    { title: 'Algebra & Linear Equations', cat: 'Mathematics', url: 'https://www.khanacademy.org/math/algebra', desc: 'Equations, inequalities, quadratic formula & systems.', icon: 'fa-square-root-alt text-amber-400' },
+    { title: 'High School Physics', cat: 'Physics', url: 'https://www.khanacademy.org/science/physics', desc: 'Kinematics, forces, energy, momentum & waves.', icon: 'fa-wave-square text-cyan-400' },
+    { title: 'Plane Geometry & Trigonometry', cat: 'Mathematics', url: 'https://en.wikipedia.org/wiki/Plane_geometry', desc: 'Circles, polygons, Pythagoras theorem & trigonometric ratios.', icon: 'fa-shapes text-emerald-400' },
+    { title: 'Differential Calculus', cat: 'Mathematics', url: 'https://en.wikipedia.org/wiki/Differential_calculus', desc: 'Limits, derivatives, rate of change & tangents.', icon: 'fa-chart-line text-purple-400' },
+    { title: 'Acids, Bases & pH Calculations', cat: 'Chemistry', url: 'https://en.wikipedia.org/wiki/Acids_and_bases', desc: 'Bronsted-Lowry, titration & pH scale.', icon: 'fa-flask text-rose-400' },
+  ];
+
+  return `
+    <div class="max-w-4xl mx-auto py-8 px-4 font-sans">
+      <div class="border-b border-white/10 pb-5 mb-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-2xl">
+            <i class="fas fa-leaf"></i>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white">Khan Academy KCSE Revision Hub</h1>
+            <p class="text-xs text-slate-400">Interactive STEM lessons, problem solving & step-by-step masteries</p>
+          </div>
+        </div>
+        <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/50 px-2.5 py-1 rounded-full font-bold">Verified Academic</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        ${courses.map(c => `
+          <a href="${c.url}" class="p-4 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/40 transition-all flex items-start gap-3.5 no-underline group">
+            <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-lg shrink-0 group-hover:scale-110 transition-transform">
+              <i class="fas ${c.icon}"></i>
+            </div>
+            <div>
+              <span class="text-[9px] font-bold uppercase tracking-wider text-emerald-400 font-mono">${c.cat}</span>
+              <h3 class="text-sm font-bold text-white group-hover:text-emerald-300 transition-colors">${c.title}</h3>
+              <p class="text-xs text-slate-400 mt-1 leading-relaxed">${c.desc}</p>
+            </div>
+          </a>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderNasaPortal() {
+  return `
+    <div class="max-w-4xl mx-auto py-8 px-4 font-sans">
+      <div class="border-b border-white/10 pb-5 mb-6 flex items-center justify-between">
+        <div class="flex items-center gap-3">
+          <div class="w-12 h-12 rounded-2xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-2xl">
+            <i class="fas fa-rocket"></i>
+          </div>
+          <div>
+            <h1 class="text-2xl font-bold text-white">NASA Space Exploration Center</h1>
+            <p class="text-xs text-slate-400">Solar system exploration, planetary science, and Mars rover missions</p>
+          </div>
+        </div>
+        <span class="text-[10px] bg-rose-950 text-rose-300 border border-rose-700/50 px-2.5 py-1 rounded-full font-bold">NASA Science</span>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+        <a href="https://www.nasa.gov/mars" class="p-5 rounded-2xl bg-gradient-to-br from-rose-950/40 to-slate-900 border border-rose-800/40 hover:border-rose-500 transition-all flex items-start gap-3.5 no-underline group">
+          <div class="w-12 h-12 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+            <i class="fas fa-satellite"></i>
+          </div>
+          <div>
+            <span class="text-[9px] font-bold uppercase text-rose-400 font-mono">Mission to Mars</span>
+            <h3 class="text-base font-bold text-white group-hover:text-rose-300">Mars Exploration Rover & Perseverance</h3>
+            <p class="text-xs text-slate-400 mt-1">Geology, atmospheric composition, biosignatures, and the search for ancient water.</p>
+          </div>
+        </a>
+
+        <a href="https://en.wikipedia.org/wiki/Solar_System" class="p-5 rounded-2xl bg-gradient-to-br from-indigo-950/40 to-slate-900 border border-indigo-800/40 hover:border-indigo-500 transition-all flex items-start gap-3.5 no-underline group">
+          <div class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl shrink-0 group-hover:scale-110 transition-transform">
+            <i class="fas fa-sun"></i>
+          </div>
+          <div>
+            <span class="text-[9px] font-bold uppercase text-indigo-400 font-mono">Astronomy</span>
+            <h3 class="text-base font-bold text-white group-hover:text-indigo-300">The Solar System</h3>
+            <p class="text-xs text-slate-400 mt-1">Eight planets, orbital mechanics, asteroid belts, and gravitational physics.</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════
    OFFLINE TOOL RENDERER
 ═══════════════════════════════════════════════════ */
 function showOfflineTool(root, tabId, toolUrl, failedUrl = '') {
   progress(root, tabId, false);
-
-  // Hide other overlays
   root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
 
   const toolOverlay = root.querySelector(`#ot-${tabId}`);
   if (!toolOverlay) return;
@@ -502,7 +969,6 @@ function showOfflineTool(root, tabId, toolUrl, failedUrl = '') {
   toolOverlay.innerHTML = tool.builder(root, tabId, failedUrl);
   toolOverlay.classList.remove('hidden');
 
-  // Wire any interactive elements inside the tool
   wireOfflineToolEvents(root, tabId, toolOverlay, toolUrl);
 
   const tab = tabs.find(t => t.id === tabId);
@@ -512,6 +978,17 @@ function showOfflineTool(root, tabId, toolUrl, failedUrl = '') {
 }
 
 function wireOfflineToolEvents(root, tabId, container, toolUrl) {
+  // Wire links inside container so navigation works
+  container.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const href = a.getAttribute('href');
+      if (href && !href.startsWith('#') && a.getAttribute('target') !== '_blank') {
+        e.preventDefault();
+        loadUrl(root, tabId, href);
+      }
+    });
+  });
+
   // "Try Again" buttons
   container.querySelectorAll('[data-retry]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -595,20 +1072,24 @@ function showBlock(root, tabId, blockedUrl, reason) {
   const overlay = root.querySelector(`#sp-${tabId}`);
   if (!overlay) return;
   root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
+
   overlay.classList.remove('hidden');
   overlay.innerHTML = `
-    <div class="max-w-lg w-full bg-[#292a2d] border border-[#5f6368]/50 rounded-3xl p-8 text-center space-y-5 shadow-2xl mx-4">
+    <div class="max-w-lg w-full bg-[#292a2d] border border-rose-500/40 rounded-3xl p-8 text-center space-y-5 shadow-2xl mx-4">
       <div class="w-14 h-14 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-3xl border border-rose-500/30">
         <i class="fas fa-shield-alt"></i>
       </div>
       <h2 class="text-lg font-bold text-white">Access Restricted</h2>
       <p class="text-slate-400 text-sm">${reason || 'Blocked by school administrator policy.'}</p>
       <div class="bg-[#1a1b1e] p-3 rounded-2xl font-mono text-xs text-rose-300 text-left space-y-1">
-        <div><b class="text-slate-400">URL:</b> ${blockedUrl}</div>
-        <div><b class="text-slate-400">Filter:</b> Dawamu Network Filter</div>
+        <div><b class="text-slate-400">URL:</b> ${escapeHtml(blockedUrl)}</div>
+        <div><b class="text-slate-400">Filter:</b> Dawamu Network Safety Policy</div>
       </div>
       <div class="flex justify-center gap-3">
-        <button data-home class="bg-[#389e3c] hover:bg-[#2e7d32] text-white text-xs font-semibold px-4 py-2 rounded-full">Return Home</button>
+        <button data-home class="bg-[#059669] hover:bg-[#10b981] text-white text-xs font-semibold px-5 py-2.5 rounded-xl cursor-pointer transition-all">Return to Browser Home</button>
       </div>
     </div>`;
 
@@ -624,6 +1105,9 @@ function showStartPage(root, tabId) {
   if (tab) { tab.url = null; tab.title = 'New Tab'; }
   if (tabId === activeTabId) root.querySelector('#omnibox').value = '';
   root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
   renderTabStrip(root);
 
   const overlay = root.querySelector(`#sp-${tabId}`);
@@ -640,7 +1124,7 @@ function startPageHTML(tabId) {
       </div>` : '';
 
   return `
-  <div class="flex flex-col items-center justify-center min-h-full p-8 text-center space-y-5 overflow-y-auto max-w-3xl mx-auto">
+  <div class="flex flex-col items-center justify-center min-h-full p-8 text-center space-y-4 overflow-y-auto max-w-3xl mx-auto">
     <div class="flex flex-col items-center gap-2">
       <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform">
       <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-300 text-[10px] font-bold uppercase tracking-widest mt-1">
@@ -655,13 +1139,24 @@ function startPageHTML(tabId) {
       <i class="fas fa-search text-emerald-400 text-sm mr-3 shrink-0"></i>
       <input id="sp-input-${tabId}" type="text"
              class="flex-1 bg-transparent outline-none text-white text-sm min-w-0 placeholder-slate-400 font-medium"
-             placeholder="Search Google, Wikipedia, or enter URL..."
+             placeholder="Search Google, Wikipedia, or enter curriculum topic..."
              autofocus>
-      <button id="sp-btn-${tabId}" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs px-5 py-2 rounded-xl ml-2 shrink-0 shadow-md transition-all active:scale-95">Search</button>
+      <button id="sp-btn-${tabId}" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs px-5 py-2 rounded-xl ml-2 shrink-0 shadow-md transition-all active:scale-95 cursor-pointer">Search</button>
+    </div>
+
+    <!-- Curriculum Fast-Access Chips -->
+    <div class="w-full max-w-xl flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Photosynthesis">🌿 Photosynthesis</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Cell_biology">🧬 Cell Biology</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/History_of_Kenya">🇰🇪 Kenya History</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://www.khanacademy.org/math/algebra">📐 Algebra</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Electricity">⚡ Ohm's Law</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://www.nasa.gov/mars">🚀 NASA Mars</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Computer_programming">💻 Coding</button>
     </div>
 
     <!-- Pinned Online Learning Shortcuts -->
-    <div class="w-full max-w-xl">
+    <div class="w-full max-w-xl pt-1">
       <div class="text-left text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2.5 flex items-center justify-between">
         <span class="flex items-center gap-1.5"><i class="fas fa-star text-amber-400 text-xs"></i> Verified Academic Portals</span>
         <span class="text-[10px] text-slate-500 font-normal">Fast Access</span>
@@ -677,7 +1172,7 @@ function startPageHTML(tabId) {
           { url:'https://www.bing.com',        icon:'fab fa-microsoft text-cyan-400',        name:'Bing', bg: 'from-cyan-900/30 to-blue-900/20' },
           { url:'https://www.duolingo.com',    icon:'fas fa-language text-green-400',       name:'Duolingo', bg: 'from-green-900/30 to-emerald-900/20' },
         ].map(c => `
-          <button class="sp-card bg-gradient-to-br ${c.bg} hover:brightness-125 border border-white/10 hover:border-emerald-500/40 p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:-translate-y-1 hover:shadow-xl group" data-url="${c.url}">
+          <button class="sp-card bg-gradient-to-br ${c.bg} hover:brightness-125 border border-white/10 hover:border-emerald-500/40 p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:-translate-y-1 hover:shadow-xl group cursor-pointer" data-url="${c.url}">
             <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
               <i class="${c.icon}"></i>
             </div>
@@ -687,7 +1182,7 @@ function startPageHTML(tabId) {
     </div>
 
     <!-- Offline Built-in Utilities -->
-    <div class="w-full max-w-xl pt-2">
+    <div class="w-full max-w-xl pt-1">
       <div class="text-left text-[11px] text-emerald-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
         <i class="fas fa-laptop-code text-xs"></i> Built-in Offline Utilities
       </div>
@@ -699,7 +1194,7 @@ function startPageHTML(tabId) {
           { url:'dawamu://notes',           icon:'fas fa-sticky-note text-yellow-400', name:'Notes' },
           { url:'dawamu://history',         icon:'fas fa-landmark text-rose-400',      name:'History' },
         ].map(c => `
-          <button class="sp-card bg-slate-900/70 hover:bg-slate-800/90 border border-emerald-900/40 hover:border-emerald-500/50 p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all hover:scale-105" data-url="${c.url}">
+          <button class="sp-card bg-slate-900/70 hover:bg-slate-800/90 border border-emerald-900/40 hover:border-emerald-500/50 p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all hover:scale-105 cursor-pointer" data-url="${c.url}">
             <i class="${c.icon} text-lg"></i>
             <span class="text-[10px] font-semibold text-slate-300 text-center">${c.name}</span>
           </button>`).join('')}
@@ -715,6 +1210,8 @@ function wireStartPage(root, tabId, overlay) {
   btn?.addEventListener('click', go);
   input?.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
   overlay.querySelectorAll('.sp-card').forEach(c =>
+    c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
+  overlay.querySelectorAll('.topic-chip').forEach(c =>
     c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
 }
 
@@ -880,8 +1377,8 @@ function buildOfflinePage(root, tabId, failedUrl) {
       </div>
       <h2 class="text-2xl font-bold text-white">You're Offline</h2>
       <p class="text-slate-400 text-sm max-w-md mx-auto">No internet connection detected. You can still use the built-in educational tools below.</p>
-      ${failedUrl ? `<div class="bg-[#292a2d] p-3 rounded-2xl font-mono text-xs text-slate-400 inline-block"><b>Tried:</b> ${failedUrl}</div>
-        <button data-retry="${failedUrl}" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white text-xs font-semibold px-6 py-2 rounded-full block mx-auto"><i class="fas fa-redo mr-2"></i>Try Again</button>` : ''}
+      ${failedUrl ? `<div class="bg-[#292a2d] p-3 rounded-2xl font-mono text-xs text-slate-400 inline-block"><b>Tried:</b> ${escapeHtml(failedUrl)}</div>
+        <button data-retry="${escapeHtml(failedUrl)}" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white text-xs font-semibold px-6 py-2 rounded-full block mx-auto cursor-pointer"><i class="fas fa-redo mr-2"></i>Try Again</button>` : ''}
     </div>
 
     <div class="mt-10">
@@ -894,7 +1391,7 @@ function buildOfflinePage(root, tabId, failedUrl) {
           { url:'dawamu://notes',          icon:'fas fa-sticky-note text-yellow-400', title:'Quick Notes',     desc:'Write & save notes offline' },
           { url:'dawamu://history',        icon:'fas fa-landmark text-rose-400',      title:'World History',   desc:'Key historical events' },
         ].map(t => `
-          <button data-tool="${t.url}" class="bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/50 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] hover:border-emerald-700/50">
+          <button data-tool="${t.url}" class="bg-[#292a2d] hover:bg-[#35363a] border border-slate-700/50 p-4 rounded-2xl text-left transition-all hover:scale-[1.02] hover:border-emerald-700/50 cursor-pointer">
             <i class="${t.icon} text-2xl mb-2"></i>
             <div class="text-sm font-bold text-white">${t.title}</div>
             <div class="text-[10px] text-slate-500 mt-0.5">${t.desc}</div>
@@ -903,7 +1400,7 @@ function buildOfflinePage(root, tabId, failedUrl) {
     </div>
 
     <div class="mt-6 text-center">
-      <button data-home class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold"><i class="fas fa-home mr-1"></i> Back to Start Page</button>
+      <button data-home class="text-emerald-400 hover:text-emerald-300 text-xs font-semibold cursor-pointer"><i class="fas fa-home mr-1"></i> Back to Start Page</button>
     </div>
   </div>`;
 }
@@ -939,7 +1436,7 @@ function buildDictionaryTool() {
 
     <div class="flex gap-2 mb-6">
       <input id="dict-search" type="text" placeholder="Type a word to look up..." class="flex-1 bg-[#303134] text-white border border-slate-700 rounded-xl px-4 py-2.5 text-sm outline-none focus:border-emerald-500">
-      <button id="dict-btn" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white font-bold px-5 py-2 rounded-xl text-sm">Look Up</button>
+      <button id="dict-btn" class="bg-[#389e3c] hover:bg-[#2e7d32] text-white font-bold px-5 py-2 rounded-xl text-sm cursor-pointer">Look Up</button>
     </div>
 
     <div id="dict-result" class="mb-6"></div>

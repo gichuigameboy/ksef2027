@@ -17,7 +17,7 @@ import { stateStore } from '../os/state.js';
 import { dawamuDialogs } from '../os/dialogs.js';
 
 /* ─── OFFLINE WEBPAGES DATABASE ─── */
-const OFFLINE_WEB_DB = {
+export const OFFLINE_WEB_DB = {
   // Start Page
   'dawamu://home': {
     title: 'Dawamu Offline Web',
