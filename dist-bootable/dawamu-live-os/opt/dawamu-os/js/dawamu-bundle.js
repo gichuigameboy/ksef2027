@@ -565,7 +565,7 @@ class OSState {
     const bright = typeof settings.brightness === 'number' ? Math.max(20, Math.min(100, settings.brightness)) : 90;
     const night = Boolean(settings.nightLight);
 
-    document.documentElement.style.setProperty('--desktop-brightness', ${bright}%);
+    document.documentElement.style.setProperty('--desktop-brightness', `${bright}%`);
     const desktopEl = document.getElementById('desktop');
     if (desktopEl) {
       desktopEl.style.removeProperty('filter');
@@ -19847,18 +19847,24 @@ function startDawamuOS() {
     reboot: () => {
       cleanupSession();
       document.body.style.background = '';
-      loginScreen.style.opacity = '1';
-      loginScreen.style.transform = 'scale(1)';
-      loginScreen.style.display = 'flex';
-      loginScreen.classList.remove('hidden');
+      if (loginScreen) {
+        loginScreen.style.opacity = '1';
+        loginScreen.style.pointerEvents = 'auto';
+        loginScreen.style.transform = 'scale(1)';
+        loginScreen.style.display = 'flex';
+        loginScreen.classList.remove('hidden');
+      }
       loginAdm?.focus();
     },
     signOut: () => {
       cleanupSession();
-      loginScreen.style.opacity = '1';
-      loginScreen.style.transform = 'scale(1)';
-      loginScreen.style.display = 'flex';
-      loginScreen.classList.remove('hidden');
+      if (loginScreen) {
+        loginScreen.style.opacity = '1';
+        loginScreen.style.pointerEvents = 'auto';
+        loginScreen.style.transform = 'scale(1)';
+        loginScreen.style.display = 'flex';
+        loginScreen.classList.remove('hidden');
+      }
       loginAdm?.focus();
     }
   };
@@ -19936,14 +19942,25 @@ function startDawamuOS() {
     } catch (_) {}
 
     // Isolate student storage immediately
-    stateStore.setActiveUser(userProfile);
+    try {
+      stateStore.setActiveUser(userProfile);
+    } catch (err) {
+      console.error('Failed to setActiveUser:', err);
+    }
 
     // Hide login screen and boot desktop immediately (0ms delay)
     loginErr?.classList.add('hidden');
-    loginScreen.style.opacity = '0';
-    loginScreen.style.display = 'none';
-    loginScreen.classList.add('hidden');
-    bootDesktop();
+    if (loginScreen) {
+      loginScreen.style.opacity = '0';
+      loginScreen.style.pointerEvents = 'none';
+      loginScreen.style.display = 'none';
+      loginScreen.classList.add('hidden');
+    }
+    try {
+      bootDesktop();
+    } catch (err) {
+      console.error('Failed during bootDesktop:', err);
+    }
 
     // Non-blocking background probe for local EduGuard FastAPI backend (Port 8000)
     try {
@@ -19979,15 +19996,30 @@ function startDawamuOS() {
     });
   }
 
-  // Quick Demo Account Click Handlers
+  // Quick Demo Account Click Handlers (Direct + Delegated)
+  const triggerQuickLogin = (btn) => {
+    if (!btn) return;
+    const adm = btn.getAttribute('data-adm') || '1001';
+    const pass = btn.getAttribute('data-pass') || 'dawamu2026';
+    if (loginAdm) loginAdm.value = adm;
+    if (loginPass) loginPass.value = pass;
+    performLogin(adm, pass);
+  };
+
   document.querySelectorAll('[data-quick-login]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const adm = btn.getAttribute('data-adm') || '1001';
-      const pass = btn.getAttribute('data-pass') || 'dawamu2026';
-      if (loginAdm) loginAdm.value = adm;
-      if (loginPass) loginPass.value = pass;
-      performLogin(adm, pass);
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerQuickLogin(btn);
     });
+  });
+
+  loginScreen?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-quick-login]');
+    if (btn) {
+      e.preventDefault();
+      triggerQuickLogin(btn);
+    }
   });
 
   let desktopInitialized = false;

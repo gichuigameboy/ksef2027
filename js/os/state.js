@@ -565,7 +565,7 @@ class OSState {
     const bright = typeof settings.brightness === 'number' ? Math.max(20, Math.min(100, settings.brightness)) : 90;
     const night = Boolean(settings.nightLight);
 
-    document.documentElement.style.setProperty('--desktop-brightness', ${bright}%);
+    document.documentElement.style.setProperty('--desktop-brightness', `${bright}%`);
     const desktopEl = document.getElementById('desktop');
     if (desktopEl) {
       desktopEl.style.removeProperty('filter');
