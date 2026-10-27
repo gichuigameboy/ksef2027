@@ -23,22 +23,21 @@ if exist "%ELECTRON_EXE%" (
     if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
         start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%ROOT_DIR%\EduGuard\backend"
     )
-    echo [2/2] Launching with Electron native engine...
-    start "" "%ELECTRON_EXE%" . %*
-    goto :eof
+    echo [2/2] Launching Dawamu OS Fullscreen with Electron native engine...
+    start /WAIT "" "%ELECTRON_EXE%" . --kiosk %*
+    goto :cleanup
 )
 if exist "%ROOT_DIR%\node_modules\.bin\electron.cmd" (
     echo [1/2] Starting EduGuard FastAPI Backend on port 8000...
     if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
         start "EduGuard-Backend" /MIN "%PY_EXE%" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --app-dir "%ROOT_DIR%\EduGuard\backend"
     )
-    echo [2/2] Launching with Electron native engine...
-    call "%ROOT_DIR%\node_modules\.bin\electron.cmd" . %*
-    goto :eof
+    echo [2/2] Launching Dawamu OS Fullscreen with Electron native engine...
+    call "%ROOT_DIR%\node_modules\.bin\electron.cmd" . --kiosk %*
+    goto :cleanup
 )
 
-:: 3. Desktop Standalone Mode (Python HTTP Server on 127.0.0.1:8080 + Chrome/Edge App Mode)
-:: Clean up any lingering port 8080 or 8000 processes to avoid conflicts
+:: 3. Desktop Standalone Mode (Python HTTP Server on 127.0.0.1:8080 + Chrome/Edge Fullscreen App Mode)
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>nul
 for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>nul
 
@@ -50,9 +49,8 @@ if exist "%ROOT_DIR%\EduGuard\backend\app\main.py" (
 echo [2/3] Initializing OS Local Static Engine on port 8080...
 start "Dawamu-StaticServer" /MIN "%PY_EXE%" -m http.server 8080 --bind 127.0.0.1 --directory "%ROOT_DIR%"
 
-:: Allow background servers 2 seconds to initialize (using ping for reliable non-blocking wait)
+:: Allow background servers 2 seconds to initialize
 ping 127.0.0.1 -n 3 >nul
-
 
 :: 4. Locate Browser (Chrome or Edge)
 set "BROWSER_EXE="
@@ -70,26 +68,17 @@ if exist "C:\Program Files\Google\Chrome\Application\chrome.exe" (
     set "BROWSER_EXE=%LocalAppData%\Microsoft\Edge\Application\msedge.exe"
 )
 
-echo [3/3] Opening Dawamu OS Desktop App Window...
+echo [3/3] Opening Dawamu OS in Fullscreen Mode...
 if defined BROWSER_EXE (
-    start "" "%BROWSER_EXE%" --app=http://127.0.0.1:8080/index.html --window-size=1366,768 --start-maximized
+    start /WAIT "" "%BROWSER_EXE%" --app=http://127.0.0.1:8080/index.html --start-fullscreen --user-data-dir="%LOCALAPPDATA%\DawamuOS\AppProfile"
 ) else (
-    start http://127.0.0.1:8080/index.html
+    start /WAIT http://127.0.0.1:8080/index.html
 )
 
-echo.
-echo =========================================================
-echo   Dawamu OS with EduGuard is now RUNNING!
-echo.
-echo   - Desktop OS UI:      http://127.0.0.1:8080
-echo   - EduGuard Backend:   http://127.0.0.1:8000
-echo   - EduGuard API Docs:  http://127.0.0.1:8000/docs
-echo =========================================================
-echo.
-echo Keep this terminal window open while using Dawamu OS.
-echo Press any key when you are finished to stop the servers.
-pause >nul
-
-echo Stopping servers...
+:cleanup
+echo Shutting down Dawamu OS background processes...
 taskkill /FI "WINDOWTITLE eq Dawamu-StaticServer*" /F >nul 2>nul
 taskkill /FI "WINDOWTITLE eq EduGuard-Backend*" /F >nul 2>nul
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8080 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>nul
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>nul
+exit /b 0

@@ -36,7 +36,13 @@ class WindowManager {
         hasMax = true;
       }
     });
-    if (!hasMax && typeof document !== 'undefined' && document.fullscreenElement) {
+    if (
+      !hasMax &&
+      typeof document !== 'undefined' &&
+      document.fullscreenElement &&
+      document.fullscreenElement !== document.documentElement &&
+      document.fullscreenElement !== document.body
+    ) {
       hasMax = true;
     }
     return hasMax;

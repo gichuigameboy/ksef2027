@@ -94,17 +94,115 @@ function startDawamuOS() {
     loginErr?.classList.add('hidden');
   }
 
-  /* ─── POWER MANAGER ─── */
+  /* ─── NATIVE FULLSCREEN OS HELPER ─── */
+  function enterOSFullscreen() {
+    try {
+      if (typeof document !== 'undefined' && !document.fullscreenElement) {
+        const el = document.documentElement;
+        const req = el.requestFullscreen || el.webkitRequestFullscreen || el.msRequestFullscreen;
+        if (req) {
+          Promise.resolve(req.call(el)).catch(() => {});
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Attempt fullscreen immediately on boot & on first user gesture anywhere in the OS
+  enterOSFullscreen();
+  const onFirstUserGesture = () => {
+    if (!document.getElementById('os-shutdown-screen')) {
+      enterOSFullscreen();
+    }
+  };
+  document.addEventListener('click', onFirstUserGesture, { once: true, capture: true });
+  document.addEventListener('keydown', onFirstUserGesture, { once: true, capture: true });
+
+  /* ─── POWER MANAGER (REAL OS FULL SHUTDOWN & PROCESS TERMINATION) ─── */
   window.dawamuPower = {
     shutdown: () => {
+      // 1. Force-close all open windows and destroy running app processes/timers/audio
       cleanupSession();
       document.getElementById('curfew-lockout-screen')?.classList.remove('active');
-      loginScreen.style.display = 'none';
-      document.body.style.background = '#000';
+      document.getElementById('launcher-overlay')?.classList.remove('open');
+      document.getElementById('quick-settings-overlay')?.classList.remove('open');
+      if (loginScreen) {
+        loginScreen.style.display = 'none';
+        loginScreen.classList.add('hidden');
+      }
+
+      // 2. Render macOS Liquid Glass Shutdown Sequence Overlay
+      let shutdownOverlay = document.getElementById('os-shutdown-screen');
+      if (!shutdownOverlay) {
+        shutdownOverlay = document.createElement('div');
+        shutdownOverlay.id = 'os-shutdown-screen';
+        shutdownOverlay.className = 'fixed inset-0 z-[2000000] flex flex-col items-center justify-center bg-black text-white select-none font-sans';
+        document.body.appendChild(shutdownOverlay);
+      }
+      shutdownOverlay.style.display = 'flex';
+      shutdownOverlay.innerHTML = `
+        <div class="flex flex-col items-center gap-4 text-center p-8">
+          <img src="assets/dawamu-logo.png" alt="Dawamu OS" class="h-16 w-auto object-contain opacity-90 mb-2">
+          <div class="w-7 h-7 rounded-full border-2 border-white/20 border-t-emerald-400 animate-spin"></div>
+          <div id="os-shutdown-status" class="text-sm font-semibold text-slate-200 tracking-wide">Shutting down Dawamu OS...</div>
+          <div id="os-shutdown-sub" class="text-xs text-slate-400">Closing active applications and stopping background processes...</div>
+        </div>
+      `;
+
+      // 3. Signal EduGuard backend & static server processes to terminate
+      try {
+        fetch('http://127.0.0.1:8000/api/v1/system/shutdown', {
+          method: 'POST',
+          keepalive: true
+        }).catch(() => {});
+      } catch (_) {}
+
+      // 4. Exit fullscreen and close native/standalone application window
+      setTimeout(() => {
+        try {
+          if (document.fullscreenElement && document.exitFullscreen) {
+            document.exitFullscreen().catch(() => {});
+          }
+        } catch (_) {}
+
+        if (window.electronAPI && typeof window.electronAPI.exitApp === 'function') {
+          window.electronAPI.exitApp();
+          return;
+        }
+
+        try {
+          window.open('', '_self');
+          window.close();
+        } catch (_) {}
+
+        // Fallback if running inside a standard browser tab that prevents window.close()
+        setTimeout(() => {
+          if (shutdownOverlay) {
+            shutdownOverlay.innerHTML = `
+              <div class="flex flex-col items-center gap-4 text-center p-8 max-w-md">
+                <div class="w-14 h-14 rounded-full bg-white/5 border border-white/10 flex items-center justify-center text-slate-400 text-xl">
+                  <i class="fas fa-power-off"></i>
+                </div>
+                <div class="text-base font-bold text-slate-200">System Powered Off</div>
+                <div class="text-xs text-slate-400 leading-relaxed">All Dawamu OS applications, user sessions, and background services have been stopped. You may close this window or power the system back on.</div>
+                <button id="os-power-on-btn" class="mt-2 px-5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold cursor-pointer transition-all shadow-lg">
+                  <i class="fas fa-bolt mr-1.5"></i> Power On Dawamu OS
+                </button>
+              </div>
+            `;
+            shutdownOverlay.querySelector('#os-power-on-btn')?.addEventListener('click', () => {
+              shutdownOverlay.remove();
+              enterOSFullscreen();
+              window.dawamuPower.reboot();
+            });
+          }
+        }, 350);
+      }, 650);
     },
     reboot: () => {
+      document.getElementById('os-shutdown-screen')?.remove();
       cleanupSession();
       document.body.style.background = '';
+      enterOSFullscreen();
       if (loginScreen) {
         loginScreen.style.opacity = '1';
         loginScreen.style.pointerEvents = 'auto';
@@ -127,8 +225,13 @@ function startDawamuOS() {
     }
   };
 
+  document.getElementById('login-shutdown-btn')?.addEventListener('click', () => {
+    window.dawamuPower.shutdown();
+  });
+
   /* ─── LOGIN GATE & AUTHENTICATION FLOW (INSTANT 0ms LOGIN) ─── */
   function performLogin(adm, pass) {
+    enterOSFullscreen();
     const cleanAdm = (adm || '').trim();
     const cleanPass = (pass || '').trim();
     const effectiveAdm = cleanAdm || '1001';

@@ -67,7 +67,7 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     kiosk:      isKioskMode,
-    fullscreen: isKioskMode,
+    fullscreen: true,
     backgroundColor: '#020c07',
     show: false,
     webPreferences: {
@@ -121,7 +121,9 @@ function createWindow() {
   });
 
   mainWindow.once('ready-to-show', () => {
+    mainWindow.setFullScreen(true);
     mainWindow.show();
+    mainWindow.focus();
   });
 
   mainWindow.on('closed', () => { mainWindow = null; });
@@ -304,7 +306,21 @@ ipcMain.on('minimize-app', (event) => {
   mainWindow?.minimize();
 });
 
+function terminateAllProcessesAndQuit() {
+  try {
+    if (process.platform === 'win32') {
+      try { execSync('taskkill /FI "WINDOWTITLE eq Dawamu-StaticServer*" /F', { stdio: 'ignore', timeout: 1500 }); } catch (_) {}
+      try { execSync('taskkill /FI "WINDOWTITLE eq EduGuard-Backend*" /F', { stdio: 'ignore', timeout: 1500 }); } catch (_) {}
+    }
+    BrowserWindow.getAllWindows().forEach((win) => {
+      try { win.destroy(); } catch (_) {}
+    });
+  } catch (_) {}
+  app.quit();
+  setTimeout(() => process.exit(0), 200);
+}
+
 ipcMain.on('exit-app', (event) => {
   if (!isAuthorizedSender(event)) return;
-  app.quit();
+  terminateAllProcessesAndQuit();
 });

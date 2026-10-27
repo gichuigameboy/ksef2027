@@ -7448,3 +7448,5 @@ input[type="text"], input[type="search"], textarea, select {
 .border-amber-400\/40 { border-color: rgba(251, 191, 36, 0.4); }
 .border-blue-400\/40 { border-color: rgba(96, 165, 250, 0.4); }
 .border-rose-400\/30 { border-color: rgba(251, 113, 133, 0.3); }
+.border-t-emerald-400 { border-top-color: #34d399; }
+.z-\[2000000\] { z-index: 2000000; }
