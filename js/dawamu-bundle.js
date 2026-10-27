@@ -19,33 +19,33 @@ const STUDENT_PERSONALIZATION_PREFIX = 'dawamu_personalization_';
 const WALLPAPER_PRESETS = [
   {
     id: 'emerald',
-    name: 'Dawamu Emerald (Default)',
+    name: 'macOS Tahoe Liquid Emerald',
     color: '#10b981',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(16, 185, 129, 0.22) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(4, 120, 87, 0.18) 0%, transparent 60%), #041409'
+    bgCss: 'radial-gradient(ellipse 85% 65% at 22% 18%, rgba(16, 185, 129, 0.42) 0%, transparent 62%), radial-gradient(ellipse 75% 60% at 82% 28%, rgba(14, 165, 233, 0.36) 0%, transparent 60%), radial-gradient(ellipse 80% 65% at 65% 88%, rgba(99, 102, 241, 0.34) 0%, transparent 64%), radial-gradient(ellipse 60% 50% at 18% 82%, rgba(20, 184, 166, 0.28) 0%, transparent 58%), linear-gradient(135deg, #030914 0%, #06182c 48%, #04101f 100%)'
   },
   {
     id: 'deep_blue',
-    name: 'Deep Blue Windows',
+    name: 'macOS Sequoia Liquid Sapphire',
     color: '#3b82f6',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(59, 130, 246, 0.25) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(30, 58, 138, 0.25) 0%, transparent 60%), #030712'
+    bgCss: 'radial-gradient(ellipse 85% 65% at 25% 15%, rgba(59, 130, 246, 0.46) 0%, transparent 62%), radial-gradient(ellipse 75% 60% at 82% 72%, rgba(139, 92, 246, 0.38) 0%, transparent 62%), radial-gradient(ellipse 65% 55% at 75% 18%, rgba(6, 182, 212, 0.32) 0%, transparent 58%), linear-gradient(135deg, #020617 0%, #0a1936 50%, #050b1c 100%)'
   },
   {
     id: 'midnight',
-    name: 'Midnight Obsidian',
+    name: 'macOS Sonoma Liquid Amethyst',
     color: '#8b5cf6',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139, 92, 246, 0.18) 0%, transparent 65%), #07070c'
+    bgCss: 'radial-gradient(ellipse 85% 65% at 30% 15%, rgba(139, 92, 246, 0.42) 0%, transparent 62%), radial-gradient(ellipse 70% 60% at 80% 75%, rgba(236, 72, 153, 0.30) 0%, transparent 60%), radial-gradient(ellipse 65% 55% at 18% 80%, rgba(59, 130, 246, 0.28) 0%, transparent 60%), linear-gradient(135deg, #060412 0%, #130b29 52%, #070510 100%)'
   },
   {
     id: 'sunset',
-    name: 'African Savannah Sunset',
+    name: 'Savannah Liquid Horizon',
     color: '#f59e0b',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(245, 158, 11, 0.25) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(225, 29, 72, 0.18) 0%, transparent 60%), #140505'
+    bgCss: 'radial-gradient(ellipse 85% 60% at 35% 15%, rgba(245, 158, 11, 0.42) 0%, transparent 62%), radial-gradient(ellipse 75% 60% at 82% 68%, rgba(244, 63, 94, 0.35) 0%, transparent 62%), radial-gradient(ellipse 65% 55% at 15% 82%, rgba(139, 92, 246, 0.28) 0%, transparent 58%), linear-gradient(135deg, #140509 0%, #1f0c18 50%, #0b0612 100%)'
   },
   {
     id: 'slate',
-    name: 'Minimal Slate Dark',
+    name: 'macOS Pro Space Titanium',
     color: '#64748b',
-    bgCss: 'linear-gradient(135deg, #0b1120 0%, #1e293b 100%)'
+    bgCss: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(148, 163, 184, 0.25) 0%, transparent 65%), radial-gradient(ellipse 70% 55% at 85% 80%, rgba(56, 189, 248, 0.18) 0%, transparent 60%), linear-gradient(135deg, #090d16 0%, #162032 50%, #0b111e 100%)'
   }
 ];
 const DEFAULT_PERSONALIZATION = {
@@ -555,6 +555,23 @@ class OSState {
         desktopEl.dataset.wallpaperId = wp.id;
       }
     }
+
+    this.applyDisplaySettings();
+  }
+
+  applyDisplaySettings() {
+    if (typeof document === 'undefined') return;
+    const settings = this.policyState?.systemSettings || DEFAULT_GLOBAL_RESTRICTIONS.systemSettings;
+    const bright = typeof settings.brightness === 'number' ? Math.max(20, Math.min(100, settings.brightness)) : 90;
+    const night = Boolean(settings.nightLight);
+
+    document.documentElement.style.setProperty('--desktop-brightness', ${bright}%);
+    const desktopEl = document.getElementById('desktop');
+    if (desktopEl) {
+      desktopEl.style.removeProperty('filter');
+      desktopEl.classList.toggle('night-light', night);
+    }
+    document.body?.classList.toggle('sepia', night);
   }
 
   // Restrictions Mutators
@@ -1770,6 +1787,56 @@ class WindowManager {
 
   init(desktopElement) {
     this.desktopEl = desktopElement;
+    if (typeof window !== 'undefined' && !this._resizeListenerBound) {
+      this._resizeListenerBound = true;
+      window.addEventListener('resize', () => {
+        this.clampWindowsToViewport();
+      });
+    }
+  }
+
+  clampWindowsToViewport() {
+    if (!this.desktopEl) return;
+    const desktopWidth = this.desktopEl.clientWidth || window.innerWidth;
+    const desktopHeight = (this.desktopEl.clientHeight || window.innerHeight) - 68;
+    this.windows.forEach((win) => {
+      if (win.maximized || win.minimized) return;
+      const el = win.element;
+      const curW = el.offsetWidth;
+      const curH = el.offsetHeight;
+      const curL = parseInt(el.style.left, 10) || 0;
+      const curT = parseInt(el.style.top, 10) || 0;
+
+      if (curW > desktopWidth - 16) {
+        el.style.width = `${Math.max(win.minWidth || 380, desktopWidth - 16)}px`;
+      }
+      if (curH > desktopHeight - 12) {
+        el.style.height = `${Math.max(win.minHeight || 270, desktopHeight - 12)}px`;
+      }
+      if (curL > desktopWidth - 100) {
+        el.style.left = `${Math.max(8, desktopWidth - Math.min(curW, desktopWidth - 16) - 8)}px`;
+      }
+      if (curT > desktopHeight - 48) {
+        el.style.top = `${Math.max(8, desktopHeight - 60)}px`;
+      }
+    });
+  }
+
+  focusNextTopWindow() {
+    let topWin = null;
+    this.windows.forEach((w) => {
+      if (!w.minimized) {
+        if (!topWin || w.zIndex > topWin.zIndex) {
+          topWin = w;
+        }
+      }
+    });
+    if (topWin) {
+      this.focusWindow(topWin.id);
+    } else {
+      this.activeWindowId = null;
+      this.notify();
+    }
   }
 
   subscribe(listener) {
@@ -1814,33 +1881,42 @@ class WindowManager {
       return existing;
     }
 
-    // Compute default centered initial coordinates
+    // Compute default centered initial coordinates clamped to available desktop area
     const desktopWidth = this.desktopEl.clientWidth || window.innerWidth;
-    const desktopHeight = (this.desktopEl.clientHeight || window.innerHeight) - 54;
+    const desktopHeight = Math.max(320, (this.desktopEl.clientHeight || window.innerHeight) - 72);
 
-    const initialLeft = Math.max(20, Math.floor((desktopWidth - width) / 2) + (this.windows.size * 25) % 100);
-    const initialTop = Math.max(20, Math.floor((desktopHeight - height) / 2) + (this.windows.size * 25) % 80);
+    const safeWidth = Math.max(minWidth, Math.min(width, desktopWidth - 24));
+    const safeHeight = Math.max(minHeight, Math.min(height, desktopHeight - 16));
+
+    const cascadeX = (this.windows.size * 24) % 96;
+    const cascadeY = (this.windows.size * 22) % 66;
+    const rawLeft = Math.floor((desktopWidth - safeWidth) / 2) + cascadeX;
+    const rawTop = Math.floor((desktopHeight - safeHeight) / 2) + cascadeY;
+
+    const initialLeft = Math.max(12, Math.min(desktopWidth - safeWidth - 12, rawLeft));
+    const initialTop = Math.max(10, Math.min(desktopHeight - safeHeight - 8, rawTop));
 
     const winEl = document.createElement('div');
     winEl.className = 'cros-window focused cros-window-opening';
     winEl.id = `window-${id}`;
-    winEl.style.width = `${width}px`;
-    winEl.style.height = `${height}px`;
+    winEl.style.width = `${safeWidth}px`;
+    winEl.style.height = `${safeHeight}px`;
     winEl.style.left = `${initialLeft}px`;
     winEl.style.top = `${initialTop}px`;
     winEl.style.zIndex = ++this.highestZIndex;
 
     winEl.innerHTML = `
       <div class="window-header" id="header-${id}">
+        <div class="window-controls">
+          <button class="win-btn close-btn" title="Close" data-action="close"><i class="fas fa-times"></i></button>
+          <button class="win-btn minimize-btn" title="Minimize" data-action="minimize"><i class="fas fa-minus"></i></button>
+          <button class="win-btn maximize-btn" title="Maximize/Restore" data-action="maximize"><i class="far fa-square"></i></button>
+        </div>
         <div class="window-title">
           <span class="app-header-icon">${icon}</span>
           <span class="window-title-text">${title}</span>
         </div>
-        <div class="window-controls">
-          <button class="win-btn minimize-btn" title="Minimize" data-action="minimize"><i class="fas fa-minus"></i></button>
-          <button class="win-btn maximize-btn" title="Maximize/Restore" data-action="maximize"><i class="far fa-square"></i></button>
-          <button class="win-btn close-btn" title="Close" data-action="close"><i class="fas fa-times"></i></button>
-        </div>
+        <div class="window-header-spacer" aria-hidden="true"></div>
       </div>
       <div class="window-body" id="body-${id}"></div>
 
@@ -1897,8 +1973,14 @@ class WindowManager {
       maximized: false,
       zIndex: this.highestZIndex,
       minWidth,
-      minHeight
+      minHeight,
+      savedRect: { left: initialLeft, top: initialTop, width: safeWidth, height: safeHeight }
     };
+
+    // Unfocus previous windows before setting new window focused
+    this.windows.forEach((w) => {
+      w.element.classList.remove('focused');
+    });
 
     this.windows.set(id, windowData);
     this.activeWindowId = id;
@@ -1944,17 +2026,50 @@ class WindowManager {
 
     header.addEventListener('mousedown', (e) => {
       if (e.target.closest('.win-btn')) return;
-      if (winData.maximized) return; // Don't drag when maximized
+      if (e.button !== 0) return;
 
       isDragging = true;
-      element.classList.add('dragging');
       startX = e.clientX;
       startY = e.clientY;
       initialLeft = parseInt(element.style.left, 10) || 0;
       initialTop = parseInt(element.style.top, 10) || 0;
 
+      if (!winData.maximized) {
+        element.classList.add('dragging');
+        document.body.classList.add('window-dragging-active');
+      }
+
       const onMouseMove = (moveEvent) => {
         if (!isDragging) return;
+
+        // Support drag-to-unmaximize when pulling a maximized window header
+        if (winData.maximized) {
+          const pullDist = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+          if (pullDist < 6) return;
+
+          const desktopW = this.desktopEl.clientWidth || window.innerWidth;
+          const restoredW = winData.savedRect?.width || Math.min(900, desktopW - 40);
+          const restoredH = winData.savedRect?.height || 560;
+          const ratio = Math.max(0.15, Math.min(0.85, moveEvent.clientX / desktopW));
+
+          winData.maximized = false;
+          element.classList.remove('maximized');
+          const maxIcon = element.querySelector('.maximize-btn i');
+          if (maxIcon) maxIcon.className = 'far fa-square';
+
+          initialLeft = Math.round(moveEvent.clientX - restoredW * ratio);
+          initialTop = Math.max(8, moveEvent.clientY - 22);
+          startX = moveEvent.clientX;
+          startY = moveEvent.clientY;
+
+          element.style.width = `${restoredW}px`;
+          element.style.height = `${restoredH}px`;
+          element.style.left = `${initialLeft}px`;
+          element.style.top = `${initialTop}px`;
+          element.classList.add('dragging');
+          document.body.classList.add('window-dragging-active');
+        }
+
         if (dragRafId) return;
 
         dragRafId = requestAnimationFrame(() => {
@@ -1964,7 +2079,7 @@ class WindowManager {
           const dy = moveEvent.clientY - startY;
 
           const maxLeft = (this.desktopEl.clientWidth || window.innerWidth) - 80;
-          const maxTop = (this.desktopEl.clientHeight || window.innerHeight) - 60;
+          const maxTop = (this.desktopEl.clientHeight || window.innerHeight) - 76;
 
           const newLeft = Math.max(-50, Math.min(maxLeft, initialLeft + dx));
           const newTop = Math.max(0, Math.min(maxTop, initialTop + dy));
@@ -1977,16 +2092,27 @@ class WindowManager {
       const onMouseUp = () => {
         isDragging = false;
         element.classList.remove('dragging');
+        document.body.classList.remove('window-dragging-active');
         if (dragRafId) {
           cancelAnimationFrame(dragRafId);
           dragRafId = null;
         }
+        if (!winData.maximized) {
+          winData.savedRect = {
+            left: parseInt(element.style.left, 10) || 0,
+            top: parseInt(element.style.top, 10) || 0,
+            width: element.offsetWidth,
+            height: element.offsetHeight
+          };
+        }
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('blur', onMouseUp);
       };
 
       document.addEventListener('mousemove', onMouseMove, { passive: true });
       document.addEventListener('mouseup', onMouseUp, { passive: true });
+      window.addEventListener('blur', onMouseUp, { once: true });
     });
 
     // ── 8-Direction Resizing Functionality ──
@@ -2007,6 +2133,7 @@ class WindowManager {
         let resizeRafId = null;
 
         element.classList.add('resizing');
+        document.body.classList.add('window-dragging-active');
 
         const onResizeMove = (moveEvt) => {
           if (resizeRafId) return;
@@ -2017,7 +2144,7 @@ class WindowManager {
             const minW = minWidth || 380;
             const minH = minHeight || 270;
             const maxW = (this.desktopEl.clientWidth || window.innerWidth);
-            const maxH = (this.desktopEl.clientHeight || window.innerHeight);
+            const maxH = (this.desktopEl.clientHeight || window.innerHeight) - 68;
 
             let newW = startW;
             let newH = startH;
@@ -2031,13 +2158,13 @@ class WindowManager {
               newH = Math.max(minH, Math.min(maxH - startT, startH + dy));
             }
             if (dir.includes('l')) {
-              const clampedW = Math.max(minW, startW - dx);
+              const clampedW = Math.max(minW, Math.min(startL + startW, startW - dx));
               newL = startL + (startW - clampedW);
               newW = clampedW;
             }
             if (dir.includes('t')) {
-              const clampedH = Math.max(minH, startH - dy);
-              newT = startT + (startH - clampedH);
+              const clampedH = Math.max(minH, Math.min(startT + startH, startH - dy));
+              newT = Math.max(0, startT + (startH - clampedH));
               newH = clampedH;
             }
 
@@ -2050,16 +2177,25 @@ class WindowManager {
 
         const onResizeUp = () => {
           element.classList.remove('resizing');
+          document.body.classList.remove('window-dragging-active');
           if (resizeRafId) {
             cancelAnimationFrame(resizeRafId);
             resizeRafId = null;
           }
+          winData.savedRect = {
+            left: parseInt(element.style.left, 10) || 0,
+            top: parseInt(element.style.top, 10) || 0,
+            width: element.offsetWidth,
+            height: element.offsetHeight
+          };
           document.removeEventListener('mousemove', onResizeMove);
           document.removeEventListener('mouseup', onResizeUp);
+          window.removeEventListener('blur', onResizeUp);
         };
 
         document.addEventListener('mousemove', onResizeMove);
         document.addEventListener('mouseup', onResizeUp);
+        window.addEventListener('blur', onResizeUp, { once: true });
       });
     });
   }
@@ -2067,6 +2203,10 @@ class WindowManager {
   focusWindow(id) {
     const win = this.windows.get(id);
     if (!win) return;
+
+    // Close open system popovers when focusing an app window
+    document.getElementById('launcher-overlay')?.classList.remove('open');
+    document.getElementById('quick-settings-overlay')?.classList.remove('open');
 
     this.windows.forEach((w) => {
       w.element.classList.remove('focused');
@@ -2091,9 +2231,10 @@ class WindowManager {
     win.element.classList.remove('focused');
 
     if (this.activeWindowId === id) {
-      this.activeWindowId = null;
+      this.focusNextTopWindow();
+    } else {
+      this.notify();
     }
-    this.notify();
   }
 
   restoreWindow(id) {
@@ -2104,13 +2245,28 @@ class WindowManager {
     const win = this.windows.get(id);
     if (!win) return;
 
-    win.maximized = !win.maximized;
-    if (win.maximized) {
+    if (!win.maximized) {
+      win.savedRect = {
+        left: parseInt(win.element.style.left, 10) || 20,
+        top: parseInt(win.element.style.top, 10) || 20,
+        width: win.element.offsetWidth,
+        height: win.element.offsetHeight
+      };
+      win.maximized = true;
       win.element.classList.add('maximized');
-      win.element.querySelector('.maximize-btn i').className = 'far fa-clone';
+      const maxIcon = win.element.querySelector('.maximize-btn i');
+      if (maxIcon) maxIcon.className = 'far fa-clone';
     } else {
+      win.maximized = false;
       win.element.classList.remove('maximized');
-      win.element.querySelector('.maximize-btn i').className = 'far fa-square';
+      if (win.savedRect) {
+        win.element.style.left = `${win.savedRect.left}px`;
+        win.element.style.top = `${win.savedRect.top}px`;
+        win.element.style.width = `${win.savedRect.width}px`;
+        win.element.style.height = `${win.savedRect.height}px`;
+      }
+      const maxIcon = win.element.querySelector('.maximize-btn i');
+      if (maxIcon) maxIcon.className = 'far fa-square';
     }
     this.focusWindow(id);
   }
@@ -2152,9 +2308,10 @@ class WindowManager {
     this.windows.delete(id);
 
     if (this.activeWindowId === id) {
-      this.activeWindowId = null;
+      this.focusNextTopWindow();
+    } else {
+      this.notify();
     }
-    this.notify();
     return true;
   }
 
@@ -2280,7 +2437,7 @@ class Launcher {
             <div class="flex flex-col">
               <span class="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
                 ${currentUser.name || 'Student User'}
-                <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
               </span>
               <span class="text-[10px] text-slate-400 leading-tight">Adm: ${currentUser.admNo || '1001'} &bull; ${currentUser.grade || 'Form 1'}</span>
             </div>
@@ -2331,11 +2488,11 @@ class Launcher {
     return appList
       .map(
         (app) => `
-      <button class="app-grid-item launcher-app-item p-2.5 rounded-2xl hover:bg-white/8 border border-transparent hover:border-white/10 flex flex-col items-center gap-1.5 text-center transition-all duration-150 active:scale-95 cursor-pointer group shadow-sm" data-app-id="${app.id}" title="Launch ${app.title}">
-        <div class="w-11 h-11 rounded-2xl ${app.bgColor || 'bg-emerald-800'} flex items-center justify-center text-xl text-white shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-150 border border-white/15">
+      <button class="app-grid-item launcher-app-item p-2.5 rounded-2xl hover:bg-white/10 border border-transparent hover:border-white/15 flex flex-col items-center gap-1.5 text-center transition-all duration-150 active:scale-95 cursor-pointer group shadow-sm" data-app-id="${app.id}" title="Launch ${app.title}">
+        <div class="w-11 h-11 rounded-2xl ${app.bgColor || 'bg-emerald-800'} flex items-center justify-center text-xl text-white shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-150 border border-white/20">
           ${app.icon}
         </div>
-        <span class="text-[11px] font-medium text-slate-300 group-hover:text-white line-clamp-1 truncate w-full leading-tight transition-colors">${app.title}</span>
+        <span class="text-[11px] font-medium text-slate-200 group-hover:text-white line-clamp-1 truncate w-full leading-tight transition-colors">${app.title}</span>
       </button>
     `
       )
@@ -2346,25 +2503,25 @@ class Launcher {
     const docs = stateStore.getState().documents || [];
     if (docs.length > 0) {
       return docs.slice(0, 3).map((doc) => `
-        <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 cursor-pointer transition-colors border border-transparent hover:border-white/5" data-doc-id="${doc.id}" title="Open document">
+        <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-white/10" data-doc-id="${doc.id}" title="Open document">
           <i class="fas fa-file-alt text-emerald-400 w-4 text-center text-sm"></i>
-          <span class="flex-1 text-slate-300 font-medium truncate">${doc.title}</span>
-          <span class="text-[10px] text-slate-500 font-mono">Saved</span>
+          <span class="flex-1 text-slate-200 font-medium truncate">${doc.title}</span>
+          <span class="text-[10px] text-slate-400 font-mono">Saved</span>
         </div>
       `).join('');
     }
 
     // Default curated academic files
     return `
-      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 cursor-pointer transition-colors border border-transparent hover:border-white/5" data-filename="KCSE_Form4_Math_Calculus.docx">
+      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-white/10" data-filename="KCSE_Form4_Math_Calculus.docx">
         <i class="fas fa-file-word text-blue-400 w-4 text-center text-sm"></i>
-        <span class="flex-1 text-slate-300 font-medium truncate">KCSE_Form4_Math_Calculus.docx</span>
-        <span class="text-[10px] text-slate-500">Today</span>
+        <span class="flex-1 text-slate-200 font-medium truncate">KCSE_Form4_Math_Calculus.docx</span>
+        <span class="text-[10px] text-slate-400">Today</span>
       </div>
-      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 cursor-pointer transition-colors border border-transparent hover:border-white/5" data-filename="Biology_Osmosis_Lab_Report.docx">
+      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-white/10" data-filename="Biology_Osmosis_Lab_Report.docx">
         <i class="fas fa-file-word text-emerald-400 w-4 text-center text-sm"></i>
-        <span class="flex-1 text-slate-300 font-medium truncate">Biology_Osmosis_Lab_Report.docx</span>
-        <span class="text-[10px] text-slate-500">Yesterday</span>
+        <span class="flex-1 text-slate-200 font-medium truncate">Biology_Osmosis_Lab_Report.docx</span>
+        <span class="text-[10px] text-slate-400">Yesterday</span>
       </div>
     `;
   }
@@ -2385,7 +2542,7 @@ class Launcher {
         <div class="flex flex-col">
           <span class="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
             ${currentUser.name || 'Student User'}
-            <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
           </span>
           <span class="text-[10px] text-slate-400 leading-tight">Adm: ${currentUser.admNo || '1001'} &bull; ${currentUser.grade || 'Form 1'}</span>
         </div>
@@ -2559,6 +2716,7 @@ class Launcher {
   }
 
   open() {
+    document.getElementById('quick-settings-overlay')?.classList.remove('open');
     this.updateProfileAndRecents();
     this.overlayEl.classList.add('open');
     const searchInput = this.overlayEl.querySelector('#launcher-search-input');
@@ -2619,94 +2777,105 @@ class QuickSettings {
       : 'ST';
 
     this.overlayEl.innerHTML = `
-      <div class="flex items-center justify-between border-b border-slate-700/60 pb-3">
-        <div class="flex items-center gap-3">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <div class="flex items-center gap-3" id="qs-user-header">
           <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-sm shadow-md border border-emerald-400/30">
             ${initials}
           </div>
           <div>
             <div class="font-bold text-sm text-white flex items-center gap-1.5">
-              ${currentUser.name || 'Student Account'}
-              <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 uppercase font-mono">${currentUser.role || 'student'}</span>
+              <span>${currentUser.name || 'Student Account'}</span>
+              <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 uppercase font-mono">${currentUser.role || 'student'}</span>
             </div>
-            <div class="text-[11px] text-slate-400">Adm: ${currentUser.admNo || '1001'} &bull; ${isDesktopNative ? 'Native Desktop OS' : 'Web Desktop'}</div>
+            <div class="text-[11px] text-slate-300">Adm: ${currentUser.admNo || '1001'} &bull; ${isDesktopNative ? 'Native Desktop OS' : 'Liquid Glass OS'}</div>
           </div>
         </div>
 
-        <button id="qs-admin-btn" class="p-2 text-slate-300 hover:text-white hover:bg-white/10 rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer" title="Open Admin Controls">
+        <button id="qs-admin-btn" class="p-2 text-slate-200 hover:text-white hover:bg-white/15 rounded-xl text-xs flex items-center gap-1.5 transition-colors cursor-pointer border border-white/10 bg-white/5" title="Open Admin Controls">
           <i class="fas fa-user-shield text-amber-400 text-sm"></i>
           <span class="font-semibold text-xs">Admin</span>
         </button>
       </div>
 
-      <!-- Quick Toggles Grid -->
+      <!-- Quick Toggles Grid (macOS Control Center Tiles) -->
       <div class="grid grid-cols-2 gap-2.5">
-        <button id="toggle-wifi" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.wifiConnected ? 'bg-emerald-600/25 text-emerald-300 border border-emerald-500/40 shadow-sm' : 'bg-slate-800/80 text-slate-400 border border-transparent'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
-          <div class="w-8 h-8 rounded-xl ${settings.wifiConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-700/50 text-slate-400'} flex items-center justify-center text-sm">
-            <i class="fas ${settings.wifiConnected ? 'fa-wifi' : 'fa-wifi-slash'}"></i>
+        <button id="toggle-wifi" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.wifiConnected ? 'qs-tile-active-emerald bg-emerald-600/25 text-emerald-200 border border-emerald-400/40 shadow-sm' : 'bg-slate-800/60 text-slate-300 border border-white/10'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
+          <div id="toggle-wifi-icon-box" class="w-8 h-8 rounded-xl ${settings.wifiConnected ? 'bg-emerald-500 text-white shadow-md' : 'bg-white/10 text-slate-400'} flex items-center justify-center text-sm transition-all">
+            <i id="toggle-wifi-icon" class="fas ${settings.wifiConnected ? 'fa-wifi' : 'fa-wifi-slash'}"></i>
           </div>
           <div class="text-left">
-            <div class="text-xs font-bold leading-tight">Network</div>
-            <div class="text-[10px] opacity-75">${settings.wifiConnected ? (navigator.onLine ? 'Connected' : 'Offline Engine') : 'Disabled'}</div>
+            <div class="text-xs font-bold leading-tight text-white">Wi-Fi</div>
+            <div id="toggle-wifi-sub" class="text-[10px] opacity-80">${settings.wifiConnected ? (navigator.onLine ? 'Connected' : 'Offline Engine') : 'Disabled'}</div>
           </div>
         </button>
 
-        <button id="toggle-bt" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.bluetoothConnected ? 'bg-blue-600/25 text-blue-300 border border-blue-500/40 shadow-sm' : 'bg-slate-800/80 text-slate-400 border border-transparent'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
-          <div class="w-8 h-8 rounded-xl ${settings.bluetoothConnected ? 'bg-blue-500/20 text-blue-400' : 'bg-slate-700/50 text-slate-400'} flex items-center justify-center text-sm">
+        <button id="toggle-bt" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.bluetoothConnected ? 'qs-tile-active-blue bg-blue-600/25 text-blue-200 border border-blue-400/40 shadow-sm' : 'bg-slate-800/60 text-slate-300 border border-white/10'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
+          <div id="toggle-bt-icon-box" class="w-8 h-8 rounded-xl ${settings.bluetoothConnected ? 'bg-blue-500 text-white shadow-md' : 'bg-white/10 text-slate-400'} flex items-center justify-center text-sm transition-all">
             <i class="fab fa-bluetooth-b"></i>
           </div>
           <div class="text-left">
-            <div class="text-xs font-bold leading-tight">Bluetooth</div>
-            <div class="text-[10px] opacity-75">${settings.bluetoothConnected ? 'Paired' : 'Off'}</div>
+            <div class="text-xs font-bold leading-tight text-white">Bluetooth</div>
+            <div id="toggle-bt-sub" class="text-[10px] opacity-80">${settings.bluetoothConnected ? 'Paired' : 'Off'}</div>
           </div>
         </button>
 
-        <button id="toggle-night" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.nightLight ? 'bg-amber-600/25 text-amber-300 border border-amber-500/40 shadow-sm' : 'bg-slate-800/80 text-slate-400 border border-transparent'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
-          <div class="w-8 h-8 rounded-xl ${settings.nightLight ? 'bg-amber-500/20 text-amber-400' : 'bg-slate-700/50 text-slate-400'} flex items-center justify-center text-sm">
+        <button id="toggle-night" class="qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.nightLight ? 'qs-tile-active-amber bg-amber-600/25 text-amber-200 border border-amber-400/40 shadow-sm' : 'bg-slate-800/60 text-slate-300 border border-white/10'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
+          <div id="toggle-night-icon-box" class="w-8 h-8 rounded-xl ${settings.nightLight ? 'bg-amber-500 text-white shadow-md' : 'bg-white/10 text-slate-400'} flex items-center justify-center text-sm transition-all">
             <i class="fas fa-moon"></i>
           </div>
           <div class="text-left">
-            <div class="text-xs font-bold leading-tight">Night Light</div>
-            <div class="text-[10px] opacity-75">${settings.nightLight ? 'Warm 4500K' : 'Off'}</div>
+            <div class="text-xs font-bold leading-tight text-white">Night Shift</div>
+            <div id="toggle-night-sub" class="text-[10px] opacity-80">${settings.nightLight ? 'Warm 4500K' : 'Off'}</div>
           </div>
         </button>
 
-        <button id="lock-screen-btn" class="qs-tile flex items-center gap-3 p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-transparent hover:border-slate-600/50 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
-          <div class="w-8 h-8 rounded-xl bg-rose-500/20 text-rose-400 flex items-center justify-center text-sm">
+        <button id="lock-screen-btn" class="qs-tile flex items-center gap-3 p-3 rounded-2xl bg-slate-800/60 hover:bg-white/10 text-slate-200 border border-white/10 hover:scale-[1.02] active:scale-95 transition-all cursor-pointer">
+          <div class="w-8 h-8 rounded-xl bg-rose-500/25 text-rose-300 border border-rose-400/30 flex items-center justify-center text-sm">
             <i class="fas fa-lock"></i>
           </div>
           <div class="text-left">
-            <div class="text-xs font-bold leading-tight">Lock Screen</div>
-            <div class="text-[10px] opacity-75">Curfew Shield</div>
+            <div class="text-xs font-bold leading-tight text-white">Lock Screen</div>
+            <div class="text-[10px] opacity-80">Curfew Shield</div>
           </div>
         </button>
       </div>
 
-      <!-- Audio & Brightness Sliders -->
-      <div class="space-y-3 pt-1 border-t border-slate-700/60">
-        <div class="flex items-center gap-3 text-xs text-slate-300">
-          <i class="fas fa-volume-up text-emerald-400 w-4 text-center"></i>
-          <input type="range" id="volume-slider" min="0" max="100" value="${settings.volume}" class="w-full accent-emerald-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg">
-          <span class="w-8 text-right font-mono text-[11px] text-slate-400">${settings.volume}%</span>
+      <!-- Audio & Brightness Sliders (macOS Control Center Glass Bars) -->
+      <div class="space-y-3 pt-2 border-t border-white/10">
+        <div class="qs-slider-card p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+          <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-300 px-1">
+            <span>Sound</span>
+            <span id="qs-volume-label" class="font-mono text-emerald-300">${settings.volume}%</span>
+          </div>
+          <div class="flex items-center gap-2.5 text-xs text-slate-200 px-1">
+            <i class="fas fa-volume-up text-emerald-400 w-4 text-center"></i>
+            <input type="range" id="volume-slider" min="0" max="100" value="${settings.volume}" class="w-full accent-emerald-500 cursor-pointer h-1.5 bg-white/15 rounded-lg">
+          </div>
         </div>
-        <div class="flex items-center gap-3 text-xs text-slate-300">
-          <i class="fas fa-sun text-amber-400 w-4 text-center"></i>
-          <input type="range" id="brightness-slider" min="20" max="100" value="${settings.brightness}" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-slate-700 rounded-lg">
-          <span class="w-8 text-right font-mono text-[11px] text-slate-400">${settings.brightness}%</span>
+
+        <div class="qs-slider-card p-2.5 rounded-2xl bg-white/5 border border-white/10 space-y-1.5">
+          <div class="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-300 px-1">
+            <span>Display</span>
+            <span id="qs-brightness-label" class="font-mono text-amber-300">${settings.brightness}%</span>
+          </div>
+          <div class="flex items-center gap-2.5 text-xs text-slate-200 px-1">
+            <i class="fas fa-sun text-amber-400 w-4 text-center"></i>
+            <input type="range" id="brightness-slider" min="20" max="100" value="${settings.brightness}" class="w-full accent-amber-500 cursor-pointer h-1.5 bg-white/15 rounded-lg">
+          </div>
         </div>
       </div>
 
       <!-- Power & Session Controls -->
-      <div class="grid grid-cols-3 gap-2 border-t border-slate-700/60 pt-2.5">
-        <button id="qs-signout-btn" class="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/40 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer active:scale-95" title="Sign Out Student">
+      <div class="grid grid-cols-3 gap-2 border-t border-white/10 pt-2.5">
+        <button id="qs-signout-btn" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer active:scale-95" title="Sign Out Student">
           <i class="fas fa-sign-out-alt text-xs text-amber-400"></i>
           <span class="text-[10px]">Sign Out</span>
         </button>
-        <button id="qs-reboot-btn" class="p-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 border border-slate-600/40 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer active:scale-95" title="Reboot DawamuOS">
+        <button id="qs-reboot-btn" class="p-2 rounded-xl bg-white/5 hover:bg-white/15 border border-white/10 text-slate-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer active:scale-95" title="Reboot DawamuOS">
           <i class="fas fa-redo text-xs text-blue-400"></i>
           <span class="text-[10px]">Reboot</span>
         </button>
-        <button id="qs-shutdown-btn" class="p-2 rounded-xl bg-rose-950/60 hover:bg-rose-900 border border-rose-700/40 text-rose-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer active:scale-95" title="Shut Down OS">
+        <button id="qs-shutdown-btn" class="p-2 rounded-xl bg-rose-500/15 hover:bg-rose-500/30 border border-rose-500/30 text-rose-200 text-xs font-semibold flex flex-col items-center justify-center gap-1 transition-all cursor-pointer active:scale-95" title="Shut Down OS">
           <i class="fas fa-power-off text-xs text-rose-400"></i>
           <span class="text-[10px]">Power Off</span>
         </button>
@@ -2721,6 +2890,8 @@ class QuickSettings {
     if (volumeSlider) {
       volumeSlider.addEventListener('input', (e) => {
         const val = parseInt(e.target.value, 10);
+        const lbl = this.overlayEl.querySelector('#qs-volume-label');
+        if (lbl) lbl.textContent = `${val}%`;
         stateStore.updateSettings({ volume: val });
       });
     }
@@ -2729,10 +2900,10 @@ class QuickSettings {
     if (brightnessSlider) {
       brightnessSlider.addEventListener('input', (e) => {
         const val = parseInt(e.target.value, 10);
+        const lbl = this.overlayEl.querySelector('#qs-brightness-label');
+        if (lbl) lbl.textContent = `${val}%`;
         stateStore.updateSettings({ brightness: val });
-        document.documentElement.style.setProperty('--desktop-brightness', `${val}%`);
-        const desktop = document.getElementById('desktop');
-        if (desktop) desktop.style.filter = `brightness(${val / 100})`;
+        stateStore.applyDisplaySettings();
       });
     }
   }
@@ -2818,8 +2989,7 @@ class QuickSettings {
       if (nightBtn) {
         const current = stateStore.getState().systemSettings.nightLight;
         stateStore.updateSettings({ nightLight: !current });
-        document.body.classList.toggle('sepia', !current);
-        document.getElementById('desktop')?.classList.toggle('night-light', !current);
+        stateStore.applyDisplaySettings();
         return;
       }
     });
@@ -2838,7 +3008,81 @@ class QuickSettings {
   }
 
   updateUI() {
-    this.render();
+    if (!this.overlayEl) return;
+    const wifiBtn = this.overlayEl.querySelector('#toggle-wifi');
+    if (!wifiBtn) {
+      this.render();
+      return;
+    }
+
+    const state = stateStore.getState();
+    const settings = state.systemSettings;
+    const currentUser = state.currentUser || { name: 'Brian Ochieng', admNo: '1001', grade: 'Form 1' };
+    const isDesktopNative = window.electronAPI && window.electronAPI.isElectron;
+    const initials = currentUser.name
+      ? currentUser.name.split(' ').map((n) => n[0]).join('').substring(0, 2).toUpperCase()
+      : 'ST';
+
+    // Update User Header
+    const userHeader = this.overlayEl.querySelector('#qs-user-header');
+    if (userHeader) {
+      userHeader.innerHTML = `
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-500 flex items-center justify-center text-white font-bold text-sm shadow-md border border-emerald-400/30">
+          ${initials}
+        </div>
+        <div>
+          <div class="font-bold text-sm text-white flex items-center gap-1.5">
+            <span>${currentUser.name || 'Student Account'}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 uppercase font-mono">${currentUser.role || 'student'}</span>
+          </div>
+          <div class="text-[11px] text-slate-300">Adm: ${currentUser.admNo || '1001'} &bull; ${isDesktopNative ? 'Native Desktop OS' : 'Liquid Glass OS'}</div>
+        </div>
+      `;
+    }
+
+    // Update Wi-Fi Tile
+    wifiBtn.className = `qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.wifiConnected ? 'qs-tile-active-emerald bg-emerald-600/25 text-emerald-200 border border-emerald-400/40 shadow-sm' : 'bg-slate-800/60 text-slate-300 border border-white/10'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer`;
+    const wifiIconBox = this.overlayEl.querySelector('#toggle-wifi-icon-box');
+    if (wifiIconBox) wifiIconBox.className = `w-8 h-8 rounded-xl ${settings.wifiConnected ? 'bg-emerald-500 text-white shadow-md' : 'bg-white/10 text-slate-400'} flex items-center justify-center text-sm transition-all`;
+    const wifiIcon = this.overlayEl.querySelector('#toggle-wifi-icon');
+    if (wifiIcon) wifiIcon.className = `fas ${settings.wifiConnected ? 'fa-wifi' : 'fa-wifi-slash'}`;
+    const wifiSub = this.overlayEl.querySelector('#toggle-wifi-sub');
+    if (wifiSub) wifiSub.textContent = settings.wifiConnected ? (navigator.onLine ? 'Connected' : 'Offline Engine') : 'Disabled';
+
+    // Update Bluetooth Tile
+    const btBtn = this.overlayEl.querySelector('#toggle-bt');
+    if (btBtn) {
+      btBtn.className = `qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.bluetoothConnected ? 'qs-tile-active-blue bg-blue-600/25 text-blue-200 border border-blue-400/40 shadow-sm' : 'bg-slate-800/60 text-slate-300 border border-white/10'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer`;
+    }
+    const btIconBox = this.overlayEl.querySelector('#toggle-bt-icon-box');
+    if (btIconBox) btIconBox.className = `w-8 h-8 rounded-xl ${settings.bluetoothConnected ? 'bg-blue-500 text-white shadow-md' : 'bg-white/10 text-slate-400'} flex items-center justify-center text-sm transition-all`;
+    const btSub = this.overlayEl.querySelector('#toggle-bt-sub');
+    if (btSub) btSub.textContent = settings.bluetoothConnected ? 'Paired' : 'Off';
+
+    // Update Night Shift Tile
+    const nightBtn = this.overlayEl.querySelector('#toggle-night');
+    if (nightBtn) {
+      nightBtn.className = `qs-tile flex items-center gap-3 p-3 rounded-2xl ${settings.nightLight ? 'qs-tile-active-amber bg-amber-600/25 text-amber-200 border border-amber-400/40 shadow-sm' : 'bg-slate-800/60 text-slate-300 border border-white/10'} hover:scale-[1.02] active:scale-95 transition-all cursor-pointer`;
+    }
+    const nightIconBox = this.overlayEl.querySelector('#toggle-night-icon-box');
+    if (nightIconBox) nightIconBox.className = `w-8 h-8 rounded-xl ${settings.nightLight ? 'bg-amber-500 text-white shadow-md' : 'bg-white/10 text-slate-400'} flex items-center justify-center text-sm transition-all`;
+    const nightSub = this.overlayEl.querySelector('#toggle-night-sub');
+    if (nightSub) nightSub.textContent = settings.nightLight ? 'Warm 4500K' : 'Off';
+
+    // Update sliders only if not actively focused/dragged
+    const volSlider = this.overlayEl.querySelector('#volume-slider');
+    if (volSlider && document.activeElement !== volSlider) {
+      volSlider.value = settings.volume;
+    }
+    const volLbl = this.overlayEl.querySelector('#qs-volume-label');
+    if (volLbl) volLbl.textContent = `${settings.volume}%`;
+
+    const brightSlider = this.overlayEl.querySelector('#brightness-slider');
+    if (brightSlider && document.activeElement !== brightSlider) {
+      brightSlider.value = settings.brightness;
+    }
+    const brightLbl = this.overlayEl.querySelector('#qs-brightness-label');
+    if (brightLbl) brightLbl.textContent = `${settings.brightness}%`;
   }
 
   close() {
@@ -2849,6 +3093,8 @@ class QuickSettings {
     if (this.overlayEl.classList.contains('open')) {
       this.close();
     } else {
+      document.getElementById('launcher-overlay')?.classList.remove('open');
+      this.updateUI();
       this.overlayEl.classList.add('open');
     }
   }
@@ -2897,49 +3143,51 @@ class Shelf {
   render() {
     this.shelfEl.innerHTML = `
       <div class="flex items-center gap-2 h-full">
-        <!-- Dawamu Start Button -->
-        <button id="everything-btn" class="win-start-btn flex items-center justify-center p-1.5 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white cursor-pointer group" title="Start Menu (DawamuOS)">
-          <img src="assets/dawamu-logo.png" alt="Start" class="h-6 w-auto object-contain drop-shadow group-hover:scale-105 transition-transform">
+        <!-- Dawamu Launchpad / Start Button -->
+        <button id="everything-btn" class="win-start-btn flex items-center justify-center p-1.5 rounded-2xl hover:bg-white/15 active:scale-95 transition-all text-white cursor-pointer group" title="Launchpad & Start Menu (DawamuOS)">
+          <img src="assets/dawamu-logo.png" alt="Start" class="h-6 w-auto object-contain drop-shadow group-hover:scale-110 transition-transform">
         </button>
 
-        <!-- Search Bar Pill -->
-        <button id="taskbar-search-btn" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 text-xs text-slate-300 transition-all cursor-pointer shadow-sm">
+        <!-- Spotlight Search Bar Pill -->
+        <button id="taskbar-search-btn" class="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/15 rounded-full px-3.5 py-1.5 text-xs text-slate-200 transition-all cursor-pointer shadow-sm">
           <i class="fas fa-search text-emerald-400 text-xs"></i>
-          <span class="text-[11px] text-slate-400 font-sans pr-1">Search apps & files</span>
-          <span class="text-[9px] bg-white/10 text-slate-400 px-1.5 py-0.2 rounded font-mono">Win</span>
+          <span class="text-[11px] text-slate-200 font-medium font-sans pr-1">Spotlight</span>
+          <span class="text-[9px] bg-white/15 text-slate-200 px-1.5 py-0.5 rounded-md font-mono border border-white/10">⌘Space</span>
         </button>
 
-        <div class="h-5 w-[1px] bg-white/10 mx-1"></div>
+        <div class="dock-divider h-7 w-[1px] bg-white/20 mx-1"></div>
 
-        <!-- Dynamic & Pinned Taskbar Apps -->
-        <div id="shelf-pinned-apps" class="flex items-center gap-1.5"></div>
+        <!-- Dynamic & Pinned Dock Apps -->
+        <div id="shelf-pinned-apps" class="flex items-center gap-2"></div>
       </div>
 
-      <!-- System Tray (Bottom Right) -->
+      <div class="dock-divider h-7 w-[1px] bg-white/20 mx-1"></div>
+
+      <!-- System Tray / macOS Control Center Pill -->
       <div class="flex items-center gap-2 h-full">
-        <div id="status-tray" class="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl hover:bg-white/10 cursor-pointer text-slate-200 transition-all border border-transparent hover:border-white/10" title="System Status & Quick Settings">
+        <div id="status-tray" class="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl hover:bg-white/15 cursor-pointer text-slate-100 transition-all border border-white/15 bg-white/10" title="Control Center & System Status">
           <!-- Restriction Badge -->
           <div id="focus-mode-badge" class="hidden text-[10px] bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
             <i class="fas fa-lock text-[9px]"></i> Focus
           </div>
 
-          <div class="flex items-center gap-2.5 text-xs text-slate-300">
+          <div class="flex items-center gap-2.5 text-xs text-slate-200">
             <i id="tray-wifi-icon" class="fas fa-wifi text-emerald-400 text-xs"></i>
-            <i class="fas fa-volume-up text-xs text-slate-300"></i>
+            <i class="fas fa-sliders text-xs text-slate-200"></i>
             <span id="tray-battery" class="flex items-center gap-1 text-[11px] font-semibold">
               <i class="fas fa-battery-full text-xs text-emerald-400"></i> 100%
             </span>
           </div>
 
           <!-- Stacked Time & Date -->
-          <div class="flex flex-col items-end text-[10px] font-sans leading-tight border-l border-white/15 pl-2.5 text-slate-300">
+          <div class="flex flex-col items-end text-[10px] font-sans leading-tight border-l border-white/20 pl-2.5 text-slate-200">
             <span id="tray-clock" class="font-bold text-white text-[11px]">10:24 AM</span>
-            <span id="tray-date" class="text-[9px] text-slate-400">9/29/2026</span>
+            <span id="tray-date" class="text-[9px] text-slate-300">9/29/2026</span>
           </div>
         </div>
 
-        <!-- Show Desktop Peek Line -->
-        <button id="win-show-desktop-btn" class="w-2 h-8 rounded-r-md border-l border-white/20 hover:bg-white/20 transition-colors ml-0.5 cursor-pointer" title="Show Desktop (Minimize All)"></button>
+        <!-- Show Desktop Glass Pill -->
+        <button id="win-show-desktop-btn" class="w-2.5 h-8 rounded-full border border-white/20 bg-white/10 hover:bg-white/25 transition-all ml-0.5 cursor-pointer" title="Show Desktop (Minimize All)"></button>
       </div>
     `;
 
@@ -2994,10 +3242,11 @@ class Shelf {
     });
 
     container.innerHTML = items.map(app => `
-      <button class="app-shelf-btn relative p-2 rounded-2xl hover:bg-white/10 active:scale-95 flex items-center justify-center transition-all group cursor-pointer ${app.isRunning ? (app.isFocused ? 'bg-white/15 shadow-inner' : 'bg-white/5') : ''}" data-app-id="${app.id}" title="${app.title} ${app.isRunning ? (app.isFocused ? '(Active)' : '(Running)') : ''}">
-        <span class="text-xl flex items-center justify-center">${app.icon}</span>
-        <!-- Active Pill Underline -->
-        <span class="win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${app.isRunning ? (app.isFocused ? 'w-4 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'w-2 h-1 bg-emerald-400/70 opacity-70') : 'w-1 h-0.5 bg-white/40 opacity-0 group-hover:opacity-40'}"></span>
+      <button class="app-shelf-btn relative p-2 rounded-2xl hover:bg-white/15 active:scale-95 flex items-center justify-center transition-all group cursor-pointer ${app.isRunning ? (app.isFocused ? 'bg-white/20 shadow-inner dock-app-focused' : 'bg-white/10 dock-app-running') : ''}" data-app-id="${app.id}" title="${app.title} ${app.isRunning ? (app.isFocused ? '(Active)' : '(Running)') : ''}">
+        <span class="dock-tooltip">${app.title}</span>
+        <span class="text-xl flex items-center justify-center dock-icon-glyph">${app.icon}</span>
+        <!-- Active Luminescent Dot -->
+        <span class="win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${app.isRunning ? (app.isFocused ? 'w-3.5 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : 'w-1.5 h-1.5 bg-white/85 opacity-90') : 'w-1 h-1 bg-white/40 opacity-0 group-hover:opacity-40'}"></span>
       </button>
     `).join('');
 
@@ -3065,16 +3314,17 @@ class Shelf {
       const win = windowManager.windows.get(appId);
       const pill = btn.querySelector('.win-app-pill');
 
+      btn.classList.remove('bg-white/20', 'bg-white/15', 'bg-white/10', 'bg-white/5', 'dock-app-focused', 'dock-app-running');
       if (win) {
         const isFocused = windowManager.activeWindowId === appId && !win.minimized;
-        btn.classList.add(isFocused ? 'bg-white/15' : 'bg-white/5');
+        btn.classList.add(isFocused ? 'bg-white/20' : 'bg-white/10');
+        btn.classList.add(isFocused ? 'dock-app-focused' : 'dock-app-running');
         if (pill) {
-          pill.className = `win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${isFocused ? 'w-4 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'w-2 h-1 bg-emerald-400/70 opacity-70'}`;
+          pill.className = `win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${isFocused ? 'w-3.5 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : 'w-1.5 h-1.5 bg-white/85 opacity-90'}`;
         }
       } else {
-        btn.classList.remove('bg-white/15', 'bg-white/5');
         if (pill) {
-          pill.className = 'win-app-pill absolute bottom-0.5 w-1 h-0.5 bg-white/40 opacity-0 group-hover:opacity-40 rounded-full transition-all duration-200';
+          pill.className = 'win-app-pill absolute bottom-0.5 w-1 h-1 bg-white/40 opacity-0 group-hover:opacity-40 rounded-full transition-all duration-200';
         }
       }
     });
@@ -11271,8 +11521,14 @@ function createClassroomApp() {
     const searchInput = container.querySelector('#asg-search');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
+        const pos = e.target.selectionStart || e.target.value.length;
         searchQuery = e.target.value;
         render();
+        const reInput = container.querySelector('#asg-search');
+        if (reInput) {
+          reInput.focus();
+          try { reInput.setSelectionRange(pos, pos); } catch (_) {}
+        }
       });
     }
 
@@ -12055,12 +12311,19 @@ function createCalculatorApp() {
   };
 
   container.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keydown', (e) => {
+  const onWindowKeyDown = (e) => {
     const calcWin = document.getElementById('window-calculator');
     if (calcWin && calcWin.classList.contains('focused')) {
       onKeyDown(e);
     }
-  });
+  };
+  window.addEventListener('keydown', onWindowKeyDown);
+
+  container.__dawamuAppController = {
+    onDestroy: () => {
+      window.removeEventListener('keydown', onWindowKeyDown);
+    }
+  };
 
   container.querySelector('#calc-clear-hist').addEventListener('click', () => {
     historyLog = [];
@@ -12338,6 +12601,16 @@ function createFocusTimerApp() {
 
   updateDisplay();
   updateStats();
+
+  container.__dawamuAppController = {
+    onDestroy: () => {
+      clearInterval(timerInterval);
+      stopAudio();
+      if (audioCtx && typeof audioCtx.close === 'function') {
+        try { audioCtx.close(); } catch (_) {}
+      }
+    }
+  };
 
   return container;
 }
@@ -13643,54 +13916,57 @@ function createExplorerApp(options = {}) {
       }
     });
 
-    // ── 15. Global Paste (Ctrl+V) & Delete Key Shortcuts in Explorer ──
-    root.tabIndex = 0; // Focusable for key handling
-    root.addEventListener('keydown', (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-      if (e.key === 'Delete' || e.key === 'Del') {
-        if (selectedFile) {
-          e.preventDefault();
-          root.querySelector('#exp-delete-btn')?.click();
+    // ── 15. Global Paste (Ctrl+V) & Delete Key Shortcuts in Explorer (Bound Once) ──
+    if (!root._rootListenersBound) {
+      root._rootListenersBound = true;
+      root.tabIndex = 0; // Focusable for key handling
+      root.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+        if (e.key === 'Delete' || e.key === 'Del') {
+          if (selectedFile) {
+            e.preventDefault();
+            root.querySelector('#exp-delete-btn')?.click();
+          }
+        } else if (e.key === 'Escape') {
+          if (selectedFile) {
+            selectedFile = null;
+            render();
+          }
         }
-      } else if (e.key === 'Escape') {
-        if (selectedFile) {
-          selectedFile = null;
+      });
+
+      root.addEventListener('paste', async (e) => {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+        // 1. Files copied to clipboard (e.g. from OS file explorer or screenshot)
+        if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+          e.preventDefault();
+          await handleExternalFilesDrop(e.clipboardData.files, currentFolder);
+          return;
+        }
+
+        // 2. Internal cut/copy clipboard
+        if (clipboard && clipboard.file) {
+          e.preventDefault();
+          root.querySelector('#exp-paste-btn')?.click();
+          return;
+        }
+
+        // 3. Plain text snippet
+        const text = e.clipboardData?.getData('text/plain');
+        if (text && text.trim()) {
+          e.preventDefault();
+          const snippetName = `Pasted_Note_${Date.now().toString().slice(-4)}.txt`;
+          const saved = stateStore.saveFileToVFS(currentFolder, {
+            name: snippetName,
+            content: text,
+            type: 'txt'
+          });
+          dawamuDialogs.toast(`Pasted text note as "${saved.name}"`, 'success');
           render();
         }
-      }
-    });
-
-    root.addEventListener('paste', async (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-
-      // 1. Files copied to clipboard (e.g. from OS file explorer or screenshot)
-      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
-        e.preventDefault();
-        await handleExternalFilesDrop(e.clipboardData.files, currentFolder);
-        return;
-      }
-
-      // 2. Internal cut/copy clipboard
-      if (clipboard && clipboard.file) {
-        e.preventDefault();
-        handlePasteClipboard();
-        return;
-      }
-
-      // 3. Plain text snippet
-      const text = e.clipboardData?.getData('text/plain');
-      if (text && text.trim()) {
-        e.preventDefault();
-        const snippetName = `Pasted_Note_${Date.now().toString().slice(-4)}.txt`;
-        const saved = stateStore.saveFileToVFS(currentFolder, {
-          name: snippetName,
-          content: text,
-          type: 'txt'
-        });
-        dawamuDialogs.toast(`Pasted text note as "${saved.name}"`, 'success');
-        render();
-      }
-    });
+      });
+    }
   }
 
   root.__dawamuAppController = {
@@ -14470,19 +14746,16 @@ function createSettingsApp(options = {}) {
 
     // Brightness slider
     root.querySelector('#set-bright')?.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
+      const val = parseInt(e.target.value, 10);
       stateStore.updateSettings({ brightness: val });
+      stateStore.applyDisplaySettings();
       const lbl = root.querySelector('#bright-val');
       if (lbl) lbl.textContent = `${val}%`;
-      const desktop = document.getElementById('desktop');
-      if (desktop) {
-        desktop.style.filter = `brightness(${val / 100})`;
-      }
     });
 
     // Volume slider
     root.querySelector('#set-vol')?.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
+      const val = parseInt(e.target.value, 10);
       stateStore.updateSettings({ volume: val });
       const lbl = root.querySelector('#vol-val');
       if (lbl) lbl.textContent = `${val}%`;
@@ -14492,10 +14765,7 @@ function createSettingsApp(options = {}) {
     root.querySelector('#set-night-btn')?.addEventListener('click', () => {
       const current = stateStore.getState().systemSettings.nightLight;
       stateStore.updateSettings({ nightLight: !current });
-      const desktop = document.getElementById('desktop');
-      if (desktop) {
-        desktop.style.filter = !current ? 'sepia(0.25) contrast(0.95)' : '';
-      }
+      stateStore.applyDisplaySettings();
       render();
     });
 

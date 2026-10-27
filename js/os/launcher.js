@@ -92,7 +92,7 @@ class Launcher {
             <div class="flex flex-col">
               <span class="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
                 ${currentUser.name || 'Student User'}
-                <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
+                <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
               </span>
               <span class="text-[10px] text-slate-400 leading-tight">Adm: ${currentUser.admNo || '1001'} &bull; ${currentUser.grade || 'Form 1'}</span>
             </div>
@@ -143,11 +143,11 @@ class Launcher {
     return appList
       .map(
         (app) => `
-      <button class="app-grid-item launcher-app-item p-2.5 rounded-2xl hover:bg-white/8 border border-transparent hover:border-white/10 flex flex-col items-center gap-1.5 text-center transition-all duration-150 active:scale-95 cursor-pointer group shadow-sm" data-app-id="${app.id}" title="Launch ${app.title}">
-        <div class="w-11 h-11 rounded-2xl ${app.bgColor || 'bg-emerald-800'} flex items-center justify-center text-xl text-white shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-150 border border-white/15">
+      <button class="app-grid-item launcher-app-item p-2.5 rounded-2xl hover:bg-white/10 border border-transparent hover:border-white/15 flex flex-col items-center gap-1.5 text-center transition-all duration-150 active:scale-95 cursor-pointer group shadow-sm" data-app-id="${app.id}" title="Launch ${app.title}">
+        <div class="w-11 h-11 rounded-2xl ${app.bgColor || 'bg-emerald-800'} flex items-center justify-center text-xl text-white shadow-lg shadow-black/30 group-hover:scale-105 transition-transform duration-150 border border-white/20">
           ${app.icon}
         </div>
-        <span class="text-[11px] font-medium text-slate-300 group-hover:text-white line-clamp-1 truncate w-full leading-tight transition-colors">${app.title}</span>
+        <span class="text-[11px] font-medium text-slate-200 group-hover:text-white line-clamp-1 truncate w-full leading-tight transition-colors">${app.title}</span>
       </button>
     `
       )
@@ -158,25 +158,25 @@ class Launcher {
     const docs = stateStore.getState().documents || [];
     if (docs.length > 0) {
       return docs.slice(0, 3).map((doc) => `
-        <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 cursor-pointer transition-colors border border-transparent hover:border-white/5" data-doc-id="${doc.id}" title="Open document">
+        <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-white/10" data-doc-id="${doc.id}" title="Open document">
           <i class="fas fa-file-alt text-emerald-400 w-4 text-center text-sm"></i>
-          <span class="flex-1 text-slate-300 font-medium truncate">${doc.title}</span>
-          <span class="text-[10px] text-slate-500 font-mono">Saved</span>
+          <span class="flex-1 text-slate-200 font-medium truncate">${doc.title}</span>
+          <span class="text-[10px] text-slate-400 font-mono">Saved</span>
         </div>
       `).join('');
     }
 
     // Default curated academic files
     return `
-      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 cursor-pointer transition-colors border border-transparent hover:border-white/5" data-filename="KCSE_Form4_Math_Calculus.docx">
+      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-white/10" data-filename="KCSE_Form4_Math_Calculus.docx">
         <i class="fas fa-file-word text-blue-400 w-4 text-center text-sm"></i>
-        <span class="flex-1 text-slate-300 font-medium truncate">KCSE_Form4_Math_Calculus.docx</span>
-        <span class="text-[10px] text-slate-500">Today</span>
+        <span class="flex-1 text-slate-200 font-medium truncate">KCSE_Form4_Math_Calculus.docx</span>
+        <span class="text-[10px] text-slate-400">Today</span>
       </div>
-      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/8 cursor-pointer transition-colors border border-transparent hover:border-white/5" data-filename="Biology_Osmosis_Lab_Report.docx">
+      <div class="recent-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 cursor-pointer transition-colors border border-transparent hover:border-white/10" data-filename="Biology_Osmosis_Lab_Report.docx">
         <i class="fas fa-file-word text-emerald-400 w-4 text-center text-sm"></i>
-        <span class="flex-1 text-slate-300 font-medium truncate">Biology_Osmosis_Lab_Report.docx</span>
-        <span class="text-[10px] text-slate-500">Yesterday</span>
+        <span class="flex-1 text-slate-200 font-medium truncate">Biology_Osmosis_Lab_Report.docx</span>
+        <span class="text-[10px] text-slate-400">Yesterday</span>
       </div>
     `;
   }
@@ -197,7 +197,7 @@ class Launcher {
         <div class="flex flex-col">
           <span class="text-xs font-bold text-white leading-tight flex items-center gap-1.5">
             ${currentUser.name || 'Student User'}
-            <span class="text-[9px] px-1.5 py-0.2 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
+            <span class="text-[9px] px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-300 border border-emerald-700/50 font-mono uppercase">${currentUser.role || 'student'}</span>
           </span>
           <span class="text-[10px] text-slate-400 leading-tight">Adm: ${currentUser.admNo || '1001'} &bull; ${currentUser.grade || 'Form 1'}</span>
         </div>
@@ -371,6 +371,7 @@ class Launcher {
   }
 
   open() {
+    document.getElementById('quick-settings-overlay')?.classList.remove('open');
     this.updateProfileAndRecents();
     this.overlayEl.classList.add('open');
     const searchInput = this.overlayEl.querySelector('#launcher-search-input');

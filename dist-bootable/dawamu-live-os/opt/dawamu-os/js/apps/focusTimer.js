@@ -259,5 +259,15 @@ export function createFocusTimerApp() {
   updateDisplay();
   updateStats();
 
+  container.__dawamuAppController = {
+    onDestroy: () => {
+      clearInterval(timerInterval);
+      stopAudio();
+      if (audioCtx && typeof audioCtx.close === 'function') {
+        try { audioCtx.close(); } catch (_) {}
+      }
+    }
+  };
+
   return container;
 }

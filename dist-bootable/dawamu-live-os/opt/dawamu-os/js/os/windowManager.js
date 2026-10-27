@@ -18,6 +18,56 @@ class WindowManager {
 
   init(desktopElement) {
     this.desktopEl = desktopElement;
+    if (typeof window !== 'undefined' && !this._resizeListenerBound) {
+      this._resizeListenerBound = true;
+      window.addEventListener('resize', () => {
+        this.clampWindowsToViewport();
+      });
+    }
+  }
+
+  clampWindowsToViewport() {
+    if (!this.desktopEl) return;
+    const desktopWidth = this.desktopEl.clientWidth || window.innerWidth;
+    const desktopHeight = (this.desktopEl.clientHeight || window.innerHeight) - 68;
+    this.windows.forEach((win) => {
+      if (win.maximized || win.minimized) return;
+      const el = win.element;
+      const curW = el.offsetWidth;
+      const curH = el.offsetHeight;
+      const curL = parseInt(el.style.left, 10) || 0;
+      const curT = parseInt(el.style.top, 10) || 0;
+
+      if (curW > desktopWidth - 16) {
+        el.style.width = `${Math.max(win.minWidth || 380, desktopWidth - 16)}px`;
+      }
+      if (curH > desktopHeight - 12) {
+        el.style.height = `${Math.max(win.minHeight || 270, desktopHeight - 12)}px`;
+      }
+      if (curL > desktopWidth - 100) {
+        el.style.left = `${Math.max(8, desktopWidth - Math.min(curW, desktopWidth - 16) - 8)}px`;
+      }
+      if (curT > desktopHeight - 48) {
+        el.style.top = `${Math.max(8, desktopHeight - 60)}px`;
+      }
+    });
+  }
+
+  focusNextTopWindow() {
+    let topWin = null;
+    this.windows.forEach((w) => {
+      if (!w.minimized) {
+        if (!topWin || w.zIndex > topWin.zIndex) {
+          topWin = w;
+        }
+      }
+    });
+    if (topWin) {
+      this.focusWindow(topWin.id);
+    } else {
+      this.activeWindowId = null;
+      this.notify();
+    }
   }
 
   subscribe(listener) {
@@ -62,33 +112,42 @@ class WindowManager {
       return existing;
     }
 
-    // Compute default centered initial coordinates
+    // Compute default centered initial coordinates clamped to available desktop area
     const desktopWidth = this.desktopEl.clientWidth || window.innerWidth;
-    const desktopHeight = (this.desktopEl.clientHeight || window.innerHeight) - 54;
+    const desktopHeight = Math.max(320, (this.desktopEl.clientHeight || window.innerHeight) - 72);
 
-    const initialLeft = Math.max(20, Math.floor((desktopWidth - width) / 2) + (this.windows.size * 25) % 100);
-    const initialTop = Math.max(20, Math.floor((desktopHeight - height) / 2) + (this.windows.size * 25) % 80);
+    const safeWidth = Math.max(minWidth, Math.min(width, desktopWidth - 24));
+    const safeHeight = Math.max(minHeight, Math.min(height, desktopHeight - 16));
+
+    const cascadeX = (this.windows.size * 24) % 96;
+    const cascadeY = (this.windows.size * 22) % 66;
+    const rawLeft = Math.floor((desktopWidth - safeWidth) / 2) + cascadeX;
+    const rawTop = Math.floor((desktopHeight - safeHeight) / 2) + cascadeY;
+
+    const initialLeft = Math.max(12, Math.min(desktopWidth - safeWidth - 12, rawLeft));
+    const initialTop = Math.max(10, Math.min(desktopHeight - safeHeight - 8, rawTop));
 
     const winEl = document.createElement('div');
     winEl.className = 'cros-window focused cros-window-opening';
     winEl.id = `window-${id}`;
-    winEl.style.width = `${width}px`;
-    winEl.style.height = `${height}px`;
+    winEl.style.width = `${safeWidth}px`;
+    winEl.style.height = `${safeHeight}px`;
     winEl.style.left = `${initialLeft}px`;
     winEl.style.top = `${initialTop}px`;
     winEl.style.zIndex = ++this.highestZIndex;
 
     winEl.innerHTML = `
       <div class="window-header" id="header-${id}">
+        <div class="window-controls">
+          <button class="win-btn close-btn" title="Close" data-action="close"><i class="fas fa-times"></i></button>
+          <button class="win-btn minimize-btn" title="Minimize" data-action="minimize"><i class="fas fa-minus"></i></button>
+          <button class="win-btn maximize-btn" title="Maximize/Restore" data-action="maximize"><i class="far fa-square"></i></button>
+        </div>
         <div class="window-title">
           <span class="app-header-icon">${icon}</span>
           <span class="window-title-text">${title}</span>
         </div>
-        <div class="window-controls">
-          <button class="win-btn minimize-btn" title="Minimize" data-action="minimize"><i class="fas fa-minus"></i></button>
-          <button class="win-btn maximize-btn" title="Maximize/Restore" data-action="maximize"><i class="far fa-square"></i></button>
-          <button class="win-btn close-btn" title="Close" data-action="close"><i class="fas fa-times"></i></button>
-        </div>
+        <div class="window-header-spacer" aria-hidden="true"></div>
       </div>
       <div class="window-body" id="body-${id}"></div>
 
@@ -145,8 +204,14 @@ class WindowManager {
       maximized: false,
       zIndex: this.highestZIndex,
       minWidth,
-      minHeight
+      minHeight,
+      savedRect: { left: initialLeft, top: initialTop, width: safeWidth, height: safeHeight }
     };
+
+    // Unfocus previous windows before setting new window focused
+    this.windows.forEach((w) => {
+      w.element.classList.remove('focused');
+    });
 
     this.windows.set(id, windowData);
     this.activeWindowId = id;
@@ -192,17 +257,50 @@ class WindowManager {
 
     header.addEventListener('mousedown', (e) => {
       if (e.target.closest('.win-btn')) return;
-      if (winData.maximized) return; // Don't drag when maximized
+      if (e.button !== 0) return;
 
       isDragging = true;
-      element.classList.add('dragging');
       startX = e.clientX;
       startY = e.clientY;
       initialLeft = parseInt(element.style.left, 10) || 0;
       initialTop = parseInt(element.style.top, 10) || 0;
 
+      if (!winData.maximized) {
+        element.classList.add('dragging');
+        document.body.classList.add('window-dragging-active');
+      }
+
       const onMouseMove = (moveEvent) => {
         if (!isDragging) return;
+
+        // Support drag-to-unmaximize when pulling a maximized window header
+        if (winData.maximized) {
+          const pullDist = Math.hypot(moveEvent.clientX - startX, moveEvent.clientY - startY);
+          if (pullDist < 6) return;
+
+          const desktopW = this.desktopEl.clientWidth || window.innerWidth;
+          const restoredW = winData.savedRect?.width || Math.min(900, desktopW - 40);
+          const restoredH = winData.savedRect?.height || 560;
+          const ratio = Math.max(0.15, Math.min(0.85, moveEvent.clientX / desktopW));
+
+          winData.maximized = false;
+          element.classList.remove('maximized');
+          const maxIcon = element.querySelector('.maximize-btn i');
+          if (maxIcon) maxIcon.className = 'far fa-square';
+
+          initialLeft = Math.round(moveEvent.clientX - restoredW * ratio);
+          initialTop = Math.max(8, moveEvent.clientY - 22);
+          startX = moveEvent.clientX;
+          startY = moveEvent.clientY;
+
+          element.style.width = `${restoredW}px`;
+          element.style.height = `${restoredH}px`;
+          element.style.left = `${initialLeft}px`;
+          element.style.top = `${initialTop}px`;
+          element.classList.add('dragging');
+          document.body.classList.add('window-dragging-active');
+        }
+
         if (dragRafId) return;
 
         dragRafId = requestAnimationFrame(() => {
@@ -212,7 +310,7 @@ class WindowManager {
           const dy = moveEvent.clientY - startY;
 
           const maxLeft = (this.desktopEl.clientWidth || window.innerWidth) - 80;
-          const maxTop = (this.desktopEl.clientHeight || window.innerHeight) - 60;
+          const maxTop = (this.desktopEl.clientHeight || window.innerHeight) - 76;
 
           const newLeft = Math.max(-50, Math.min(maxLeft, initialLeft + dx));
           const newTop = Math.max(0, Math.min(maxTop, initialTop + dy));
@@ -225,16 +323,27 @@ class WindowManager {
       const onMouseUp = () => {
         isDragging = false;
         element.classList.remove('dragging');
+        document.body.classList.remove('window-dragging-active');
         if (dragRafId) {
           cancelAnimationFrame(dragRafId);
           dragRafId = null;
         }
+        if (!winData.maximized) {
+          winData.savedRect = {
+            left: parseInt(element.style.left, 10) || 0,
+            top: parseInt(element.style.top, 10) || 0,
+            width: element.offsetWidth,
+            height: element.offsetHeight
+          };
+        }
         document.removeEventListener('mousemove', onMouseMove);
         document.removeEventListener('mouseup', onMouseUp);
+        window.removeEventListener('blur', onMouseUp);
       };
 
       document.addEventListener('mousemove', onMouseMove, { passive: true });
       document.addEventListener('mouseup', onMouseUp, { passive: true });
+      window.addEventListener('blur', onMouseUp, { once: true });
     });
 
     // ── 8-Direction Resizing Functionality ──
@@ -255,6 +364,7 @@ class WindowManager {
         let resizeRafId = null;
 
         element.classList.add('resizing');
+        document.body.classList.add('window-dragging-active');
 
         const onResizeMove = (moveEvt) => {
           if (resizeRafId) return;
@@ -265,7 +375,7 @@ class WindowManager {
             const minW = minWidth || 380;
             const minH = minHeight || 270;
             const maxW = (this.desktopEl.clientWidth || window.innerWidth);
-            const maxH = (this.desktopEl.clientHeight || window.innerHeight);
+            const maxH = (this.desktopEl.clientHeight || window.innerHeight) - 68;
 
             let newW = startW;
             let newH = startH;
@@ -279,13 +389,13 @@ class WindowManager {
               newH = Math.max(minH, Math.min(maxH - startT, startH + dy));
             }
             if (dir.includes('l')) {
-              const clampedW = Math.max(minW, startW - dx);
+              const clampedW = Math.max(minW, Math.min(startL + startW, startW - dx));
               newL = startL + (startW - clampedW);
               newW = clampedW;
             }
             if (dir.includes('t')) {
-              const clampedH = Math.max(minH, startH - dy);
-              newT = startT + (startH - clampedH);
+              const clampedH = Math.max(minH, Math.min(startT + startH, startH - dy));
+              newT = Math.max(0, startT + (startH - clampedH));
               newH = clampedH;
             }
 
@@ -298,16 +408,25 @@ class WindowManager {
 
         const onResizeUp = () => {
           element.classList.remove('resizing');
+          document.body.classList.remove('window-dragging-active');
           if (resizeRafId) {
             cancelAnimationFrame(resizeRafId);
             resizeRafId = null;
           }
+          winData.savedRect = {
+            left: parseInt(element.style.left, 10) || 0,
+            top: parseInt(element.style.top, 10) || 0,
+            width: element.offsetWidth,
+            height: element.offsetHeight
+          };
           document.removeEventListener('mousemove', onResizeMove);
           document.removeEventListener('mouseup', onResizeUp);
+          window.removeEventListener('blur', onResizeUp);
         };
 
         document.addEventListener('mousemove', onResizeMove);
         document.addEventListener('mouseup', onResizeUp);
+        window.addEventListener('blur', onResizeUp, { once: true });
       });
     });
   }
@@ -315,6 +434,10 @@ class WindowManager {
   focusWindow(id) {
     const win = this.windows.get(id);
     if (!win) return;
+
+    // Close open system popovers when focusing an app window
+    document.getElementById('launcher-overlay')?.classList.remove('open');
+    document.getElementById('quick-settings-overlay')?.classList.remove('open');
 
     this.windows.forEach((w) => {
       w.element.classList.remove('focused');
@@ -339,9 +462,10 @@ class WindowManager {
     win.element.classList.remove('focused');
 
     if (this.activeWindowId === id) {
-      this.activeWindowId = null;
+      this.focusNextTopWindow();
+    } else {
+      this.notify();
     }
-    this.notify();
   }
 
   restoreWindow(id) {
@@ -352,13 +476,28 @@ class WindowManager {
     const win = this.windows.get(id);
     if (!win) return;
 
-    win.maximized = !win.maximized;
-    if (win.maximized) {
+    if (!win.maximized) {
+      win.savedRect = {
+        left: parseInt(win.element.style.left, 10) || 20,
+        top: parseInt(win.element.style.top, 10) || 20,
+        width: win.element.offsetWidth,
+        height: win.element.offsetHeight
+      };
+      win.maximized = true;
       win.element.classList.add('maximized');
-      win.element.querySelector('.maximize-btn i').className = 'far fa-clone';
+      const maxIcon = win.element.querySelector('.maximize-btn i');
+      if (maxIcon) maxIcon.className = 'far fa-clone';
     } else {
+      win.maximized = false;
       win.element.classList.remove('maximized');
-      win.element.querySelector('.maximize-btn i').className = 'far fa-square';
+      if (win.savedRect) {
+        win.element.style.left = `${win.savedRect.left}px`;
+        win.element.style.top = `${win.savedRect.top}px`;
+        win.element.style.width = `${win.savedRect.width}px`;
+        win.element.style.height = `${win.savedRect.height}px`;
+      }
+      const maxIcon = win.element.querySelector('.maximize-btn i');
+      if (maxIcon) maxIcon.className = 'far fa-square';
     }
     this.focusWindow(id);
   }
@@ -400,9 +539,10 @@ class WindowManager {
     this.windows.delete(id);
 
     if (this.activeWindowId === id) {
-      this.activeWindowId = null;
+      this.focusNextTopWindow();
+    } else {
+      this.notify();
     }
-    this.notify();
     return true;
   }
 

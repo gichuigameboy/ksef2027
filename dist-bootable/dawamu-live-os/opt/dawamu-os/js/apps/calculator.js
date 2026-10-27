@@ -649,12 +649,19 @@ export function createCalculatorApp() {
   };
 
   container.addEventListener('keydown', onKeyDown);
-  window.addEventListener('keydown', (e) => {
+  const onWindowKeyDown = (e) => {
     const calcWin = document.getElementById('window-calculator');
     if (calcWin && calcWin.classList.contains('focused')) {
       onKeyDown(e);
     }
-  });
+  };
+  window.addEventListener('keydown', onWindowKeyDown);
+
+  container.__dawamuAppController = {
+    onDestroy: () => {
+      window.removeEventListener('keydown', onWindowKeyDown);
+    }
+  };
 
   container.querySelector('#calc-clear-hist').addEventListener('click', () => {
     historyLog = [];

@@ -756,19 +756,16 @@ export function createSettingsApp(options = {}) {
 
     // Brightness slider
     root.querySelector('#set-bright')?.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
+      const val = parseInt(e.target.value, 10);
       stateStore.updateSettings({ brightness: val });
+      stateStore.applyDisplaySettings();
       const lbl = root.querySelector('#bright-val');
       if (lbl) lbl.textContent = `${val}%`;
-      const desktop = document.getElementById('desktop');
-      if (desktop) {
-        desktop.style.filter = `brightness(${val / 100})`;
-      }
     });
 
     // Volume slider
     root.querySelector('#set-vol')?.addEventListener('input', (e) => {
-      const val = parseInt(e.target.value);
+      const val = parseInt(e.target.value, 10);
       stateStore.updateSettings({ volume: val });
       const lbl = root.querySelector('#vol-val');
       if (lbl) lbl.textContent = `${val}%`;
@@ -778,10 +775,7 @@ export function createSettingsApp(options = {}) {
     root.querySelector('#set-night-btn')?.addEventListener('click', () => {
       const current = stateStore.getState().systemSettings.nightLight;
       stateStore.updateSettings({ nightLight: !current });
-      const desktop = document.getElementById('desktop');
-      if (desktop) {
-        desktop.style.filter = !current ? 'sepia(0.25) contrast(0.95)' : '';
-      }
+      stateStore.applyDisplaySettings();
       render();
     });
 

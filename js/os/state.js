@@ -15,33 +15,33 @@ const STUDENT_PERSONALIZATION_PREFIX = 'dawamu_personalization_';
 export const WALLPAPER_PRESETS = [
   {
     id: 'emerald',
-    name: 'Dawamu Emerald (Default)',
+    name: 'macOS Tahoe Liquid Emerald',
     color: '#10b981',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(16, 185, 129, 0.22) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(4, 120, 87, 0.18) 0%, transparent 60%), #041409'
+    bgCss: 'radial-gradient(ellipse 85% 65% at 22% 18%, rgba(16, 185, 129, 0.42) 0%, transparent 62%), radial-gradient(ellipse 75% 60% at 82% 28%, rgba(14, 165, 233, 0.36) 0%, transparent 60%), radial-gradient(ellipse 80% 65% at 65% 88%, rgba(99, 102, 241, 0.34) 0%, transparent 64%), radial-gradient(ellipse 60% 50% at 18% 82%, rgba(20, 184, 166, 0.28) 0%, transparent 58%), linear-gradient(135deg, #030914 0%, #06182c 48%, #04101f 100%)'
   },
   {
     id: 'deep_blue',
-    name: 'Deep Blue Windows',
+    name: 'macOS Sequoia Liquid Sapphire',
     color: '#3b82f6',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(59, 130, 246, 0.25) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(30, 58, 138, 0.25) 0%, transparent 60%), #030712'
+    bgCss: 'radial-gradient(ellipse 85% 65% at 25% 15%, rgba(59, 130, 246, 0.46) 0%, transparent 62%), radial-gradient(ellipse 75% 60% at 82% 72%, rgba(139, 92, 246, 0.38) 0%, transparent 62%), radial-gradient(ellipse 65% 55% at 75% 18%, rgba(6, 182, 212, 0.32) 0%, transparent 58%), linear-gradient(135deg, #020617 0%, #0a1936 50%, #050b1c 100%)'
   },
   {
     id: 'midnight',
-    name: 'Midnight Obsidian',
+    name: 'macOS Sonoma Liquid Amethyst',
     color: '#8b5cf6',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(139, 92, 246, 0.18) 0%, transparent 65%), #07070c'
+    bgCss: 'radial-gradient(ellipse 85% 65% at 30% 15%, rgba(139, 92, 246, 0.42) 0%, transparent 62%), radial-gradient(ellipse 70% 60% at 80% 75%, rgba(236, 72, 153, 0.30) 0%, transparent 60%), radial-gradient(ellipse 65% 55% at 18% 80%, rgba(59, 130, 246, 0.28) 0%, transparent 60%), linear-gradient(135deg, #060412 0%, #130b29 52%, #070510 100%)'
   },
   {
     id: 'sunset',
-    name: 'African Savannah Sunset',
+    name: 'Savannah Liquid Horizon',
     color: '#f59e0b',
-    bgCss: 'radial-gradient(ellipse 80% 60% at 50% -10%, rgba(245, 158, 11, 0.25) 0%, transparent 65%), radial-gradient(ellipse 60% 50% at 85% 70%, rgba(225, 29, 72, 0.18) 0%, transparent 60%), #140505'
+    bgCss: 'radial-gradient(ellipse 85% 60% at 35% 15%, rgba(245, 158, 11, 0.42) 0%, transparent 62%), radial-gradient(ellipse 75% 60% at 82% 68%, rgba(244, 63, 94, 0.35) 0%, transparent 62%), radial-gradient(ellipse 65% 55% at 15% 82%, rgba(139, 92, 246, 0.28) 0%, transparent 58%), linear-gradient(135deg, #140509 0%, #1f0c18 50%, #0b0612 100%)'
   },
   {
     id: 'slate',
-    name: 'Minimal Slate Dark',
+    name: 'macOS Pro Space Titanium',
     color: '#64748b',
-    bgCss: 'linear-gradient(135deg, #0b1120 0%, #1e293b 100%)'
+    bgCss: 'radial-gradient(ellipse 80% 60% at 50% 0%, rgba(148, 163, 184, 0.25) 0%, transparent 65%), radial-gradient(ellipse 70% 55% at 85% 80%, rgba(56, 189, 248, 0.18) 0%, transparent 60%), linear-gradient(135deg, #090d16 0%, #162032 50%, #0b111e 100%)'
   }
 ];
 
@@ -555,6 +555,23 @@ class OSState {
         desktopEl.dataset.wallpaperId = wp.id;
       }
     }
+
+    this.applyDisplaySettings();
+  }
+
+  applyDisplaySettings() {
+    if (typeof document === 'undefined') return;
+    const settings = this.policyState?.systemSettings || DEFAULT_GLOBAL_RESTRICTIONS.systemSettings;
+    const bright = typeof settings.brightness === 'number' ? Math.max(20, Math.min(100, settings.brightness)) : 90;
+    const night = Boolean(settings.nightLight);
+
+    document.documentElement.style.setProperty('--desktop-brightness', ${bright}%);
+    const desktopEl = document.getElementById('desktop');
+    if (desktopEl) {
+      desktopEl.style.removeProperty('filter');
+      desktopEl.classList.toggle('night-light', night);
+    }
+    document.body?.classList.toggle('sepia', night);
   }
 
   // Restrictions Mutators

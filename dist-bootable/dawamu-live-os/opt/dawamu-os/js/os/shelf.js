@@ -36,49 +36,51 @@ class Shelf {
   render() {
     this.shelfEl.innerHTML = `
       <div class="flex items-center gap-2 h-full">
-        <!-- Dawamu Start Button -->
-        <button id="everything-btn" class="win-start-btn flex items-center justify-center p-1.5 rounded-xl hover:bg-white/10 active:scale-95 transition-all text-white cursor-pointer group" title="Start Menu (DawamuOS)">
-          <img src="assets/dawamu-logo.png" alt="Start" class="h-6 w-auto object-contain drop-shadow group-hover:scale-105 transition-transform">
+        <!-- Dawamu Launchpad / Start Button -->
+        <button id="everything-btn" class="win-start-btn flex items-center justify-center p-1.5 rounded-2xl hover:bg-white/15 active:scale-95 transition-all text-white cursor-pointer group" title="Launchpad & Start Menu (DawamuOS)">
+          <img src="assets/dawamu-logo.png" alt="Start" class="h-6 w-auto object-contain drop-shadow group-hover:scale-110 transition-transform">
         </button>
 
-        <!-- Search Bar Pill -->
-        <button id="taskbar-search-btn" class="flex items-center gap-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-full px-3 py-1.5 text-xs text-slate-300 transition-all cursor-pointer shadow-sm">
+        <!-- Spotlight Search Bar Pill -->
+        <button id="taskbar-search-btn" class="flex items-center gap-2 bg-white/10 hover:bg-white/15 border border-white/15 rounded-full px-3.5 py-1.5 text-xs text-slate-200 transition-all cursor-pointer shadow-sm">
           <i class="fas fa-search text-emerald-400 text-xs"></i>
-          <span class="text-[11px] text-slate-400 font-sans pr-1">Search apps & files</span>
-          <span class="text-[9px] bg-white/10 text-slate-400 px-1.5 py-0.2 rounded font-mono">Win</span>
+          <span class="text-[11px] text-slate-200 font-medium font-sans pr-1">Spotlight</span>
+          <span class="text-[9px] bg-white/15 text-slate-200 px-1.5 py-0.5 rounded-md font-mono border border-white/10">⌘Space</span>
         </button>
 
-        <div class="h-5 w-[1px] bg-white/10 mx-1"></div>
+        <div class="dock-divider h-7 w-[1px] bg-white/20 mx-1"></div>
 
-        <!-- Dynamic & Pinned Taskbar Apps -->
-        <div id="shelf-pinned-apps" class="flex items-center gap-1.5"></div>
+        <!-- Dynamic & Pinned Dock Apps -->
+        <div id="shelf-pinned-apps" class="flex items-center gap-2"></div>
       </div>
 
-      <!-- System Tray (Bottom Right) -->
+      <div class="dock-divider h-7 w-[1px] bg-white/20 mx-1"></div>
+
+      <!-- System Tray / macOS Control Center Pill -->
       <div class="flex items-center gap-2 h-full">
-        <div id="status-tray" class="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl hover:bg-white/10 cursor-pointer text-slate-200 transition-all border border-transparent hover:border-white/10" title="System Status & Quick Settings">
+        <div id="status-tray" class="flex items-center gap-2.5 px-3 py-1.5 rounded-2xl hover:bg-white/15 cursor-pointer text-slate-100 transition-all border border-white/15 bg-white/10" title="Control Center & System Status">
           <!-- Restriction Badge -->
           <div id="focus-mode-badge" class="hidden text-[10px] bg-indigo-900/60 text-indigo-300 border border-indigo-700/50 px-2 py-0.5 rounded-full font-bold flex items-center gap-1">
             <i class="fas fa-lock text-[9px]"></i> Focus
           </div>
 
-          <div class="flex items-center gap-2.5 text-xs text-slate-300">
+          <div class="flex items-center gap-2.5 text-xs text-slate-200">
             <i id="tray-wifi-icon" class="fas fa-wifi text-emerald-400 text-xs"></i>
-            <i class="fas fa-volume-up text-xs text-slate-300"></i>
+            <i class="fas fa-sliders text-xs text-slate-200"></i>
             <span id="tray-battery" class="flex items-center gap-1 text-[11px] font-semibold">
               <i class="fas fa-battery-full text-xs text-emerald-400"></i> 100%
             </span>
           </div>
 
           <!-- Stacked Time & Date -->
-          <div class="flex flex-col items-end text-[10px] font-sans leading-tight border-l border-white/15 pl-2.5 text-slate-300">
+          <div class="flex flex-col items-end text-[10px] font-sans leading-tight border-l border-white/20 pl-2.5 text-slate-200">
             <span id="tray-clock" class="font-bold text-white text-[11px]">10:24 AM</span>
-            <span id="tray-date" class="text-[9px] text-slate-400">9/29/2026</span>
+            <span id="tray-date" class="text-[9px] text-slate-300">9/29/2026</span>
           </div>
         </div>
 
-        <!-- Show Desktop Peek Line -->
-        <button id="win-show-desktop-btn" class="w-2 h-8 rounded-r-md border-l border-white/20 hover:bg-white/20 transition-colors ml-0.5 cursor-pointer" title="Show Desktop (Minimize All)"></button>
+        <!-- Show Desktop Glass Pill -->
+        <button id="win-show-desktop-btn" class="w-2.5 h-8 rounded-full border border-white/20 bg-white/10 hover:bg-white/25 transition-all ml-0.5 cursor-pointer" title="Show Desktop (Minimize All)"></button>
       </div>
     `;
 
@@ -133,10 +135,11 @@ class Shelf {
     });
 
     container.innerHTML = items.map(app => `
-      <button class="app-shelf-btn relative p-2 rounded-2xl hover:bg-white/10 active:scale-95 flex items-center justify-center transition-all group cursor-pointer ${app.isRunning ? (app.isFocused ? 'bg-white/15 shadow-inner' : 'bg-white/5') : ''}" data-app-id="${app.id}" title="${app.title} ${app.isRunning ? (app.isFocused ? '(Active)' : '(Running)') : ''}">
-        <span class="text-xl flex items-center justify-center">${app.icon}</span>
-        <!-- Active Pill Underline -->
-        <span class="win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${app.isRunning ? (app.isFocused ? 'w-4 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'w-2 h-1 bg-emerald-400/70 opacity-70') : 'w-1 h-0.5 bg-white/40 opacity-0 group-hover:opacity-40'}"></span>
+      <button class="app-shelf-btn relative p-2 rounded-2xl hover:bg-white/15 active:scale-95 flex items-center justify-center transition-all group cursor-pointer ${app.isRunning ? (app.isFocused ? 'bg-white/20 shadow-inner dock-app-focused' : 'bg-white/10 dock-app-running') : ''}" data-app-id="${app.id}" title="${app.title} ${app.isRunning ? (app.isFocused ? '(Active)' : '(Running)') : ''}">
+        <span class="dock-tooltip">${app.title}</span>
+        <span class="text-xl flex items-center justify-center dock-icon-glyph">${app.icon}</span>
+        <!-- Active Luminescent Dot -->
+        <span class="win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${app.isRunning ? (app.isFocused ? 'w-3.5 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : 'w-1.5 h-1.5 bg-white/85 opacity-90') : 'w-1 h-1 bg-white/40 opacity-0 group-hover:opacity-40'}"></span>
       </button>
     `).join('');
 
@@ -204,16 +207,17 @@ class Shelf {
       const win = windowManager.windows.get(appId);
       const pill = btn.querySelector('.win-app-pill');
 
+      btn.classList.remove('bg-white/20', 'bg-white/15', 'bg-white/10', 'bg-white/5', 'dock-app-focused', 'dock-app-running');
       if (win) {
         const isFocused = windowManager.activeWindowId === appId && !win.minimized;
-        btn.classList.add(isFocused ? 'bg-white/15' : 'bg-white/5');
+        btn.classList.add(isFocused ? 'bg-white/20' : 'bg-white/10');
+        btn.classList.add(isFocused ? 'dock-app-focused' : 'dock-app-running');
         if (pill) {
-          pill.className = `win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${isFocused ? 'w-4 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'w-2 h-1 bg-emerald-400/70 opacity-70'}`;
+          pill.className = `win-app-pill absolute bottom-0.5 rounded-full transition-all duration-200 ${isFocused ? 'w-3.5 h-1 bg-emerald-400 opacity-100 shadow-[0_0_8px_rgba(52,211,153,0.9)]' : 'w-1.5 h-1.5 bg-white/85 opacity-90'}`;
         }
       } else {
-        btn.classList.remove('bg-white/15', 'bg-white/5');
         if (pill) {
-          pill.className = 'win-app-pill absolute bottom-0.5 w-1 h-0.5 bg-white/40 opacity-0 group-hover:opacity-40 rounded-full transition-all duration-200';
+          pill.className = 'win-app-pill absolute bottom-0.5 w-1 h-1 bg-white/40 opacity-0 group-hover:opacity-40 rounded-full transition-all duration-200';
         }
       }
     });

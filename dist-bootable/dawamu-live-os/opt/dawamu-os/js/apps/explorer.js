@@ -798,54 +798,57 @@ export function createExplorerApp(options = {}) {
       }
     });
 
-    // ── 15. Global Paste (Ctrl+V) & Delete Key Shortcuts in Explorer ──
-    root.tabIndex = 0; // Focusable for key handling
-    root.addEventListener('keydown', (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-      if (e.key === 'Delete' || e.key === 'Del') {
-        if (selectedFile) {
-          e.preventDefault();
-          root.querySelector('#exp-delete-btn')?.click();
+    // ── 15. Global Paste (Ctrl+V) & Delete Key Shortcuts in Explorer (Bound Once) ──
+    if (!root._rootListenersBound) {
+      root._rootListenersBound = true;
+      root.tabIndex = 0; // Focusable for key handling
+      root.addEventListener('keydown', (e) => {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+        if (e.key === 'Delete' || e.key === 'Del') {
+          if (selectedFile) {
+            e.preventDefault();
+            root.querySelector('#exp-delete-btn')?.click();
+          }
+        } else if (e.key === 'Escape') {
+          if (selectedFile) {
+            selectedFile = null;
+            render();
+          }
         }
-      } else if (e.key === 'Escape') {
-        if (selectedFile) {
-          selectedFile = null;
+      });
+
+      root.addEventListener('paste', async (e) => {
+        if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
+
+        // 1. Files copied to clipboard (e.g. from OS file explorer or screenshot)
+        if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
+          e.preventDefault();
+          await handleExternalFilesDrop(e.clipboardData.files, currentFolder);
+          return;
+        }
+
+        // 2. Internal cut/copy clipboard
+        if (clipboard && clipboard.file) {
+          e.preventDefault();
+          root.querySelector('#exp-paste-btn')?.click();
+          return;
+        }
+
+        // 3. Plain text snippet
+        const text = e.clipboardData?.getData('text/plain');
+        if (text && text.trim()) {
+          e.preventDefault();
+          const snippetName = `Pasted_Note_${Date.now().toString().slice(-4)}.txt`;
+          const saved = stateStore.saveFileToVFS(currentFolder, {
+            name: snippetName,
+            content: text,
+            type: 'txt'
+          });
+          dawamuDialogs.toast(`Pasted text note as "${saved.name}"`, 'success');
           render();
         }
-      }
-    });
-
-    root.addEventListener('paste', async (e) => {
-      if (['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)) return;
-
-      // 1. Files copied to clipboard (e.g. from OS file explorer or screenshot)
-      if (e.clipboardData?.files && e.clipboardData.files.length > 0) {
-        e.preventDefault();
-        await handleExternalFilesDrop(e.clipboardData.files, currentFolder);
-        return;
-      }
-
-      // 2. Internal cut/copy clipboard
-      if (clipboard && clipboard.file) {
-        e.preventDefault();
-        handlePasteClipboard();
-        return;
-      }
-
-      // 3. Plain text snippet
-      const text = e.clipboardData?.getData('text/plain');
-      if (text && text.trim()) {
-        e.preventDefault();
-        const snippetName = `Pasted_Note_${Date.now().toString().slice(-4)}.txt`;
-        const saved = stateStore.saveFileToVFS(currentFolder, {
-          name: snippetName,
-          content: text,
-          type: 'txt'
-        });
-        dawamuDialogs.toast(`Pasted text note as "${saved.name}"`, 'success');
-        render();
-      }
-    });
+      });
+    }
   }
 
   root.__dawamuAppController = {

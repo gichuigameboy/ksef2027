@@ -304,8 +304,14 @@ export function createClassroomApp() {
     const searchInput = container.querySelector('#asg-search');
     if (searchInput) {
       searchInput.addEventListener('input', (e) => {
+        const pos = e.target.selectionStart || e.target.value.length;
         searchQuery = e.target.value;
         render();
+        const reInput = container.querySelector('#asg-search');
+        if (reInput) {
+          reInput.focus();
+          try { reInput.setSelectionRange(pos, pos); } catch (_) {}
+        }
       });
     }
 
