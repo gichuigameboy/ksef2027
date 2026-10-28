@@ -661,6 +661,16 @@ video {
   -webkit-user-drag: element !important;
 }
 
+[contenteditable="true"],
+[contenteditable="true"] *,
+input:not([type="button"]):not([type="submit"]):not([type="reset"]),
+textarea,
+.selectable-text {
+  -webkit-user-select: text !important;
+     -moz-user-select: text !important;
+          user-select: text !important;
+}
+
 body, html, input, button, select, textarea {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, sans-serif;
   letter-spacing: -0.012em;

@@ -18,7 +18,7 @@ import { dawamuDialogs } from '../os/dialogs.js';
 
 export function createWordApp(options = {}) {
   const root = document.createElement('div');
-  root.className = 'flex flex-col h-full bg-[#eef1f5] font-sans text-slate-800 select-none overflow-hidden';
+  root.className = 'flex flex-col h-full bg-[#eef1f5] font-sans text-slate-800 overflow-hidden';
 
   const AUTO_SAVE_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes (300,000 ms)
 
@@ -365,6 +365,15 @@ export function createWordApp(options = {}) {
       width: 1px;
       background: #cbd5e1;
       margin: 0 6px;
+    }
+    #word-paper,
+    #word-paper * {
+      -webkit-user-select: text !important;
+      -moz-user-select: text !important;
+      user-select: text !important;
+    }
+    #word-paper {
+      cursor: text;
     }
     #word-paper h1 { font-size: 26px; font-weight: 800; margin: 16px 0 8px 0; color: #1e293b; }
     #word-paper h2 { font-size: 20px; font-weight: 700; margin: 14px 0 6px 0; color: #185abd; }
@@ -775,75 +784,191 @@ export function createWordApp(options = {}) {
   }
 
   /* ═══════════════════════════════════════════════════
+     SELECTION TRACKING & FORMATTING ENGINE
+  ═══════════════════════════════════════════════════ */
+  let savedSelectionRange = null;
+
+  function saveSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      if (paper.contains(range.commonAncestorContainer) || paper === range.commonAncestorContainer) {
+        savedSelectionRange = range.cloneRange();
+      }
+    }
+  }
+
+  function restoreSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      if (paper.contains(range.commonAncestorContainer) || paper === range.commonAncestorContainer) {
+        savedSelectionRange = range.cloneRange();
+        paper.focus();
+        return;
+      }
+    }
+    paper.focus();
+    if (savedSelectionRange) {
+      try {
+        const curSel = window.getSelection();
+        curSel.removeAllRanges();
+        curSel.addRange(savedSelectionRange);
+      } catch (_) {}
+    }
+  }
+
+  function executeFormat(cmd, value = null) {
+    restoreSelection();
+    document.execCommand(cmd, false, value);
+    saveSelection();
+    markDirty();
+    updateRibbonActiveStates();
+    updateDocumentMetrics();
+  }
+
+  function applyFontSize(sizeStr) {
+    restoreSelection();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      const span = document.createElement('span');
+      span.style.fontSize = sizeStr;
+      try {
+        const contents = range.extractContents();
+        span.appendChild(contents);
+        range.insertNode(span);
+        const newRange = document.createRange();
+        newRange.selectNodeContents(span);
+        sel.removeAllRanges();
+        sel.addRange(newRange);
+        saveSelection();
+      } catch (_) {
+        document.execCommand('fontSize', false, '4');
+      }
+    } else {
+      paper.style.fontSize = sizeStr;
+    }
+    markDirty();
+    updateDocumentMetrics();
+  }
+
+  function changeFontSizeDelta(delta) {
+    restoreSelection();
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      let node = sel.anchorNode;
+      if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+      const curSize = node ? parseInt(window.getComputedStyle(node).fontSize, 10) || 14 : 14;
+      const nextSize = Math.max(8, Math.min(72, curSize + delta)) + 'px';
+      applyFontSize(nextSize);
+    } else {
+      const cur = parseInt(paper.style.fontSize || '14', 10);
+      const next = Math.max(8, Math.min(72, cur + delta)) + 'px';
+      paper.style.fontSize = next;
+    }
+    markDirty();
+    updateDocumentMetrics();
+  }
+
+  function updateRibbonActiveStates() {
+    const commands = [
+      'bold', 'italic', 'underline', 'strikeThrough', 'subscript', 'superscript',
+      'justifyLeft', 'justifyCenter', 'justifyRight', 'justifyFull',
+      'insertUnorderedList', 'insertOrderedList'
+    ];
+    commands.forEach(cmd => {
+      const btn = ribbonPanels.querySelector(`[data-cmd="${cmd}"]`);
+      if (!btn) return;
+      try {
+        const isActive = document.queryCommandState(cmd);
+        if (isActive) {
+          btn.classList.add('bg-blue-200', 'text-blue-800', 'border-blue-400', 'font-bold');
+        } else {
+          btn.classList.remove('bg-blue-200', 'text-blue-800', 'border-blue-400', 'font-bold');
+        }
+      } catch (_) {}
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════
      EVENT WIRING
   ═══════════════════════════════════════════════════ */
   function wireRibbonEvents() {
-    // Basic execCommands
+    // Crucial: Prevent buttons in ribbon from stealing focus and collapsing selection in contenteditable
+    ribbonPanels.querySelectorAll('button').forEach(btn => {
+      btn.addEventListener('mousedown', (e) => {
+        saveSelection();
+        e.preventDefault();
+      });
+    });
+
+    // Basic execCommands (Bold, Italic, Underline, Strike, Lists, Alignment, Undo, Redo, RemoveFormat)
     ribbonPanels.querySelectorAll('[data-cmd]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        paper.focus();
-        document.execCommand(btn.dataset.cmd, false, null);
-        updateDocumentMetrics();
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        executeFormat(btn.dataset.cmd);
       });
     });
 
     // Font Family
     const selFont = ribbonPanels.querySelector('#sel-font-family');
     if (selFont) {
+      selFont.addEventListener('focus', () => saveSelection());
       selFont.addEventListener('change', (e) => {
-        paper.focus();
-        document.execCommand('fontName', false, e.target.value);
+        executeFormat('fontName', e.target.value);
       });
     }
 
     // Font Size
     const selSize = ribbonPanels.querySelector('#sel-font-size');
     if (selSize) {
+      selSize.addEventListener('focus', () => saveSelection());
       selSize.addEventListener('change', (e) => {
-        paper.focus();
-        const sel = window.getSelection();
-        if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
-          const span = document.createElement('span');
-          span.style.fontSize = e.target.value;
-          const range = sel.getRangeAt(0);
-          span.appendChild(range.extractContents());
-          range.insertNode(span);
-        } else {
-          paper.style.fontSize = e.target.value;
-        }
+        applyFontSize(e.target.value);
       });
     }
 
     // Grow / Shrink Font
-    ribbonPanels.querySelector('#btn-grow-font')?.addEventListener('click', () => {
-      const cur = parseInt(paper.style.fontSize || '14');
-      paper.style.fontSize = (cur + 2) + 'px';
+    ribbonPanels.querySelector('#btn-grow-font')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      changeFontSizeDelta(2);
     });
-    ribbonPanels.querySelector('#btn-shrink-font')?.addEventListener('click', () => {
-      const cur = parseInt(paper.style.fontSize || '14');
-      if (cur > 8) paper.style.fontSize = (cur - 2) + 'px';
+    ribbonPanels.querySelector('#btn-shrink-font')?.addEventListener('click', (e) => {
+      e.preventDefault();
+      changeFontSizeDelta(-2);
     });
 
     // Text & Hilite Color
-    ribbonPanels.querySelector('#input-fore-color')?.addEventListener('input', (e) => {
-      paper.focus();
-      document.execCommand('foreColor', false, e.target.value);
-    });
-    ribbonPanels.querySelector('#input-hilite-color')?.addEventListener('input', (e) => {
-      paper.focus();
-      document.execCommand('hiliteColor', false, e.target.value);
-    });
+    const foreInput = ribbonPanels.querySelector('#input-fore-color');
+    if (foreInput) {
+      foreInput.addEventListener('focus', () => saveSelection());
+      foreInput.addEventListener('input', (e) => {
+        executeFormat('foreColor', e.target.value);
+      });
+    }
+
+    const hiliteInput = ribbonPanels.querySelector('#input-hilite-color');
+    if (hiliteInput) {
+      hiliteInput.addEventListener('focus', () => saveSelection());
+      hiliteInput.addEventListener('input', (e) => {
+        executeFormat('hiliteColor', e.target.value);
+      });
+    }
 
     // Line Height
     ribbonPanels.querySelector('#sel-line-height')?.addEventListener('change', (e) => {
       paper.style.lineHeight = e.target.value;
+      markDirty();
     });
 
     // Heading Styles
     ribbonPanels.querySelectorAll('[data-style]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        paper.focus();
-        document.execCommand('formatBlock', false, btn.dataset.style);
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        const style = btn.dataset.style;
+        const tag = `<${style.replace(/[<>]/g, '')}>`;
+        executeFormat('formatBlock', tag);
       });
     });
 
@@ -1041,6 +1166,10 @@ export function createWordApp(options = {}) {
 
   // Ribbon Tab Switching
   root.querySelectorAll('.ribbon-tab-btn').forEach(btn => {
+    btn.addEventListener('mousedown', (e) => {
+      saveSelection();
+      e.preventDefault();
+    });
     btn.addEventListener('click', () => {
       root.querySelectorAll('.ribbon-tab-btn').forEach(b => {
         if (b.dataset.tab !== 'file') b.classList.remove('active-tab');
@@ -1054,8 +1183,16 @@ export function createWordApp(options = {}) {
   // Top App Bar Buttons
   root.querySelector('#btn-quick-save').addEventListener('click', () => saveDocument(currentFolderKey, false));
   root.querySelector('#btn-save-downloads').addEventListener('click', () => saveDocument('downloads', false));
-  root.querySelector('#btn-quick-undo').addEventListener('click', () => { document.execCommand('undo'); markDirty(); updateDocumentMetrics(false); });
-  root.querySelector('#btn-quick-redo').addEventListener('click', () => { document.execCommand('redo'); markDirty(); updateDocumentMetrics(false); });
+  const quickUndo = root.querySelector('#btn-quick-undo');
+  if (quickUndo) {
+    quickUndo.addEventListener('mousedown', (e) => { saveSelection(); e.preventDefault(); });
+    quickUndo.addEventListener('click', () => executeFormat('undo'));
+  }
+  const quickRedo = root.querySelector('#btn-quick-redo');
+  if (quickRedo) {
+    quickRedo.addEventListener('mousedown', (e) => { saveSelection(); e.preventDefault(); });
+    quickRedo.addEventListener('click', () => executeFormat('redo'));
+  }
   root.querySelector('#btn-quick-print').addEventListener('click', printDoc);
   root.querySelector('#btn-quick-export').addEventListener('click', exportHtml);
 
@@ -1130,11 +1267,13 @@ export function createWordApp(options = {}) {
 
   // Text Case Transformation
   function transformSelection(fn) {
+    restoreSelection();
     const sel = window.getSelection();
-    if (!sel.rangeCount) return;
+    if (!sel || !sel.rangeCount) return;
     const text = sel.toString();
     if (text) {
       document.execCommand('insertText', false, fn(text));
+      saveSelection();
       markDirty();
       updateDocumentMetrics(false);
     }
@@ -1437,15 +1576,53 @@ export function createWordApp(options = {}) {
     w.print();
   }
 
-  // Keyboard Shortcuts: Ctrl+S, Ctrl+F
+  // Document Selection & Metrics Tracking
+  paper.addEventListener('mouseup', () => {
+    saveSelection();
+    updateRibbonActiveStates();
+    updateDocumentMetrics(false);
+  });
+  paper.addEventListener('keyup', (e) => {
+    saveSelection();
+    updateRibbonActiveStates();
+    if (!['Control', 'Shift', 'Alt', 'Meta'].includes(e.key)) {
+      updateDocumentMetrics(true);
+    }
+  });
+  document.addEventListener('selectionchange', () => {
+    if (document.activeElement === paper || paper.contains(document.activeElement)) {
+      saveSelection();
+      updateRibbonActiveStates();
+    }
+  });
+
+  // Formatting & Productivity Keyboard Shortcuts
   root.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      saveDocument(currentFolderKey, false);
-    } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
-      e.preventDefault();
-      findReplaceBar.classList.remove('hidden');
-      findInput.focus();
+    if (e.ctrlKey || e.metaKey) {
+      const key = e.key.toLowerCase();
+      if (key === 'b') {
+        e.preventDefault();
+        executeFormat('bold');
+      } else if (key === 'i') {
+        e.preventDefault();
+        executeFormat('italic');
+      } else if (key === 'u') {
+        e.preventDefault();
+        executeFormat('underline');
+      } else if (key === 'z') {
+        e.preventDefault();
+        executeFormat(e.shiftKey ? 'redo' : 'undo');
+      } else if (key === 'y') {
+        e.preventDefault();
+        executeFormat('redo');
+      } else if (key === 's') {
+        e.preventDefault();
+        saveDocument(currentFolderKey, false);
+      } else if (key === 'f') {
+        e.preventDefault();
+        findReplaceBar.classList.remove('hidden');
+        findInput.focus();
+      }
     }
   });
 
