@@ -1,16 +1,13 @@
 /**
- * Dawamu OS - Ultra-Fast School Browser with Offline Support
+ * Dawamu OS - Ultra-Fast School Web Browser
  *
- * KEY DESIGN:
- * - Each tab has ONE persistent <webview> (in Electron) or sandboxed proxy <iframe> (in Web mode).
- * - Navigation just sets webview/iframe.src — no renderer process respawning.
- * - Start Page is a lightweight HTML overlay shown ON TOP of the webview.
- * - Encached Curriculum Knowledgebase: 30+ KCSE offline articles, Wikipedia portals,
- *   Khan Academy STEM lessons, NASA space guides, and offline educational search.
- * - In Web Mode, external web requests route through EduGuard Safe Proxy (port 8000),
- *   bypassing X-Frame-Options blocks while enforcing school safety filters.
- * - Persistent session partition = cached DNS + SSL across all tabs.
- * - All student restriction enforcement runs before any navigation fires.
+ * Implements:
+ * - Persistent Bookmarks with Star Toggle, Bookmarks Bar, and Bookmarks Manager (dawamu://bookmarks)
+ * - Persistent Browsing History with Day Grouping, Individual Deletion, and Clear History (dawamu://browser-history)
+ * - Chrome-like Address Bar Autocomplete & Suggestions (Bookmarks, History, Web Search)
+ * - Navigation Controls with dynamic Disabled states & Stop/Reload toggles
+ * - Browser Menu (New Tab, Bookmarks, History, Downloads, Clear Data)
+ * - Multi-tab sandboxed navigation with live proxy routing and full offline curriculum encyclopedia
  */
 
 import { restrictionManager } from '../os/restrictionManager.js';
@@ -29,14 +26,333 @@ const ENGINES = {
 
 let engine = 'google';
 
-const BOOKMARKS = [
-  { label: 'Google',       icon: 'fab fa-google text-blue-400',           url: 'https://www.google.com' },
-  { label: 'Wikipedia',    icon: 'fab fa-wikipedia-w text-slate-200',     url: 'https://www.wikipedia.org' },
-  { label: 'Khan Academy', icon: 'fas fa-leaf text-emerald-400',           url: 'https://www.khanacademy.org' },
-  { label: 'NASA Space',   icon: 'fas fa-rocket text-rose-400',           url: 'https://www.nasa.gov' },
-  { label: 'Math Is Fun',  icon: 'fas fa-square-root-alt text-amber-400',  url: 'https://www.mathsisfun.com' },
-  { label: 'Brave Safe',   icon: 'fas fa-shield-alt text-amber-500',       url: 'https://search.brave.com' },
+/* ═══════════════════════════════════════════════════
+   STORAGE & PERSISTENCE (PER-STUDENT ISOLATION)
+═══════════════════════════════════════════════════ */
+const MEMORY_STORAGE = {};
+
+function getStorageNamespace(key) {
+  try {
+    const user = stateStore?.getState?.()?.currentUser;
+    const admNo = user?.admNo || 'default';
+    return `dawamu_browser_${key}_${admNo}`;
+  } catch (_) {
+    return `dawamu_browser_${key}_default`;
+  }
+}
+
+const DEFAULT_BOOKMARKS = [
+  { id: 'bm_google', title: 'Google', url: 'https://www.google.com', icon: 'fab fa-google text-blue-400', dateAdded: 1700000000000 },
+  { id: 'bm_wiki', title: 'Wikipedia', url: 'https://www.wikipedia.org', icon: 'fab fa-wikipedia-w text-slate-200', dateAdded: 1700000000001 },
+  { id: 'bm_khan', title: 'Khan Academy', url: 'https://www.khanacademy.org', icon: 'fas fa-leaf text-emerald-400', dateAdded: 1700000000002 },
+  { id: 'bm_nasa', title: 'NASA Space', url: 'https://www.nasa.gov', icon: 'fas fa-rocket text-rose-400', dateAdded: 1700000000003 },
+  { id: 'bm_math', title: 'Math Is Fun', url: 'https://www.mathsisfun.com', icon: 'fas fa-square-root-alt text-amber-400', dateAdded: 1700000000004 },
+  { id: 'bm_brave', title: 'Brave Safe Search', url: 'https://search.brave.com', icon: 'fas fa-shield-alt text-amber-500', dateAdded: 1700000000005 },
 ];
+
+export function loadBookmarks() {
+  const k = getStorageNamespace('bookmarks');
+  try {
+    const raw = localStorage.getItem(k);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (_) {}
+  if (MEMORY_STORAGE[k]) return MEMORY_STORAGE[k];
+  return [...DEFAULT_BOOKMARKS];
+}
+
+export function saveBookmarks(list) {
+  const k = getStorageNamespace('bookmarks');
+  try {
+    localStorage.setItem(k, JSON.stringify(list));
+  } catch (_) {}
+  MEMORY_STORAGE[k] = list;
+}
+
+export function loadHistory() {
+  const k = getStorageNamespace('history');
+  try {
+    const raw = localStorage.getItem(k);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch (_) {}
+  if (MEMORY_STORAGE[k]) return MEMORY_STORAGE[k];
+  return [];
+}
+
+export function saveHistory(list) {
+  const k = getStorageNamespace('history');
+  try {
+    localStorage.setItem(k, JSON.stringify(list));
+  } catch (_) {}
+  MEMORY_STORAGE[k] = list;
+}
+
+export function loadBrowserPrefs() {
+  const k = getStorageNamespace('prefs');
+  try {
+    const raw = localStorage.getItem(k);
+    if (raw) return JSON.parse(raw);
+  } catch (_) {}
+  if (MEMORY_STORAGE[k]) return MEMORY_STORAGE[k];
+  return { showBookmarkBar: true, engine: 'google' };
+}
+
+export function saveBrowserPrefs(prefs) {
+  const k = getStorageNamespace('prefs');
+  try {
+    localStorage.setItem(k, JSON.stringify(prefs));
+  } catch (_) {}
+  MEMORY_STORAGE[k] = prefs;
+}
+
+export function normalizeUrl(rawUrl) {
+  if (!rawUrl) return '';
+  let url = rawUrl.trim();
+  try {
+    if (url.startsWith('dawamu://')) {
+      return url.toLowerCase().replace(/\/$/, '');
+    }
+    const parsed = new URL(url.startsWith('http://') || url.startsWith('https://') ? url : 'https://' + url);
+    let href = parsed.origin + parsed.pathname;
+    if (parsed.search) href += parsed.search;
+    return href.replace(/\/$/, '').toLowerCase();
+  } catch (_) {
+    return url.replace(/\/$/, '').toLowerCase();
+  }
+}
+
+export function inferSiteIcon(url) {
+  if (!url) return 'fas fa-globe text-blue-400';
+  const u = url.toLowerCase();
+  if (u.includes('google.com')) return 'fab fa-google text-blue-400';
+  if (u.includes('wikipedia.org')) return 'fab fa-wikipedia-w text-slate-200';
+  if (u.includes('khanacademy.org')) return 'fas fa-leaf text-emerald-400';
+  if (u.includes('nasa.gov')) return 'fas fa-rocket text-rose-400';
+  if (u.includes('mathsisfun.com')) return 'fas fa-square-root-alt text-amber-400';
+  if (u.includes('brave.com')) return 'fas fa-shield-alt text-amber-500';
+  if (u.includes('bing.com')) return 'fab fa-microsoft text-cyan-400';
+  if (u.includes('duolingo.com')) return 'fas fa-language text-green-400';
+  if (u.startsWith('dawamu://')) return 'fas fa-graduation-cap text-emerald-400';
+  return 'fas fa-globe text-blue-400';
+}
+
+export function isPageBookmarked(url) {
+  if (!url || url === 'about:blank' || url === 'dawamu://newtab') return false;
+  const targetNorm = normalizeUrl(url);
+  const list = loadBookmarks();
+  return list.some(b => normalizeUrl(b.url) === targetNorm);
+}
+
+export function getBookmarkForUrl(url) {
+  if (!url) return null;
+  const targetNorm = normalizeUrl(url);
+  const list = loadBookmarks();
+  return list.find(b => normalizeUrl(b.url) === targetNorm) || null;
+}
+
+export function addBookmark(title, url, icon = null) {
+  if (!url) return false;
+  const list = loadBookmarks();
+  const targetNorm = normalizeUrl(url);
+  const existingIdx = list.findIndex(b => normalizeUrl(b.url) === targetNorm);
+  
+  if (existingIdx !== -1) {
+    list[existingIdx].title = title || list[existingIdx].title;
+    saveBookmarks(list);
+    return list[existingIdx];
+  }
+  
+  const newBm = {
+    id: `bm_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    title: (title && title !== 'New Tab') ? title : urlTitle(url),
+    url: url,
+    icon: icon || inferSiteIcon(url),
+    dateAdded: Date.now()
+  };
+  list.push(newBm);
+  saveBookmarks(list);
+  return newBm;
+}
+
+export function removeBookmark(idOrUrl) {
+  let list = loadBookmarks();
+  const norm = normalizeUrl(idOrUrl);
+  list = list.filter(b => b.id !== idOrUrl && normalizeUrl(b.url) !== norm);
+  saveBookmarks(list);
+}
+
+export function updateBookmark(id, newTitle, newUrl) {
+  const list = loadBookmarks();
+  const bm = list.find(b => b.id === id);
+  if (!bm) return false;
+  
+  const normNew = normalizeUrl(newUrl);
+  const duplicate = list.find(b => b.id !== id && normalizeUrl(b.url) === normNew);
+  if (duplicate) {
+    dawamuDialogs.toast('A bookmark with this URL already exists', 'error');
+    return false;
+  }
+  
+  bm.title = newTitle.trim() || bm.title;
+  bm.url = newUrl.trim() || bm.url;
+  bm.icon = inferSiteIcon(bm.url);
+  saveBookmarks(list);
+  return true;
+}
+
+export function recordHistory(url, title = '') {
+  if (!url || url === 'about:blank' || url.startsWith('javascript:')) return;
+  if (url === 'dawamu://newtab' || url === 'dawamu://start') return;
+  if (url === 'dawamu://offline' || url === 'dawamu://browser-history' || url === 'dawamu://bookmarks') return;
+
+  const list = loadHistory();
+  const norm = normalizeUrl(url);
+  const now = Date.now();
+  const cleanTitle = (title && title !== 'New Tab' && title !== 'Page') ? title : urlTitle(url);
+
+  // If same URL visited within 15 seconds, just update timestamp
+  if (list.length > 0 && normalizeUrl(list[0].url) === norm && (now - list[0].timestamp) < 15000) {
+    list[0].timestamp = now;
+    if (cleanTitle && cleanTitle !== list[0].title) list[0].title = cleanTitle;
+    saveHistory(list);
+    return;
+  }
+
+  list.unshift({
+    id: `hist_${now}_${Math.random().toString(36).slice(2, 6)}`,
+    url: url,
+    title: cleanTitle,
+    timestamp: now
+  });
+
+  if (list.length > 500) list.length = 500;
+  saveHistory(list);
+}
+
+export function removeHistoryEntry(id) {
+  let list = loadHistory();
+  list = list.filter(h => h.id !== id && h.url !== id);
+  saveHistory(list);
+}
+
+export function clearAllHistory() {
+  saveHistory([]);
+}
+
+function groupHistoryByDate(historyList) {
+  const groups = {
+    today: [],
+    yesterday: [],
+    thisWeek: [],
+    older: []
+  };
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const startOfYesterday = startOfToday - 86400000;
+  const startOfThisWeek = startOfToday - (now.getDay() * 86400000);
+
+  for (const item of historyList) {
+    const ts = item.timestamp || 0;
+    if (ts >= startOfToday) {
+      groups.today.push(item);
+    } else if (ts >= startOfYesterday) {
+      groups.yesterday.push(item);
+    } else if (ts >= startOfThisWeek) {
+      groups.thisWeek.push(item);
+    } else {
+      groups.older.push(item);
+    }
+  }
+
+  return groups;
+}
+
+export function getAutocompleteSuggestions(query) {
+  const q = query.trim().toLowerCase();
+  if (!q) return [];
+
+  const bookmarks = loadBookmarks();
+  const history = loadHistory();
+  const seenUrls = new Set();
+  const results = [];
+
+  // Match Bookmarks first
+  for (const bm of bookmarks) {
+    const norm = normalizeUrl(bm.url);
+    if (seenUrls.has(norm)) continue;
+    const title = (bm.title || '').toLowerCase();
+    const url = (bm.url || '').toLowerCase();
+    let score = 0;
+
+    if (url.startsWith(q) || url.replace(/^https?:\/\//, '').startsWith(q)) {
+      score = 100;
+    } else if (title.startsWith(q)) {
+      score = 80;
+    } else if (url.includes(q)) {
+      score = 60;
+    } else if (title.includes(q)) {
+      score = 40;
+    }
+
+    if (score > 0) {
+      seenUrls.add(norm);
+      results.push({
+        type: 'bookmark',
+        title: bm.title || urlTitle(bm.url),
+        url: bm.url,
+        score: score + 10
+      });
+    }
+  }
+
+  // Match History
+  for (const h of history) {
+    const norm = normalizeUrl(h.url);
+    if (seenUrls.has(norm)) continue;
+    const title = (h.title || '').toLowerCase();
+    const url = (h.url || '').toLowerCase();
+    let score = 0;
+
+    if (url.startsWith(q) || url.replace(/^https?:\/\//, '').startsWith(q)) {
+      score = 90;
+    } else if (title.startsWith(q)) {
+      score = 70;
+    } else if (url.includes(q)) {
+      score = 50;
+    } else if (title.includes(q)) {
+      score = 30;
+    }
+
+    if (score > 0) {
+      seenUrls.add(norm);
+      results.push({
+        type: 'history',
+        title: h.title || urlTitle(h.url),
+        url: h.url,
+        score: score
+      });
+    }
+  }
+
+  results.sort((a, b) => b.score - a.score);
+  const top = results.slice(0, 6);
+
+  // Append search action
+  top.push({
+    type: 'search',
+    title: `Search with Google for "${query.trim()}"`,
+    url: `dawamu://search?q=${encodeURIComponent(query.trim())}`,
+    score: -1
+  });
+
+  return top;
+}
 
 /* ─── TAB STATE ─── */
 let tabs = [];
@@ -51,9 +367,11 @@ function newTab(url = null) {
 }
 
 /* ═══════════════════════════════════════════════════
-   OFFLINE TOOLS — Built-in educational pages (no network)
+   OFFLINE TOOLS — Built-in educational pages
 ═══════════════════════════════════════════════════ */
 const OFFLINE_TOOLS = {
+  'dawamu://bookmarks': { title: 'Bookmarks Manager', builder: buildBookmarksManagerPage },
+  'dawamu://browser-history': { title: 'Browsing History', builder: buildBrowserHistoryPage },
   'dawamu://dictionary': { title: 'Dawamu Dictionary', builder: buildDictionaryTool },
   'dawamu://periodic-table': { title: 'Periodic Table', builder: buildPeriodicTableTool },
   'dawamu://math': { title: 'Math Reference', builder: buildMathTool },
@@ -62,7 +380,9 @@ const OFFLINE_TOOLS = {
   'dawamu://offline': { title: 'You are Offline', builder: buildOfflinePage },
 };
 
-function isOfflineTool(url) { return url && url.startsWith('dawamu://') && !url.startsWith('dawamu://search'); }
+function isOfflineTool(url) {
+  return url && url.startsWith('dawamu://') && !url.startsWith('dawamu://search');
+}
 
 function escapeHtml(str) {
   if (!str) return '';
@@ -79,49 +399,33 @@ function findOfflineArticleOrPage(url) {
   const db = (typeof OFFLINE_WEB_DB !== 'undefined') ? OFFLINE_WEB_DB : {};
   const art = (typeof OFFLINE_ARTICLES !== 'undefined') ? OFFLINE_ARTICLES : {};
 
-  // Exact match
   if (db[clean]) return db[clean];
   if (art[clean]) return art[clean];
 
-  // Match without trailing slash
   const noSlash = clean.replace(/\/$/, '');
   if (db[noSlash]) return db[noSlash];
   if (art[noSlash]) return art[noSlash];
 
-  // Match https vs http
   const withHttps = clean.replace(/^http:\/\//, 'https://');
   if (db[withHttps]) return db[withHttps];
   if (art[withHttps]) return art[withHttps];
 
-  // Match Wikipedia Portals
   if (clean === 'https://www.wikipedia.org' || clean === 'https://www.wikipedia.org/' ||
       clean === 'https://en.wikipedia.org' || clean === 'https://en.wikipedia.org/' ||
       clean === 'http://www.wikipedia.org' || clean === 'http://en.wikipedia.org') {
-    return {
-      title: 'Wikipedia - Educational Library',
-      render: renderWikipediaPortal
-    };
+    return { title: 'Wikipedia - Educational Library', render: renderWikipediaPortal };
   }
 
-  // Match Khan Academy Portal
   if (clean === 'https://www.khanacademy.org' || clean === 'https://www.khanacademy.org/' ||
       clean === 'https://khanacademy.org' || clean === 'http://www.khanacademy.org') {
-    return {
-      title: 'Khan Academy - Secondary Curriculum Hub',
-      render: renderKhanAcademyPortal
-    };
+    return { title: 'Khan Academy - Secondary Curriculum Hub', render: renderKhanAcademyPortal };
   }
 
-  // Match NASA Space Exploration Portal
   if (clean === 'https://www.nasa.gov' || clean === 'https://www.nasa.gov/' ||
       clean === 'https://nasa.gov' || clean === 'http://www.nasa.gov') {
-    return {
-      title: 'NASA Space Exploration Hub',
-      render: renderNasaPortal
-    };
+    return { title: 'NASA Space Exploration Hub', render: renderNasaPortal };
   }
 
-  // Match path slug (e.g. /wiki/Cell_biology)
   try {
     const parsed = new URL(clean.startsWith('http') ? clean : 'https://' + clean);
     const pathSlug = parsed.pathname.toLowerCase().replace(/\/$/, '');
@@ -188,13 +492,12 @@ export function createBrowserApp() {
   isOnline = navigator.onLine;
 
   const root = document.createElement('div');
-  root.className = 'flex flex-col h-full bg-[#202124] text-white overflow-hidden font-sans';
+  root.className = 'flex flex-col h-full bg-[#202124] text-white overflow-hidden font-sans relative select-none';
   root.innerHTML = buildChrome();
 
   wireChrome(root);
   openTab(root, null);
 
-  // Live online/offline detection
   const updateStatus = () => {
     isOnline = navigator.onLine;
     const badge = root.querySelector('#net-badge');
@@ -212,56 +515,124 @@ export function createBrowserApp() {
 }
 
 /* ═══════════════════════════════════════════════════
-   CHROME SHELL (static, rendered once)
+   CHROME SHELL
 ═══════════════════════════════════════════════════ */
 function buildChrome() {
+  const prefs = loadBrowserPrefs();
+  const showBmBar = prefs.showBookmarkBar !== false;
+
   return `
   <!-- Tab Strip -->
   <div id="tab-strip" class="flex items-end bg-[#070c16] px-3 pt-2 gap-1.5 min-h-[42px] overflow-x-auto shrink-0 border-b border-white/5 select-none"></div>
 
   <!-- Toolbar -->
-  <div class="bg-[#0b1322] border-b border-white/10 px-3.5 py-2 flex items-center gap-2.5 shrink-0 relative backdrop-blur-xl">
+  <div class="bg-[#0b1322] border-b border-white/10 px-3.5 py-2 flex items-center gap-2 shrink-0 relative backdrop-blur-xl z-30">
     <div class="flex items-center gap-1.5 text-slate-300">
-      <button id="btn-back"    class="nb" title="Back"><i class="fas fa-arrow-left text-xs"></i></button>
-      <button id="btn-forward" class="nb" title="Forward"><i class="fas fa-arrow-right text-xs"></i></button>
-      <button id="btn-reload"  class="nb" title="Reload"><i id="reload-icon" class="fas fa-redo text-xs"></i></button>
-      <button id="btn-home"    class="nb" title="Home"><i class="fas fa-home text-xs"></i></button>
+      <button id="btn-back" class="nb opacity-30 cursor-not-allowed pointer-events-none" title="Back"><i class="fas fa-arrow-left text-xs"></i></button>
+      <button id="btn-forward" class="nb opacity-30 cursor-not-allowed pointer-events-none" title="Forward"><i class="fas fa-arrow-right text-xs"></i></button>
+      <button id="btn-reload" class="nb" title="Reload"><i id="reload-icon" class="fas fa-redo text-xs"></i></button>
+      <button id="btn-home" class="nb" title="Home"><i class="fas fa-home text-xs"></i></button>
     </div>
 
     <!-- Search Engine Selector -->
     <div class="relative flex items-center">
-      <select id="engine-sel" class="bg-white/5 hover:bg-white/10 text-slate-200 text-xs border border-white/10 hover:border-emerald-500/40 rounded-xl px-3 py-1.5 outline-none cursor-pointer transition-all font-semibold appearance-none pr-7">
+      <select id="engine-sel" class="bg-white/5 hover:bg-white/10 text-slate-200 text-xs border border-white/10 hover:border-emerald-500/40 rounded-xl px-2.5 py-1.5 outline-none cursor-pointer transition-all font-semibold appearance-none pr-6">
         <option value="google" class="bg-[#0b1322]">Google</option>
         <option value="bing" class="bg-[#0b1322]">Bing</option>
         <option value="brave" class="bg-[#0b1322]">Brave</option>
       </select>
-      <i class="fas fa-chevron-down text-[9px] text-slate-400 absolute right-2.5 pointer-events-none"></i>
+      <i class="fas fa-chevron-down text-[9px] text-slate-400 absolute right-2 pointer-events-none"></i>
     </div>
 
     <!-- Omnibox URL / Search Bar -->
-    <div class="flex-1 flex items-center gap-2.5 bg-[#070e1c] hover:bg-[#091326] focus-within:bg-[#050a14] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 border border-white/10 rounded-2xl px-4 py-1.5 transition-all shadow-inner">
+    <div class="flex-1 flex items-center gap-2 bg-[#070e1c] hover:bg-[#091326] focus-within:bg-[#050a14] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 border border-white/10 rounded-2xl px-3.5 py-1.5 transition-all shadow-inner relative">
       <div class="flex items-center gap-1.5 text-emerald-400 text-xs shrink-0">
         <i class="fas fa-lock text-[11px]"></i>
       </div>
       <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
              class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-400 min-w-0 font-medium"
              placeholder="Search Google, Wikipedia, or enter URL...">
-      <div class="flex items-center gap-1.5 shrink-0">
-        <span class="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-sm">
+
+      <!-- Bookmark Star Toggle inside Address Bar -->
+      <button id="btn-star" class="text-slate-400 hover:text-amber-400 p-1 cursor-pointer transition-colors shrink-0 flex items-center justify-center rounded-lg hover:bg-white/5" title="Bookmark this tab">
+        <i id="star-icon" class="far fa-star text-xs"></i>
+      </button>
+
+      <div class="flex items-center gap-1 shrink-0">
+        <span class="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
           SAFE
         </span>
       </div>
     </div>
 
-    <!-- Save Page & Downloads Drawer Button -->
-    <button id="btn-save-page" class="px-2.5 h-[30px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0" title="Save Current Web Page to This PC > Downloads"><i class="fas fa-file-download text-xs"></i><span>Save Page</span></button>
+    <!-- URL Autocomplete Suggestions Dropdown -->
+    <div id="omnibox-dropdown" class="hidden absolute top-[50px] left-[165px] right-[130px] z-50 bg-[#091120]/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden py-1.5 select-none max-h-[300px] overflow-y-auto"></div>
+
+    <!-- Save Page as Document Button -->
+    <button id="btn-save-page" class="px-2.5 h-[30px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0" title="Save Current Web Page to This PC > Downloads">
+      <i class="fas fa-file-download text-xs"></i>
+      <span class="hidden sm:inline">Save Page</span>
+    </button>
+
+    <!-- Downloads Flyout Button -->
     <button id="btn-downloads" class="nb relative" title="Downloads (Stored in This PC > Downloads)">
       <i class="fas fa-arrow-down text-xs text-slate-300"></i>
       <span id="dl-badge" class="hidden absolute top-1 right-1 w-2 h-2 bg-emerald-400 rounded-full"></span>
     </button>
 
+    <!-- Browser Menu Button (Three dots) -->
+    <button id="btn-browser-menu" class="nb" title="Customize and control Dawamu Browser">
+      <i class="fas fa-ellipsis-v text-xs text-slate-300"></i>
+    </button>
+
     <button id="btn-new-tab" class="nb text-emerald-400 hover:text-white" title="New Tab"><i class="fas fa-plus text-xs"></i></button>
+
+    <!-- Browser Menu Flyout Popover -->
+    <div id="browser-menu-popover" class="hidden absolute top-12 right-12 w-64 bg-[#091120]/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 text-xs select-none">
+      <div class="px-2.5 py-1.5 font-bold text-slate-300 text-[11px] uppercase tracking-wider flex items-center justify-between border-b border-white/10 mb-1">
+        <span>Dawamu Browser</span>
+        <span class="text-[9px] text-emerald-400 font-mono">Safe Network</span>
+      </div>
+      <button id="menu-new-tab" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i class="fas fa-plus text-emerald-400 w-4"></i>
+        <span class="flex-1">New Tab</span>
+        <span class="text-[10px] text-slate-500">Ctrl+T</span>
+      </button>
+      <button id="menu-bookmark-tab" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i class="fas fa-star text-amber-400 w-4"></i>
+        <span class="flex-1">Bookmark This Tab...</span>
+        <span class="text-[10px] text-slate-500">Ctrl+D</span>
+      </button>
+      <button id="menu-toggle-bm-bar" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i id="menu-bm-bar-check" class="${showBmBar ? 'fas fa-check text-emerald-400' : ''} w-4"></i>
+        <span class="flex-1">Show Bookmarks Bar</span>
+        <span class="text-[10px] text-slate-500">Ctrl+Shift+B</span>
+      </button>
+      <button id="menu-manage-bookmarks" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i class="fas fa-bookmark text-blue-400 w-4"></i>
+        <span class="flex-1">Bookmarks Manager</span>
+      </button>
+      <div class="h-[1px] bg-white/10 my-1"></div>
+      <button id="menu-history" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i class="fas fa-history text-cyan-400 w-4"></i>
+        <span class="flex-1">History</span>
+        <span class="text-[10px] text-slate-500">Ctrl+H</span>
+      </button>
+      <button id="menu-clear-history" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-rose-500/20 text-rose-300 transition-colors cursor-pointer text-left">
+        <i class="fas fa-trash-alt text-rose-400 w-4"></i>
+        <span class="flex-1">Clear Browsing History...</span>
+      </button>
+      <div class="h-[1px] bg-white/10 my-1"></div>
+      <button id="menu-downloads" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i class="fas fa-download text-emerald-400 w-4"></i>
+        <span class="flex-1">Downloads</span>
+      </button>
+      <button id="menu-offline-tools" class="menu-item flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/10 text-slate-200 transition-colors cursor-pointer text-left">
+        <i class="fas fa-graduation-cap text-purple-400 w-4"></i>
+        <span class="flex-1">Offline Curriculum Tools</span>
+      </button>
+    </div>
 
     <!-- Downloads Flyout Popover -->
     <div id="dl-popover" class="hidden absolute top-12 right-3 w-84 bg-[#091120]/95 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl p-4 z-50 flex flex-col gap-3">
@@ -281,25 +652,27 @@ function buildChrome() {
   </div>
 
   <!-- Bookmarks Bar -->
-  <div id="bm-bar" class="bg-[#070c16] border-b border-white/5 px-3.5 py-1.5 flex items-center gap-1.5 text-xs overflow-x-auto shrink-0 select-none">
-    ${BOOKMARKS.map(b => `
-      <button class="bm flex items-center gap-1.5 px-3 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-transparent hover:border-white/10 shrink-0 transition-all text-xs font-medium" data-url="${b.url}">
-        <i class="${b.icon} text-[11px]"></i><span class="text-[11px]">${b.label}</span>
-      </button>`).join('')}
-    <span class="border-l border-white/10 h-4 mx-1"></span>
-    <button class="bm flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-600/40 shrink-0 transition-all text-xs font-semibold shadow-sm" data-url="dawamu://offline">
-      <i class="fas fa-graduation-cap text-[10px]"></i><span class="text-[11px]">Offline Tools</span>
-    </button>
+  <div id="bm-bar" class="${showBmBar ? '' : 'hidden'} bg-[#070c16] border-b border-white/5 px-3.5 py-1.5 flex items-center gap-1.5 text-xs overflow-x-auto shrink-0 select-none">
+    <div id="bm-list" class="flex items-center gap-1.5 overflow-x-auto flex-1 min-w-0"></div>
+    <div class="flex items-center gap-1 shrink-0 ml-auto border-l border-white/10 pl-2">
+      <button id="btn-open-bm-manager" class="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-transparent hover:border-white/10 transition-all text-xs cursor-pointer" title="Open Bookmarks Manager">
+        <i class="fas fa-bookmark text-amber-400 text-[10px]"></i>
+        <span class="text-[11px]">All Bookmarks</span>
+      </button>
+      <button class="bm bm-item flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-emerald-950/70 hover:bg-emerald-900/90 text-emerald-300 border border-emerald-600/40 shrink-0 transition-all text-xs font-semibold shadow-sm cursor-pointer" data-url="dawamu://offline">
+        <i class="fas fa-graduation-cap text-[10px]"></i><span class="text-[11px]">Offline Tools</span>
+      </button>
+    </div>
   </div>
 
   <!-- Progress Bar -->
   <div id="prog" class="h-0.5 bg-gradient-to-r from-emerald-500 to-teal-400 w-0 opacity-0 shrink-0 transition-all duration-150"></div>
 
   <!-- Canvas: holds one wrapper per tab -->
-  <div id="canvas" class="flex-1 flex overflow-hidden"></div>
+  <div id="canvas" class="flex-1 flex overflow-hidden relative"></div>
 
   <!-- Status Bar -->
-  <div class="bg-[#070c16] border-t border-white/5 px-4 py-1.5 flex justify-between shrink-0 text-slate-400 text-[11px] font-sans">
+  <div class="bg-[#070c16] border-t border-white/5 px-4 py-1.5 flex justify-between shrink-0 text-slate-400 text-[11px] font-sans select-none">
     <span id="status" class="truncate max-w-md flex items-center gap-1.5">
       <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
       Dawamu Safe Browser • Protected Student Session
@@ -309,6 +682,9 @@ function buildChrome() {
       <span class="text-[10px] text-emerald-400 font-semibold font-mono bg-emerald-950/50 px-2 py-0.5 rounded border border-emerald-800/30">Virtual OS Drive Active</span>
     </div>
   </div>
+
+  <!-- Modal Dialog Container for Bookmark Edit / Manage -->
+  <div id="browser-modal-overlay" class="hidden absolute inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"></div>
 
   <style>
     .nb { width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center;
@@ -333,6 +709,7 @@ function buildChrome() {
     .offline-tool.hidden { display:none !important; }
     .offline-article-body { color:#e2e8f0; line-height:1.7; }
     .offline-article-body a { color:#38bdf8; text-decoration:underline; }
+    .suggest-item.selected { background: rgba(16, 185, 129, 0.22); border-left: 3px solid #10b981; }
   </style>`;
 }
 
@@ -353,13 +730,13 @@ function buildTabDOM(root, tabId) {
   wrap.id = `tw-${tabId}`;
   wrap.className = 'tab-wrap hidden';
 
-  // 1. External website sandbox diagnostic banner (rendered at the top of tab)
+  // Diagnostic banner for external websites
   const banner = document.createElement('div');
   banner.id = `ext-banner-${tabId}`;
   banner.className = 'hidden shrink-0 z-20';
   wrap.appendChild(banner);
 
-  // 2. Main web renderer (webview in Electron, iframe in Web mode)
+  // Main web renderer (webview in Electron, iframe in Web mode)
   if (IS_ELECTRON) {
     const wv = document.createElement('webview');
     wv.id = `wv-${tabId}`;
@@ -378,13 +755,13 @@ function buildTabDOM(root, tabId) {
     wrap.appendChild(fr);
   }
 
-  // 3. Offline tool / article overlay (absolute overlay for dawamu:// and offline articles)
+  // Offline tool / article overlay (absolute overlay for dawamu:// and offline articles)
   const toolOverlay = document.createElement('div');
   toolOverlay.id = `ot-${tabId}`;
   toolOverlay.className = 'offline-tool hidden';
   wrap.appendChild(toolOverlay);
 
-  // 4. Start page overlay
+  // Start page overlay
   const overlay = document.createElement('div');
   overlay.id = `sp-${tabId}`;
   overlay.className = 'start-overlay bg-[#202124]';
@@ -396,10 +773,9 @@ function buildTabDOM(root, tabId) {
 }
 
 function wireWebview(root, tabId, wv) {
-  wv.addEventListener('did-start-loading',  ()  => progress(root, tabId, true));
-  wv.addEventListener('did-stop-loading',   ()  => progress(root, tabId, false));
+  wv.addEventListener('did-start-loading', () => progress(root, tabId, true));
+  wv.addEventListener('did-stop-loading', () => progress(root, tabId, false));
 
-  // Anti-CAPTCHA / Anti-Bot Bypass: Disables navigator.webdriver flag inside webviews
   wv.addEventListener('dom-ready', () => {
     try {
       wv.executeJavaScript(`
@@ -416,7 +792,6 @@ function wireWebview(root, tabId, wv) {
 
   wv.addEventListener('did-fail-load', (e) => {
     progress(root, tabId, false);
-    // Show offline page on network errors
     if (e.errorCode && (e.errorCode === -106 || e.errorCode === -105 || e.errorCode === -2 || e.errorCode === -118 || e.errorCode === -7)) {
       showOfflineTool(root, tabId, 'dawamu://offline', e.validatedURL || '');
     }
@@ -424,19 +799,29 @@ function wireWebview(root, tabId, wv) {
 
   wv.addEventListener('did-navigate', e => {
     const tab = tabs.find(t => t.id === tabId);
-    if (tab) tab.url = e.url;
-    if (tabId === activeTabId) root.querySelector('#omnibox').value = e.url;
+    if (tab) {
+      tab.url = e.url;
+      recordHistory(e.url, tab.title);
+    }
+    if (tabId === activeTabId) {
+      root.querySelector('#omnibox').value = e.url;
+      updateNavControls(root, tabId);
+    }
   });
 
   wv.addEventListener('page-title-updated', e => {
     const tab = tabs.find(t => t.id === tabId);
-    if (tab) tab.title = e.title || 'Page';
+    if (tab) {
+      tab.title = e.title || 'Page';
+      if (tab.url) recordHistory(tab.url, tab.title);
+    }
     renderTabStrip(root);
   });
 
   wv.addEventListener('update-target-url', e => {
-    if (tabId === activeTabId)
+    if (tabId === activeTabId) {
       root.querySelector('#status').textContent = e.url || 'Dawamu Safe Browser';
+    }
   });
 
   wv.addEventListener('will-navigate', e => {
@@ -447,7 +832,6 @@ function wireWebview(root, tabId, wv) {
     }
   });
 
-  // Security: Intercept popup/new-window attempts inside the webview
   wv.addEventListener('new-window', e => {
     e.preventDefault();
     const targetUrl = e.url;
@@ -471,6 +855,7 @@ function activateTab(root, tabId) {
   const omni = root.querySelector('#omnibox');
   if (omni) omni.value = (!tab?.url) ? '' : tab.url;
   renderTabStrip(root);
+  updateNavControls(root, tabId);
 }
 
 function closeTab(root, tabId) {
@@ -512,26 +897,26 @@ function renderTabStrip(root) {
 }
 
 /* ═══════════════════════════════════════════════════
-   NAVIGATION
+   NAVIGATION ENGINE
 ═══════════════════════════════════════════════════ */
 function loadUrl(root, tabId, url, pushHistory = true) {
-  // 1. Internal dawamu:// URLs (always offline tools)
+  // 1. Internal dawamu:// URLs (offline tools, bookmarks, history)
   if (isOfflineTool(url)) {
-    showOfflineTool(root, tabId, url);
+    showOfflineTool(root, tabId, url, '', pushHistory);
     return;
   }
 
   // 2. Search query route
   if (url.startsWith('dawamu://search')) {
     const q = decodeURIComponent(url.split('?q=')[1] || '').trim();
-    showSearchResults(root, tabId, q);
+    showSearchResults(root, tabId, q, pushHistory);
     return;
   }
 
   // 3. Offline Encyclopedia / Educational Article match
   const offlineMatch = findOfflineArticleOrPage(url);
   if (offlineMatch) {
-    showOfflineArticle(root, tabId, url, offlineMatch);
+    showOfflineArticle(root, tabId, url, offlineMatch, pushHistory);
     return;
   }
 
@@ -564,10 +949,11 @@ function loadUrl(root, tabId, url, pushHistory = true) {
     }
   }
 
+  recordHistory(url, tab?.title);
+
   const banner = root.querySelector(`#ext-banner-${tabId}`);
 
   if (IS_ELECTRON) {
-    // Native Electron <webview>
     const wv = root.querySelector(`#wv-${tabId}`);
     if (wv) {
       wv.classList.remove('hidden');
@@ -575,11 +961,9 @@ function loadUrl(root, tabId, url, pushHistory = true) {
     }
     banner?.classList.add('hidden');
   } else {
-    // Web Application Mode (Chrome / Edge / Safari / Browser)
     const fr = root.querySelector(`#wv-${tabId}`);
     if (fr) {
       fr.classList.remove('hidden');
-      // Route through local EduGuard Safe Proxy on port 8000
       const proxyUrl = `http://127.0.0.1:8000/api/v1/proxy?url=${encodeURIComponent(url)}`;
       fr.src = proxyUrl;
     }
@@ -619,36 +1003,34 @@ function loadUrl(root, tabId, url, pushHistory = true) {
     }
   }
 
-  if (tabId === activeTabId) root.querySelector('#omnibox').value = url;
+  if (tabId === activeTabId) {
+    root.querySelector('#omnibox').value = url;
+    updateNavControls(root, tabId);
+  }
   progress(root, tabId, true);
   renderTabStrip(root);
 }
 
 function navigate(root, tabId, raw) {
-  let url = raw.trim();
+  let url = (raw || '').trim();
   if (!url) return;
 
-  // Internal URLs
   if (url.startsWith('dawamu://')) {
     loadUrl(root, tabId, url);
     return;
   }
 
-  // Check if it matches an offline educational article or topic
   if (findOfflineArticleOrPage(url)) {
     loadUrl(root, tabId, url);
     return;
   }
 
-  // Check if it's a URL (contains a dot with no spaces, or starts with http:// or https://)
   if (!url.startsWith('http://') && !url.startsWith('https://')) {
     if (/\.\w{2,}/.test(url) && !url.includes(' ')) {
       url = 'https://' + url;
     } else {
-      // It's a search query! Check policy
       const q = restrictionManager.inspectSearchQuery(url);
       if (!q.safe) { showBlock(root, tabId, url, q.reason); return; }
-
       loadUrl(root, tabId, `dawamu://search?q=${encodeURIComponent(url)}`);
       return;
     }
@@ -657,10 +1039,65 @@ function navigate(root, tabId, raw) {
   loadUrl(root, tabId, url);
 }
 
+function updateNavControls(root, tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  const btnBack = root.querySelector('#btn-back');
+  const btnFwd = root.querySelector('#btn-forward');
+  const btnReload = root.querySelector('#btn-reload');
+  const reloadIcon = root.querySelector('#reload-icon');
+  const starIcon = root.querySelector('#star-icon');
+
+  const canGoBack = tab && tab.history && tab.historyIdx > 0;
+  const canGoFwd = tab && tab.history && tab.historyIdx < tab.history.length - 1;
+
+  if (btnBack) {
+    btnBack.disabled = !canGoBack;
+    if (canGoBack) {
+      btnBack.classList.remove('opacity-30', 'cursor-not-allowed', 'pointer-events-none');
+      btnBack.title = 'Back';
+    } else {
+      btnBack.classList.add('opacity-30', 'cursor-not-allowed', 'pointer-events-none');
+      btnBack.title = 'Back (No previous page)';
+    }
+  }
+
+  if (btnFwd) {
+    btnFwd.disabled = !canGoFwd;
+    if (canGoFwd) {
+      btnFwd.classList.remove('opacity-30', 'cursor-not-allowed', 'pointer-events-none');
+      btnFwd.title = 'Forward';
+    } else {
+      btnFwd.classList.add('opacity-30', 'cursor-not-allowed', 'pointer-events-none');
+      btnFwd.title = 'Forward (No next page)';
+    }
+  }
+
+  if (reloadIcon) {
+    if (tab?.loading) {
+      reloadIcon.className = 'fas fa-times text-xs text-rose-400';
+      btnReload.title = 'Stop loading';
+    } else {
+      reloadIcon.className = 'fas fa-redo text-xs text-slate-300';
+      btnReload.title = 'Reload this page';
+    }
+  }
+
+  if (starIcon) {
+    const isBm = tab?.url && isPageBookmarked(tab.url);
+    if (isBm) {
+      starIcon.className = 'fas fa-star text-amber-400 text-xs';
+      starIcon.parentElement.title = 'Bookmarked (Click to remove)';
+    } else {
+      starIcon.className = 'far fa-star text-slate-400 hover:text-amber-400 text-xs';
+      starIcon.parentElement.title = 'Bookmark this tab';
+    }
+  }
+}
+
 /* ═══════════════════════════════════════════════════
    OFFLINE ARTICLE & SEARCH RENDERING
 ═══════════════════════════════════════════════════ */
-function showOfflineArticle(root, tabId, url, article) {
+function showOfflineArticle(root, tabId, url, article, pushHistory = true) {
   progress(root, tabId, false);
   root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
   root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
@@ -695,7 +1132,6 @@ function showOfflineArticle(root, tabId, url, article) {
   `;
   toolOverlay.classList.remove('hidden');
 
-  // Wire links inside the rendered article
   toolOverlay.querySelectorAll('a').forEach(a => {
     a.addEventListener('click', (e) => {
       const href = a.getAttribute('href');
@@ -714,12 +1150,23 @@ function showOfflineArticle(root, tabId, url, article) {
   if (tab) {
     tab.url = url;
     tab.title = article.title || 'Educational Resource';
+    if (!tab.history) { tab.history = []; tab.historyIdx = -1; }
+    if (pushHistory) {
+      tab.history = tab.history.slice(0, tab.historyIdx + 1);
+      tab.history.push(url);
+      tab.historyIdx = tab.history.length - 1;
+    }
   }
-  if (tabId === activeTabId) root.querySelector('#omnibox').value = url;
+  recordHistory(url, article.title);
+
+  if (tabId === activeTabId) {
+    root.querySelector('#omnibox').value = url;
+    updateNavControls(root, tabId);
+  }
   renderTabStrip(root);
 }
 
-function showSearchResults(root, tabId, query) {
+function showSearchResults(root, tabId, query, pushHistory = true) {
   progress(root, tabId, false);
   root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
   root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
@@ -742,7 +1189,6 @@ function showSearchResults(root, tabId, query) {
         <div class="text-xs text-slate-400 font-mono">${results.length} verified curriculum matches</div>
       </div>
 
-      <!-- Quick Action: Search Live Web via Safe Proxy / Webview -->
       <div class="bg-gradient-to-r from-blue-900/30 to-indigo-900/30 border border-blue-500/30 p-4 rounded-2xl flex items-center justify-between gap-4">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-lg">
@@ -758,7 +1204,6 @@ function showSearchResults(root, tabId, query) {
         </button>
       </div>
 
-      <!-- Offline Matched Articles List -->
       ${results.length === 0 ? `
         <div class="bg-slate-900/60 p-8 rounded-2xl text-center space-y-3 border border-slate-800">
           <i class="fas fa-search text-3xl text-slate-600"></i>
@@ -808,9 +1253,1052 @@ function showSearchResults(root, tabId, query) {
   if (tab) {
     tab.url = `dawamu://search?q=${encodeURIComponent(query)}`;
     tab.title = `Search: ${query}`;
+    if (!tab.history) { tab.history = []; tab.historyIdx = -1; }
+    if (pushHistory) {
+      tab.history = tab.history.slice(0, tab.historyIdx + 1);
+      tab.history.push(tab.url);
+      tab.historyIdx = tab.history.length - 1;
+    }
   }
-  if (tabId === activeTabId) root.querySelector('#omnibox').value = query;
+  recordHistory(tab?.url, tab?.title);
+
+  if (tabId === activeTabId) {
+    root.querySelector('#omnibox').value = query;
+    updateNavControls(root, tabId);
+  }
   renderTabStrip(root);
+}
+
+/* ═══════════════════════════════════════════════════
+   OFFLINE TOOL RENDERER & INTERACTION
+═══════════════════════════════════════════════════ */
+function showOfflineTool(root, tabId, toolUrl, failedUrl = '', pushHistory = true) {
+  progress(root, tabId, false);
+  root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
+
+  const toolOverlay = root.querySelector(`#ot-${tabId}`);
+  if (!toolOverlay) return;
+
+  const tool = OFFLINE_TOOLS[toolUrl] || OFFLINE_TOOLS['dawamu://offline'];
+  toolOverlay.innerHTML = tool.builder(root, tabId, failedUrl);
+  toolOverlay.classList.remove('hidden');
+
+  wireOfflineToolEvents(root, tabId, toolOverlay, toolUrl);
+
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) {
+    tab.url = toolUrl;
+    tab.title = tool.title;
+    if (!tab.history) { tab.history = []; tab.historyIdx = -1; }
+    if (pushHistory) {
+      tab.history = tab.history.slice(0, tab.historyIdx + 1);
+      tab.history.push(toolUrl);
+      tab.historyIdx = tab.history.length - 1;
+    }
+  }
+
+  // Record history for internal tool pages (except offline error)
+  if (pushHistory && toolUrl !== 'dawamu://offline') {
+    recordHistory(toolUrl, tool.title);
+  }
+
+  if (tabId === activeTabId) {
+    root.querySelector('#omnibox').value = toolUrl;
+    updateNavControls(root, tabId);
+  }
+  renderTabStrip(root);
+}
+
+function wireOfflineToolEvents(root, tabId, container, toolUrl) {
+  container.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', (e) => {
+      const href = a.getAttribute('href');
+      if (href && !href.startsWith('#') && a.getAttribute('target') !== '_blank') {
+        e.preventDefault();
+        loadUrl(root, tabId, href);
+      }
+    });
+  });
+
+  container.querySelectorAll('[data-retry]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const url = btn.dataset.retry;
+      if (url) loadUrl(root, tabId, url);
+    });
+  });
+
+  container.querySelectorAll('[data-tool]').forEach(card => {
+    card.addEventListener('click', () => {
+      loadUrl(root, tabId, card.dataset.tool);
+    });
+  });
+
+  container.querySelectorAll('[data-home]').forEach(btn => {
+    btn.addEventListener('click', () => showStartPage(root, tabId));
+  });
+
+  // ── Bookmarks Manager Wiring ──
+  if (toolUrl === 'dawamu://bookmarks') {
+    const mgrList = container.querySelector('#bm-mgr-list');
+    const searchInput = container.querySelector('#bm-mgr-search');
+    const addBtn = container.querySelector('#bm-mgr-add-btn');
+
+    const renderFilteredBookmarks = (filter = '') => {
+      const all = loadBookmarks();
+      const q = filter.trim().toLowerCase();
+      const filtered = q ? all.filter(b => b.title.toLowerCase().includes(q) || b.url.toLowerCase().includes(q)) : all;
+
+      if (filtered.length === 0) {
+        mgrList.innerHTML = `<div class="text-center py-12 text-slate-500 text-xs">No bookmarks match "${escapeHtml(filter)}"</div>`;
+        return;
+      }
+
+      mgrList.innerHTML = filtered.map(b => `
+        <div class="bm-mgr-item p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 transition-all flex items-center justify-between gap-3 group" data-id="${b.id}">
+          <div class="flex items-center gap-3 truncate cursor-pointer bm-mgr-open-link flex-1 min-w-0" data-url="${b.url}">
+            <div class="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
+              <i class="${b.icon || 'fas fa-globe text-blue-400'} text-sm"></i>
+            </div>
+            <div class="truncate">
+              <div class="text-xs font-semibold text-white group-hover:text-emerald-300 transition-colors truncate">${escapeHtml(b.title)}</div>
+              <div class="text-[10px] text-slate-400 font-mono truncate">${escapeHtml(b.url)}</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0 opacity-80 group-hover:opacity-100">
+            <button class="bm-mgr-edit-btn p-1.5 rounded-lg hover:bg-white/10 text-slate-300 hover:text-white cursor-pointer transition-colors" data-id="${b.id}" title="Edit bookmark">
+              <i class="fas fa-pen text-xs"></i>
+            </button>
+            <button class="bm-mgr-del-btn p-1.5 rounded-lg hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 cursor-pointer transition-colors" data-id="${b.id}" title="Delete bookmark">
+              <i class="fas fa-trash-alt text-xs"></i>
+            </button>
+          </div>
+        </div>
+      `).join('');
+
+      mgrList.querySelectorAll('.bm-mgr-open-link').forEach(el => {
+        el.addEventListener('click', () => loadUrl(root, tabId, el.dataset.url));
+      });
+      mgrList.querySelectorAll('.bm-mgr-edit-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const bm = loadBookmarks().find(item => item.id === btn.dataset.id);
+          if (bm) showEditBookmarkModal(root, bm, () => renderFilteredBookmarks(searchInput?.value || ''));
+        });
+      });
+      mgrList.querySelectorAll('.bm-mgr-del-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          removeBookmark(btn.dataset.id);
+          renderBookmarksBar(root);
+          updateNavControls(root, activeTabId);
+          renderFilteredBookmarks(searchInput?.value || '');
+          dawamuDialogs.toast('Bookmark removed', 'info');
+        });
+      });
+    };
+
+    renderFilteredBookmarks();
+    searchInput?.addEventListener('input', () => renderFilteredBookmarks(searchInput.value));
+    addBtn?.addEventListener('click', () => {
+      showEditBookmarkModal(root, { id: null, title: 'New Bookmark', url: 'https://' }, () => {
+        renderFilteredBookmarks(searchInput?.value || '');
+      });
+    });
+  }
+
+  // ── Browser History Manager Wiring ──
+  if (toolUrl === 'dawamu://browser-history') {
+    const groupsContainer = container.querySelector('#hist-groups-container');
+    const searchInput = container.querySelector('#hist-search-input');
+    const clearAllBtn = container.querySelector('#hist-clear-all-btn');
+
+    const renderFilteredHistory = (filter = '') => {
+      const all = loadHistory();
+      const q = filter.trim().toLowerCase();
+      const filtered = q ? all.filter(h => h.title.toLowerCase().includes(q) || h.url.toLowerCase().includes(q)) : all;
+
+      if (filtered.length === 0) {
+        groupsContainer.innerHTML = filter.trim()
+          ? `<div class="text-center py-12 text-slate-500 text-xs">No history matches "${escapeHtml(filter)}"</div>`
+          : `
+            <div class="text-center py-16 text-slate-500 select-none">
+              <i class="fas fa-history text-4xl mb-3 text-slate-600 block"></i>
+              <div class="font-bold text-slate-300 text-sm">No browsing history found</div>
+              <p class="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                Websites and lessons you visit in Dawamu Browser will appear here.
+              </p>
+            </div>`;
+        return;
+      }
+
+      const groups = groupHistoryByDate(filtered);
+      groupsContainer.innerHTML = renderHistoryGroupsHtml(groups);
+
+      groupsContainer.querySelectorAll('.hist-item-link').forEach(el => {
+        el.addEventListener('click', () => loadUrl(root, tabId, el.dataset.url));
+      });
+      groupsContainer.querySelectorAll('.hist-del-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const targetId = btn.getAttribute('data-id') || btn.dataset.id;
+          removeHistoryEntry(targetId);
+          renderFilteredHistory(searchInput?.value || '');
+          dawamuDialogs.toast('History item deleted', 'info');
+        });
+      });
+    };
+
+    renderFilteredHistory();
+    searchInput?.addEventListener('input', () => renderFilteredHistory(searchInput.value));
+
+    clearAllBtn?.addEventListener('click', async () => {
+      const confirmed = await dawamuDialogs.confirm('Clear all browsing history? This cannot be undone.');
+      if (confirmed) {
+        clearAllHistory();
+        renderFilteredHistory();
+        dawamuDialogs.toast('Browsing history cleared', 'success');
+      }
+    });
+  }
+
+  // Dictionary search
+  const dictInput = container.querySelector('#dict-search');
+  const dictBtn = container.querySelector('#dict-btn');
+  const dictResult = container.querySelector('#dict-result');
+  if (dictInput && dictBtn && dictResult) {
+    const search = () => {
+      const word = dictInput.value.trim().toLowerCase();
+      if (!word) return;
+      const entry = DICTIONARY_DATA[word];
+      if (entry) {
+        dictResult.innerHTML = `<div class="bg-[#292a2d] p-4 rounded-2xl border border-slate-700/50">
+          <h3 class="text-lg font-bold text-white capitalize">${word}</h3>
+          <p class="text-[10px] text-slate-500 italic">${entry.type}</p>
+          <p class="text-sm text-slate-300 mt-2">${entry.def}</p>
+          ${entry.example ? `<p class="text-xs text-slate-500 mt-2 italic">"${entry.example}"</p>` : ''}
+        </div>`;
+      } else {
+        dictResult.innerHTML = `<div class="text-slate-500 text-sm">Word "${word}" not found in offline dictionary. Try: <span class="text-emerald-400 cursor-pointer" onclick="this.closest('.offline-tool').querySelector('#dict-search').value='atom';this.closest('.offline-tool').querySelector('#dict-btn').click()">atom</span>, <span class="text-emerald-400 cursor-pointer" onclick="this.closest('.offline-tool').querySelector('#dict-search').value='democracy';this.closest('.offline-tool').querySelector('#dict-btn').click()">democracy</span>, <span class="text-emerald-400 cursor-pointer" onclick="this.closest('.offline-tool').querySelector('#dict-search').value='photosynthesis';this.closest('.offline-tool').querySelector('#dict-btn').click()">photosynthesis</span></div>`;
+      }
+    };
+    dictBtn.addEventListener('click', search);
+    dictInput.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
+  }
+
+  // Notes autosave
+  const notepad = container.querySelector('#offline-notepad');
+  if (notepad) {
+    notepad.value = localStorage.getItem('dawamu_notes') || '';
+    notepad.addEventListener('input', () => {
+      localStorage.setItem('dawamu_notes', notepad.value);
+    });
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   PROGRESS BAR
+═══════════════════════════════════════════════════ */
+let _progTimer = null;
+function progress(root, tabId, on) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) tab.loading = on;
+  if (tabId === activeTabId) updateNavControls(root, tabId);
+  const bar = root.querySelector('#prog');
+  if (!bar) return;
+  clearTimeout(_progTimer);
+  if (on) {
+    bar.style.width = '60%'; bar.style.opacity = '1';
+    _progTimer = setTimeout(() => { bar.style.width='100%'; setTimeout(()=>{ bar.style.opacity='0'; bar.style.width='0'; },200); }, 3000);
+  } else {
+    bar.style.width = '100%';
+    _progTimer = setTimeout(() => { bar.style.opacity='0'; setTimeout(()=>{ bar.style.width='0'; },150); }, 200);
+  }
+  renderTabStrip(root);
+}
+
+/* ═══════════════════════════════════════════════════
+   BLOCK PAGE
+═══════════════════════════════════════════════════ */
+function showBlock(root, tabId, blockedUrl, reason) {
+  progress(root, tabId, false);
+  const overlay = root.querySelector(`#sp-${tabId}`);
+  if (!overlay) return;
+  root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
+
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = `
+    <div class="max-w-lg w-full bg-[#292a2d] border border-rose-500/40 rounded-3xl p-8 text-center space-y-5 shadow-2xl mx-4">
+      <div class="w-14 h-14 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-3xl border border-rose-500/30">
+        <i class="fas fa-shield-alt"></i>
+      </div>
+      <h2 class="text-lg font-bold text-white">Access Restricted</h2>
+      <p class="text-slate-400 text-sm">${reason || 'Blocked by school administrator policy.'}</p>
+      <div class="bg-[#1a1b1e] p-3 rounded-2xl font-mono text-xs text-rose-300 text-left space-y-1">
+        <div><b class="text-slate-400">URL:</b> ${escapeHtml(blockedUrl)}</div>
+        <div><b class="text-slate-400">Filter:</b> Dawamu Network Safety Policy</div>
+      </div>
+      <div class="flex justify-center gap-3">
+        <button data-home class="bg-[#059669] hover:bg-[#10b981] text-white text-xs font-semibold px-5 py-2.5 rounded-xl cursor-pointer transition-all">Return to Browser Home</button>
+      </div>
+    </div>`;
+
+  root.querySelector(`#omnibox`).value = blockedUrl;
+  overlay.querySelector('[data-home]')?.addEventListener('click', () => showStartPage(root, tabId));
+}
+
+/* ═══════════════════════════════════════════════════
+   START PAGE
+═══════════════════════════════════════════════════ */
+function showStartPage(root, tabId) {
+  const tab = tabs.find(t => t.id === tabId);
+  if (tab) { tab.url = null; tab.title = 'New Tab'; }
+  if (tabId === activeTabId) {
+    root.querySelector('#omnibox').value = '';
+    updateNavControls(root, tabId);
+  }
+  root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
+  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
+  const view = root.querySelector(`#wv-${tabId}`);
+  if (view) view.classList.add('hidden');
+  renderTabStrip(root);
+
+  const overlay = root.querySelector(`#sp-${tabId}`);
+  if (!overlay) return;
+  overlay.classList.remove('hidden');
+  overlay.innerHTML = startPageHTML(tabId);
+  wireStartPage(root, tabId, overlay);
+}
+
+function startPageHTML(tabId) {
+  const offlineNotice = !navigator.onLine
+    ? `<div class="flex items-center gap-2 bg-amber-950/80 border border-amber-600/50 text-amber-300 text-xs px-4 py-2 rounded-full mb-3 shadow-lg">
+        <i class="fas fa-plane"></i> Working in Offline Mode — Built-in educational tools are active!
+      </div>` : '';
+
+  return `
+  <div class="flex flex-col items-center justify-center min-h-full p-8 text-center space-y-4 overflow-y-auto max-w-3xl mx-auto">
+    <div class="flex flex-col items-center gap-2">
+      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform">
+      <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-300 text-[10px] font-bold uppercase tracking-widest mt-1">
+        <i class="fas fa-shield-alt text-xs"></i> Dawamu Safe Web Environment
+      </div>
+    </div>
+
+    ${offlineNotice}
+
+    <!-- Modern Central Search Bar -->
+    <div class="w-full max-w-xl flex items-center bg-[#0d1627]/90 hover:bg-[#111e35] focus-within:bg-[#070d18] border border-white/15 hover:border-emerald-500/50 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 rounded-2xl px-4 py-3 shadow-2xl transition-all">
+      <i class="fas fa-search text-emerald-400 text-sm mr-3 shrink-0"></i>
+      <input id="sp-input-${tabId}" type="text"
+             class="flex-1 bg-transparent outline-none text-white text-sm min-w-0 placeholder-slate-400 font-medium"
+             placeholder="Search Google, Wikipedia, or enter curriculum topic..."
+             autofocus>
+      <button id="sp-btn-${tabId}" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs px-5 py-2 rounded-xl ml-2 shrink-0 shadow-md transition-all active:scale-95 cursor-pointer">Search</button>
+    </div>
+
+    <!-- Curriculum Fast-Access Chips -->
+    <div class="w-full max-w-xl flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Photosynthesis">🌿 Photosynthesis</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Cell_biology">🧬 Cell Biology</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/History_of_Kenya">🇰🇪 Kenya History</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://www.khanacademy.org/math/algebra">📐 Algebra</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Electricity">⚡ Ohm's Law</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://www.nasa.gov/mars">🚀 NASA Mars</button>
+      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Computer_programming">💻 Coding</button>
+    </div>
+
+    <!-- Pinned Online Learning Shortcuts -->
+    <div class="w-full max-w-xl pt-1">
+      <div class="text-left text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2.5 flex items-center justify-between">
+        <span class="flex items-center gap-1.5"><i class="fas fa-star text-amber-400 text-xs"></i> Verified Academic Portals</span>
+        <span class="text-[10px] text-slate-500 font-normal">Fast Access</span>
+      </div>
+      <div class="grid grid-cols-4 gap-2.5">
+        ${[
+          { url:'https://www.google.com',      icon:'fab fa-google text-blue-400',          name:'Google', bg: 'from-blue-900/30 to-indigo-900/20' },
+          { url:'https://www.khanacademy.org', icon:'fas fa-leaf text-emerald-400',         name:'Khan Academy', bg: 'from-emerald-900/30 to-teal-900/20' },
+          { url:'https://www.wikipedia.org',   icon:'fab fa-wikipedia-w text-slate-200',    name:'Wikipedia', bg: 'from-slate-800/40 to-slate-900/20' },
+          { url:'https://www.nasa.gov',        icon:'fas fa-rocket text-rose-400',          name:'NASA', bg: 'from-rose-900/30 to-amber-900/20' },
+          { url:'https://search.brave.com',    icon:'fas fa-shield-alt text-amber-500',      name:'Brave', bg: 'from-amber-900/30 to-orange-900/20' },
+          { url:'https://www.mathsisfun.com',  icon:'fas fa-square-root-alt text-amber-400', name:'Math Is Fun', bg: 'from-amber-900/30 to-yellow-900/20' },
+          { url:'https://www.bing.com',        icon:'fab fa-microsoft text-cyan-400',        name:'Bing', bg: 'from-cyan-900/30 to-blue-900/20' },
+          { url:'https://www.duolingo.com',    icon:'fas fa-language text-green-400',       name:'Duolingo', bg: 'from-green-900/30 to-emerald-900/20' },
+        ].map(c => `
+          <button class="sp-card bg-gradient-to-br ${c.bg} hover:brightness-125 border border-white/10 hover:border-emerald-500/40 p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:-translate-y-1 hover:shadow-xl group cursor-pointer" data-url="${c.url}">
+            <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+              <i class="${c.icon}"></i>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-200 group-hover:text-white truncate w-full">${c.name}</span>
+          </button>`).join('')}
+      </div>
+    </div>
+
+    <!-- Offline Built-in Utilities -->
+    <div class="w-full max-w-xl pt-1">
+      <div class="text-left text-[11px] text-emerald-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
+        <i class="fas fa-laptop-code text-xs"></i> Built-in Offline Utilities
+      </div>
+      <div class="grid grid-cols-5 gap-2">
+        ${[
+          { url:'dawamu://dictionary',     icon:'fas fa-book text-sky-400',           name:'Dictionary' },
+          { url:'dawamu://periodic-table',  icon:'fas fa-atom text-purple-400',        name:'Elements' },
+          { url:'dawamu://math',            icon:'fas fa-calculator text-amber-400',   name:'Math Ref' },
+          { url:'dawamu://notes',           icon:'fas fa-sticky-note text-yellow-400', name:'Notes' },
+          { url:'dawamu://history',         icon:'fas fa-landmark text-rose-400',      name:'History' },
+        ].map(c => `
+          <button class="sp-card bg-slate-900/70 hover:bg-slate-800/90 border border-emerald-900/40 hover:border-emerald-500/50 p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all hover:scale-105 cursor-pointer" data-url="${c.url}">
+            <i class="${c.icon} text-lg"></i>
+            <span class="text-[10px] font-semibold text-slate-300 text-center">${c.name}</span>
+          </button>`).join('')}
+      </div>
+    </div>
+  </div>`;
+}
+
+function wireStartPage(root, tabId, overlay) {
+  const input = overlay.querySelector(`#sp-input-${tabId}`);
+  const btn   = overlay.querySelector(`#sp-btn-${tabId}`);
+  const go = () => { const v = input?.value.trim(); if (v) navigate(root, tabId, v); };
+  btn?.addEventListener('click', go);
+  input?.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+  overlay.querySelectorAll('.sp-card').forEach(c =>
+    c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
+  overlay.querySelectorAll('.topic-chip').forEach(c =>
+    c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
+}
+
+/* ═══════════════════════════════════════════════════
+   CHROME TOOLBAR & CONTROLS WIRING
+═══════════════════════════════════════════════════ */
+function wireChrome(root) {
+  const omni = root.querySelector('#omnibox');
+  const dropdown = root.querySelector('#omnibox-dropdown');
+  const starBtn = root.querySelector('#btn-star');
+  const menuBtn = root.querySelector('#btn-browser-menu');
+  const menuPopover = root.querySelector('#browser-menu-popover');
+  let selectedSuggestIndex = -1;
+  let currentSuggestions = [];
+
+  // Engine selection
+  root.querySelector('#engine-sel').addEventListener('change', e => {
+    engine = e.target.value;
+    const prefs = loadBrowserPrefs();
+    prefs.engine = engine;
+    saveBrowserPrefs(prefs);
+  });
+
+  // Render initial bookmarks bar
+  renderBookmarksBar(root);
+
+  // ── Autocomplete / Suggestions Engine ──
+  const closeSuggestions = () => {
+    if (dropdown) {
+      dropdown.classList.add('hidden');
+      dropdown.style.display = 'none';
+    }
+    selectedSuggestIndex = -1;
+    currentSuggestions = [];
+  };
+
+  const renderSuggestions = (list) => {
+    currentSuggestions = list;
+    selectedSuggestIndex = -1;
+    if (!dropdown || list.length === 0) {
+      closeSuggestions();
+      return;
+    }
+    dropdown.classList.remove('hidden');
+    dropdown.style.display = 'block';
+
+    dropdown.innerHTML = list.map((s, idx) => `
+      <div class="suggest-item omnibox-item px-3.5 py-2 flex items-center gap-3 cursor-pointer transition-colors ${idx === 0 ? 'bg-white/5' : ''}" data-idx="${idx}" data-url="${escapeHtml(s.url)}" data-type="${s.type}">
+        <div class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+          ${s.type === 'bookmark'
+            ? '<i class="fas fa-star text-amber-400 text-xs"></i>'
+            : (s.type === 'history'
+              ? '<i class="fas fa-history text-cyan-400 text-xs"></i>'
+              : '<i class="fas fa-search text-emerald-400 text-xs"></i>')}
+        </div>
+        <div class="flex-1 min-w-0">
+          <div class="text-xs font-semibold text-white truncate">${escapeHtml(s.title)}</div>
+          <div class="text-[10px] text-slate-400 font-mono truncate">${escapeHtml(s.url)}</div>
+        </div>
+        <span class="text-[9px] px-2 py-0.5 rounded-full font-mono uppercase font-bold shrink-0 ${
+          s.type === 'bookmark' ? 'bg-amber-950/80 text-amber-300 border border-amber-700/50' :
+          (s.type === 'history' ? 'bg-cyan-950/80 text-cyan-300 border border-cyan-700/50' : 'bg-emerald-950/80 text-emerald-300 border border-emerald-700/50')
+        }">${s.type}</span>
+      </div>
+    `).join('');
+
+    dropdown.classList.remove('hidden');
+
+    dropdown.querySelectorAll('.suggest-item').forEach(el => {
+      el.addEventListener('click', () => {
+        const idx = parseInt(el.dataset.idx);
+        const item = currentSuggestions[idx];
+        if (item) {
+          navigate(root, activeTabId, item.url);
+          closeSuggestions();
+        }
+      });
+    });
+  };
+
+  omni.addEventListener('input', () => {
+    const val = omni.value.trim();
+    if (!val) {
+      closeSuggestions();
+      return;
+    }
+    const suggestions = getAutocompleteSuggestions(val);
+    renderSuggestions(suggestions);
+  });
+
+  omni.addEventListener('keydown', e => {
+    if (!dropdown.classList.contains('hidden') && currentSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        selectedSuggestIndex = (selectedSuggestIndex + 1) % currentSuggestions.length;
+        highlightSuggestion(dropdown, selectedSuggestIndex);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        selectedSuggestIndex = (selectedSuggestIndex - 1 + currentSuggestions.length) % currentSuggestions.length;
+        highlightSuggestion(dropdown, selectedSuggestIndex);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeSuggestions();
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (selectedSuggestIndex >= 0 && selectedSuggestIndex < currentSuggestions.length) {
+          const chosen = currentSuggestions[selectedSuggestIndex];
+          navigate(root, activeTabId, chosen.url);
+        } else {
+          navigate(root, activeTabId, omni.value);
+        }
+        closeSuggestions();
+        omni.blur();
+        return;
+      }
+    }
+
+    if (e.key === 'Enter') {
+      navigate(root, activeTabId, omni.value);
+      closeSuggestions();
+      omni.blur();
+    }
+    if (e.key === 'Escape') {
+      closeSuggestions();
+    }
+  });
+
+  omni.addEventListener('focus', () => {
+    omni.select();
+    if (omni.value.trim()) {
+      const suggestions = getAutocompleteSuggestions(omni.value.trim());
+      renderSuggestions(suggestions);
+    }
+  });
+
+  // ── Star Bookmark Toggle ──
+  starBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const tab = tabs.find(t => t.id === activeTabId);
+    const curUrl = tab?.url || omni.value.trim();
+    if (!curUrl || curUrl === 'about:blank' || curUrl === 'dawamu://newtab') {
+      dawamuDialogs.toast('Open a page first to bookmark it', 'info');
+      return;
+    }
+    const curTitle = tab?.title && tab.title !== 'New Tab' ? tab.title : urlTitle(curUrl);
+    const existing = getBookmarkForUrl(curUrl);
+    if (existing) {
+      removeBookmark(existing.id);
+      dawamuDialogs.toast(`Removed "${existing.title}" from bookmarks`, 'info');
+    } else {
+      addBookmark(curTitle, curUrl);
+      dawamuDialogs.toast(`Bookmarked "${curTitle}"`, 'success');
+    }
+    renderBookmarksBar(root);
+    updateNavControls(root, activeTabId);
+  });
+
+  // ── Back, Forward, Reload, Home ──
+  root.querySelector('#btn-back').addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const v = root.querySelector(`#wv-${activeTabId}`);
+    if (IS_ELECTRON && v?.canGoBack?.()) {
+      v.goBack();
+    } else if (tab && tab.history && tab.historyIdx > 0) {
+      tab.historyIdx--;
+      loadUrl(root, activeTabId, tab.history[tab.historyIdx], false);
+    } else if (v?.contentWindow) {
+      try { v.contentWindow.history.back(); } catch (_) {}
+    }
+    updateNavControls(root, activeTabId);
+  });
+
+  root.querySelector('#btn-forward').addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const v = root.querySelector(`#wv-${activeTabId}`);
+    if (IS_ELECTRON && v?.canGoForward?.()) {
+      v.goForward();
+    } else if (tab && tab.history && tab.historyIdx < tab.history.length - 1) {
+      tab.historyIdx++;
+      loadUrl(root, activeTabId, tab.history[tab.historyIdx], false);
+    } else if (v?.contentWindow) {
+      try { v.contentWindow.history.forward(); } catch (_) {}
+    }
+    updateNavControls(root, activeTabId);
+  });
+
+  root.querySelector('#btn-reload').addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const v = root.querySelector(`#wv-${activeTabId}`);
+    if (tab?.loading) {
+      try { if (IS_ELECTRON) v?.stop(); } catch (_) {}
+      progress(root, activeTabId, false);
+    } else {
+      if (IS_ELECTRON) { try { v?.reload(); } catch (_) {} }
+      else if (v) v.src = v.src;
+      progress(root, activeTabId, true);
+    }
+    updateNavControls(root, activeTabId);
+  });
+
+  root.querySelector('#btn-home').addEventListener('click', () => showStartPage(root, activeTabId));
+  root.querySelector('#btn-new-tab').addEventListener('click', () => openTab(root, null));
+
+  // ── Bookmarks Bar Click Handling ──
+  root.querySelector('#bm-bar').addEventListener('click', e => {
+    const b = e.target.closest('.bm');
+    if (b) navigate(root, activeTabId, b.dataset.url);
+  });
+
+  root.querySelector('#btn-open-bm-manager')?.addEventListener('click', () => {
+    loadUrl(root, activeTabId, 'dawamu://bookmarks');
+  });
+
+  // ── Browser Menu (Three dots) ──
+  menuBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    menuPopover?.classList.toggle('hidden');
+    root.querySelector('#dl-popover')?.classList.add('hidden');
+  });
+
+  root.querySelector('#menu-new-tab')?.addEventListener('click', () => {
+    menuPopover?.classList.add('hidden');
+    openTab(root, null);
+  });
+
+  root.querySelector('#menu-bookmark-tab')?.addEventListener('click', () => {
+    menuPopover?.classList.add('hidden');
+    starBtn?.click();
+  });
+
+  root.querySelector('#menu-toggle-bm-bar')?.addEventListener('click', () => {
+    const prefs = loadBrowserPrefs();
+    prefs.showBookmarkBar = !prefs.showBookmarkBar;
+    saveBrowserPrefs(prefs);
+    renderBookmarksBar(root);
+    menuPopover?.classList.add('hidden');
+  });
+
+  root.querySelector('#menu-manage-bookmarks')?.addEventListener('click', () => {
+    menuPopover?.classList.add('hidden');
+    loadUrl(root, activeTabId, 'dawamu://bookmarks');
+  });
+
+  root.querySelector('#menu-history')?.addEventListener('click', () => {
+    menuPopover?.classList.add('hidden');
+    loadUrl(root, activeTabId, 'dawamu://browser-history');
+  });
+
+  root.querySelector('#menu-clear-history')?.addEventListener('click', async () => {
+    menuPopover?.classList.add('hidden');
+    const confirmed = await dawamuDialogs.confirm('Clear all browsing history? This cannot be undone.');
+    if (confirmed) {
+      clearAllHistory();
+      dawamuDialogs.toast('Browsing history cleared', 'success');
+      const tab = tabs.find(t => t.id === activeTabId);
+      if (tab?.url === 'dawamu://browser-history') {
+        loadUrl(root, activeTabId, 'dawamu://browser-history');
+      }
+    }
+  });
+
+  root.querySelector('#menu-downloads')?.addEventListener('click', () => {
+    menuPopover?.classList.add('hidden');
+    root.querySelector('#btn-downloads')?.click();
+  });
+
+  root.querySelector('#menu-offline-tools')?.addEventListener('click', () => {
+    menuPopover?.classList.add('hidden');
+    loadUrl(root, activeTabId, 'dawamu://offline');
+  });
+
+  // Dismiss dropdowns when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('#omnibox') && !e.target.closest('#omnibox-dropdown')) {
+      closeSuggestions();
+    }
+    if (!e.target.closest('#btn-browser-menu') && !e.target.closest('#browser-menu-popover')) {
+      menuPopover?.classList.add('hidden');
+    }
+    if (!e.target.closest('#btn-downloads') && !e.target.closest('#dl-popover')) {
+      root.querySelector('#dl-popover')?.classList.add('hidden');
+    }
+  });
+
+  // Keyboard Shortcuts (Ctrl+T, Ctrl+H, Ctrl+D, Ctrl+Shift+B)
+  root.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        openTab(root, null);
+      } else if (e.key === 'h' || e.key === 'H') {
+        e.preventDefault();
+        loadUrl(root, activeTabId, 'dawamu://browser-history');
+      } else if (e.key === 'd' || e.key === 'D') {
+        e.preventDefault();
+        starBtn?.click();
+      } else if (e.shiftKey && (e.key === 'b' || e.key === 'B')) {
+        e.preventDefault();
+        const prefs = loadBrowserPrefs();
+        prefs.showBookmarkBar = !prefs.showBookmarkBar;
+        saveBrowserPrefs(prefs);
+        renderBookmarksBar(root);
+      }
+    }
+  });
+
+  // Downloads popover and live notifications
+  const dlBtn = root.querySelector('#btn-downloads');
+  const dlPopover = root.querySelector('#dl-popover');
+  const dlBadge = root.querySelector('#dl-badge');
+  const dlList = root.querySelector('#dl-list');
+  const downloadedItems = [...stateStore.getFolderFiles('downloads').filter(f => f.type !== 'folder')];
+  const savePageBtn = root.querySelector('#btn-save-page');
+
+  savePageBtn?.addEventListener('click', () => {
+    const tab = tabs.find(t => t.id === activeTabId);
+    const currentUrl = root.querySelector('#omnibox')?.value.trim() || tab?.url || 'dawamu://start';
+    const rawTitle = (tab?.title && tab.title !== 'New Tab') ? tab.title : (urlTitle(currentUrl) || 'Web_Research_Article');
+    const cleanFileName = rawTitle.replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_') + '_WebClip.docx';
+    const toolEl = root.querySelector(`#ot-${activeTabId}`);
+    const bodyHtml = (toolEl && !toolEl.classList.contains('hidden'))
+      ? toolEl.innerHTML
+      : `<p><b>Source URL:</b> ${currentUrl}</p><p>Saved from Dawamu Safe Browser on ${new Date().toLocaleString()}.</p>`;
+    const savedDocHtml = `<h1>${rawTitle}</h1><p style="font-size:12px;color:#64748b;"><b>Saved from Dawamu Browser:</b> ${currentUrl}</p><hr>${bodyHtml}`;
+    const savedFile = stateStore.saveFileToVFS('downloads', {
+      name: cleanFileName,
+      type: 'doc',
+      icon: 'fa-file-word',
+      color: 'text-blue-400',
+      content: savedDocHtml
+    });
+    downloadedItems.unshift(savedFile || { name: cleanFileName, size: '24 KB' });
+    updateDownloadUI();
+    dawamuDialogs.toast(`Saved "${cleanFileName}" to This PC > Downloads`, 'success');
+  });
+
+  const updateDownloadUI = () => {
+    if (!dlList) return;
+    if (downloadedItems.length === 0) {
+      dlList.innerHTML = `<div class="text-slate-400 text-center py-4 text-[11px]">No recent downloads</div>`;
+      dlBadge?.classList.add('hidden');
+    } else {
+      dlBadge?.classList.remove('hidden');
+      dlList.innerHTML = downloadedItems.map(item => `
+        <div class="p-2 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-2">
+          <div class="flex items-center gap-2 truncate">
+            <i class="fas fa-file text-emerald-400 text-sm"></i>
+            <div class="truncate">
+              <div class="font-semibold text-white truncate text-[11px]">${item.name}</div>
+              <div class="text-[9px] text-slate-400">${item.size || 'Saved in This PC > Downloads'}</div>
+            </div>
+          </div>
+          <span class="text-[9px] bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded-full shrink-0 font-semibold">This PC</span>
+        </div>
+      `).join('');
+    }
+  };
+
+  dlBtn?.addEventListener('click', (e) => {
+    e.stopPropagation();
+    dlPopover?.classList.toggle('hidden');
+    menuPopover?.classList.add('hidden');
+  });
+
+  if (window.electronAPI?.onDownloadComplete) {
+    window.electronAPI.onDownloadComplete((data) => {
+      downloadedItems.unshift(data);
+      updateDownloadUI();
+      const statusEl = root.querySelector('#status');
+      if (statusEl) {
+        statusEl.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i>Downloaded ${data.name} to This PC &gt; Downloads</span>`;
+        setTimeout(() => {
+          statusEl.textContent = 'Dawamu Safe Browser • Protected Session';
+        }, 5000);
+      }
+    });
+  }
+
+  renderTabStrip(root);
+  updateNavControls(root, activeTabId);
+}
+
+function highlightSuggestion(dropdown, activeIdx) {
+  dropdown.querySelectorAll('.suggest-item').forEach((el, idx) => {
+    if (idx === activeIdx) {
+      el.classList.add('selected');
+      el.scrollIntoView({ block: 'nearest' });
+    } else {
+      el.classList.remove('selected');
+    }
+  });
+}
+
+function renderBookmarksBar(root) {
+  const bmBar = root.querySelector('#bm-bar');
+  const bmList = root.querySelector('#bm-list');
+  if (!bmBar || !bmList) return;
+
+  const prefs = loadBrowserPrefs();
+  if (prefs.showBookmarkBar === false) {
+    bmBar.classList.add('hidden');
+  } else {
+    bmBar.classList.remove('hidden');
+  }
+
+  const checkIcon = root.querySelector('#menu-bm-bar-check');
+  if (checkIcon) {
+    checkIcon.className = prefs.showBookmarkBar !== false ? 'fas fa-check text-emerald-400 w-4' : 'w-4';
+  }
+
+  const bookmarks = loadBookmarks();
+  if (bookmarks.length === 0) {
+    bmList.innerHTML = `<span class="text-slate-500 text-[11px] italic px-2">No bookmarks saved yet. Click the star in the address bar to bookmark any page.</span>`;
+    return;
+  }
+
+  bmList.innerHTML = bookmarks.map(b => `
+    <button class="bm bm-item flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white border border-transparent hover:border-white/10 shrink-0 transition-all text-xs font-medium cursor-pointer"
+            data-id="${b.id}"
+            data-url="${b.url}"
+            title="${escapeHtml(b.title)} • ${escapeHtml(b.url)} (Right-click to edit)">
+      <i class="${b.icon || 'fas fa-globe text-blue-400'} text-[11px]"></i>
+      <span class="text-[11px] truncate max-w-[130px]">${escapeHtml(b.title)}</span>
+    </button>
+  `).join('');
+
+  bmList.querySelectorAll('.bm').forEach(btn => {
+    btn.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const bId = btn.dataset.id;
+      const b = bookmarks.find(item => item.id === bId);
+      if (b) showEditBookmarkModal(root, b, () => renderBookmarksBar(root));
+    });
+  });
+}
+
+function showEditBookmarkModal(root, bookmark, onSaved) {
+  const overlay = root.querySelector('#browser-modal-overlay');
+  if (!overlay) return;
+
+  const isNew = !bookmark.id;
+  overlay.innerHTML = `
+    <div class="bg-[#0b1322] border border-white/15 rounded-3xl p-6 w-full max-w-md shadow-2xl text-slate-100 space-y-4">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="font-bold text-sm text-white flex items-center gap-2">
+          <i class="fas fa-star text-amber-400"></i> ${isNew ? 'Add Bookmark' : 'Edit Bookmark'}
+        </h3>
+        <button id="modal-close-btn" class="p-1.5 hover:bg-white/10 rounded-lg text-slate-400 hover:text-white cursor-pointer transition-colors">
+          <i class="fas fa-times text-xs"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3 text-xs">
+        <div>
+          <label class="block text-slate-400 text-[11px] font-semibold mb-1">Bookmark Name</label>
+          <input id="modal-bm-name" type="text" value="${escapeHtml(bookmark.title || '')}" class="w-full bg-[#070e1c] border border-white/10 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-white outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-400 text-[11px] font-semibold mb-1">URL</label>
+          <input id="modal-bm-url" type="text" value="${escapeHtml(bookmark.url || '')}" class="w-full bg-[#070e1c] border border-white/10 focus:border-emerald-500 rounded-xl px-3.5 py-2 text-white outline-none font-mono text-[11px]">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-between pt-2 border-t border-white/10">
+        ${!isNew ? `
+          <button id="modal-del-btn" class="bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white font-semibold text-xs px-3 py-1.5 rounded-xl cursor-pointer transition-all">
+            <i class="fas fa-trash-alt mr-1"></i> Remove
+          </button>
+        ` : '<div></div>'}
+        <div class="flex items-center gap-2">
+          <button id="modal-cancel-btn" class="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white text-xs font-semibold cursor-pointer transition-all">Cancel</button>
+          <button id="modal-save-btn" class="px-4 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold cursor-pointer transition-all active:scale-95 shadow-md">Save</button>
+        </div>
+      </div>
+    </div>
+  `;
+  overlay.classList.remove('hidden');
+
+  const close = () => { overlay.classList.add('hidden'); overlay.innerHTML = ''; };
+  overlay.querySelector('#modal-close-btn')?.addEventListener('click', close);
+  overlay.querySelector('#modal-cancel-btn')?.addEventListener('click', close);
+
+  overlay.querySelector('#modal-save-btn')?.addEventListener('click', () => {
+    const nameVal = overlay.querySelector('#modal-bm-name')?.value.trim();
+    const urlVal = overlay.querySelector('#modal-bm-url')?.value.trim();
+    if (!urlVal) {
+      dawamuDialogs.toast('Please provide a valid URL', 'error');
+      return;
+    }
+    if (isNew) {
+      addBookmark(nameVal || urlTitle(urlVal), urlVal);
+      dawamuDialogs.toast(`Bookmark "${nameVal}" added`, 'success');
+    } else {
+      updateBookmark(bookmark.id, nameVal, urlVal);
+      dawamuDialogs.toast(`Bookmark "${nameVal}" updated`, 'success');
+    }
+    renderBookmarksBar(root);
+    updateNavControls(root, activeTabId);
+    if (onSaved) onSaved();
+    close();
+  });
+
+  overlay.querySelector('#modal-del-btn')?.addEventListener('click', () => {
+    if (bookmark.id) {
+      removeBookmark(bookmark.id);
+      dawamuDialogs.toast(`Removed "${bookmark.title}" from bookmarks`, 'info');
+      renderBookmarksBar(root);
+      updateNavControls(root, activeTabId);
+      if (onSaved) onSaved();
+    }
+    close();
+  });
+}
+
+function renderHistoryGroupsHtml(groups) {
+  const sections = [
+    { key: 'today', label: 'Today', icon: 'fas fa-calendar-day text-emerald-400' },
+    { key: 'yesterday', label: 'Yesterday', icon: 'fas fa-calendar text-sky-400' },
+    { key: 'thisWeek', label: 'Earlier this week', icon: 'fas fa-calendar-week text-amber-400' },
+    { key: 'older', label: 'Older', icon: 'fas fa-history text-slate-400' },
+  ];
+
+  let html = '';
+  for (const s of sections) {
+    const items = groups[s.key] || [];
+    if (items.length === 0) continue;
+
+    html += `
+      <div class="space-y-2">
+        <div class="text-[11px] font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 pb-1 border-b border-white/5">
+          <i class="${s.icon} text-xs"></i>
+          <span>${s.label}</span>
+          <span class="text-slate-500 font-normal">(${items.length})</span>
+        </div>
+        <div class="space-y-1.5">
+          ${items.map(h => {
+            const timeStr = new Date(h.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            return `
+              <div class="hist-item-row p-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-cyan-500/30 transition-all flex items-center justify-between gap-3 group" data-id="${h.id}" data-url="${h.url}">
+                <div class="flex items-center gap-3 truncate cursor-pointer hist-item-link flex-1 min-w-0" data-url="${h.url}">
+                  <span class="text-[10px] text-slate-500 font-mono shrink-0 w-14">${timeStr}</span>
+                  <div class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
+                    <i class="fas fa-globe text-cyan-400 text-xs"></i>
+                  </div>
+                  <div class="truncate">
+                    <div class="text-xs font-semibold text-white group-hover:text-cyan-300 transition-colors truncate">${escapeHtml(h.title)}</div>
+                    <div class="text-[10px] text-slate-400 font-mono truncate">${escapeHtml(h.url)}</div>
+                  </div>
+                </div>
+                <button class="hist-del-btn opacity-60 group-hover:opacity-100 hover:text-rose-400 p-1.5 cursor-pointer transition-colors" data-id="${h.id}" title="Remove from history">
+                  <i class="fas fa-trash-alt text-xs"></i>
+                </button>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  return html;
+}
+
+function buildBookmarksManagerPage(root, tabId) {
+  const bookmarks = loadBookmarks();
+  return `
+    <div class="p-6 max-w-3xl mx-auto space-y-6">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-lg border border-amber-500/30">
+            <i class="fas fa-star"></i>
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-white">Bookmarks Manager</h2>
+            <p class="text-[11px] text-slate-400">${bookmarks.length} saved bookmark${bookmarks.length === 1 ? '' : 's'}</p>
+          </div>
+        </div>
+        <button id="bm-mgr-add-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-md">
+          <i class="fas fa-plus text-[10px]"></i> Add Bookmark
+        </button>
+      </div>
+
+      <div class="bg-[#0f172a] border border-white/10 rounded-xl px-3.5 py-2 flex items-center gap-2">
+        <i class="fas fa-search text-slate-500 text-xs"></i>
+        <input id="bm-mgr-search" type="text" placeholder="Search saved bookmarks..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 flex-1 min-w-0">
+      </div>
+
+      <div id="bm-mgr-list" class="space-y-2"></div>
+    </div>
+  `;
+}
+
+function buildBrowserHistoryPage(root, tabId) {
+  const historyList = loadHistory();
+  return `
+    <div class="p-6 max-w-3xl mx-auto space-y-6">
+      <div class="flex items-center justify-between pb-3 border-b border-white/10">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg border border-cyan-500/30">
+            <i class="fas fa-history"></i>
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-white">Browsing History</h2>
+            <p class="text-[11px] text-slate-400">${historyList.length} total visited page${historyList.length === 1 ? '' : 's'}</p>
+          </div>
+        </div>
+        <button id="hist-clear-all-btn" class="bg-rose-600/20 hover:bg-rose-600/40 border border-rose-500/40 text-rose-300 hover:text-white font-semibold text-xs px-3.5 py-1.5 rounded-xl flex items-center gap-1.5 cursor-pointer transition-all active:scale-95 shadow-md ${historyList.length === 0 ? 'opacity-40 pointer-events-none' : ''}">
+          <i class="fas fa-trash-alt text-[10px]"></i> Clear History
+        </button>
+      </div>
+
+      <div class="bg-[#0f172a] border border-white/10 rounded-xl px-3.5 py-2 flex items-center gap-2">
+        <i class="fas fa-search text-slate-500 text-xs"></i>
+        <input id="hist-search-input" type="text" placeholder="Search browsing history..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 flex-1 min-w-0">
+      </div>
+
+      <div id="hist-groups-container" class="space-y-6"></div>
+    </div>
+  `;
+}
+
+function urlTitle(url) {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch (_) { return url; }
 }
 
 /* ═══════════════════════════════════════════════════
@@ -951,414 +2439,6 @@ function renderNasaPortal() {
     </div>
   `;
 }
-
-/* ═══════════════════════════════════════════════════
-   OFFLINE TOOL RENDERER
-═══════════════════════════════════════════════════ */
-function showOfflineTool(root, tabId, toolUrl, failedUrl = '') {
-  progress(root, tabId, false);
-  root.querySelector(`#sp-${tabId}`)?.classList.add('hidden');
-  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
-  const view = root.querySelector(`#wv-${tabId}`);
-  if (view) view.classList.add('hidden');
-
-  const toolOverlay = root.querySelector(`#ot-${tabId}`);
-  if (!toolOverlay) return;
-
-  const tool = OFFLINE_TOOLS[toolUrl] || OFFLINE_TOOLS['dawamu://offline'];
-  toolOverlay.innerHTML = tool.builder(root, tabId, failedUrl);
-  toolOverlay.classList.remove('hidden');
-
-  wireOfflineToolEvents(root, tabId, toolOverlay, toolUrl);
-
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab) { tab.url = toolUrl; tab.title = tool.title; }
-  if (tabId === activeTabId) root.querySelector('#omnibox').value = toolUrl;
-  renderTabStrip(root);
-}
-
-function wireOfflineToolEvents(root, tabId, container, toolUrl) {
-  // Wire links inside container so navigation works
-  container.querySelectorAll('a').forEach(a => {
-    a.addEventListener('click', (e) => {
-      const href = a.getAttribute('href');
-      if (href && !href.startsWith('#') && a.getAttribute('target') !== '_blank') {
-        e.preventDefault();
-        loadUrl(root, tabId, href);
-      }
-    });
-  });
-
-  // "Try Again" buttons
-  container.querySelectorAll('[data-retry]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const url = btn.dataset.retry;
-      if (url) loadUrl(root, tabId, url);
-    });
-  });
-
-  // Tool navigation cards
-  container.querySelectorAll('[data-tool]').forEach(card => {
-    card.addEventListener('click', () => {
-      loadUrl(root, tabId, card.dataset.tool);
-    });
-  });
-
-  // Go Home buttons
-  container.querySelectorAll('[data-home]').forEach(btn => {
-    btn.addEventListener('click', () => showStartPage(root, tabId));
-  });
-
-  // Dictionary search
-  const dictInput = container.querySelector('#dict-search');
-  const dictBtn = container.querySelector('#dict-btn');
-  const dictResult = container.querySelector('#dict-result');
-  if (dictInput && dictBtn && dictResult) {
-    const search = () => {
-      const word = dictInput.value.trim().toLowerCase();
-      if (!word) return;
-      const entry = DICTIONARY_DATA[word];
-      if (entry) {
-        dictResult.innerHTML = `<div class="bg-[#292a2d] p-4 rounded-2xl border border-slate-700/50">
-          <h3 class="text-lg font-bold text-white capitalize">${word}</h3>
-          <p class="text-[10px] text-slate-500 italic">${entry.type}</p>
-          <p class="text-sm text-slate-300 mt-2">${entry.def}</p>
-          ${entry.example ? `<p class="text-xs text-slate-500 mt-2 italic">"${entry.example}"</p>` : ''}
-        </div>`;
-      } else {
-        dictResult.innerHTML = `<div class="text-slate-500 text-sm">Word "${word}" not found in offline dictionary. Try: <span class="text-emerald-400 cursor-pointer" onclick="this.closest('.offline-tool').querySelector('#dict-search').value='atom';this.closest('.offline-tool').querySelector('#dict-btn').click()">atom</span>, <span class="text-emerald-400 cursor-pointer" onclick="this.closest('.offline-tool').querySelector('#dict-search').value='democracy';this.closest('.offline-tool').querySelector('#dict-btn').click()">democracy</span>, <span class="text-emerald-400 cursor-pointer" onclick="this.closest('.offline-tool').querySelector('#dict-search').value='photosynthesis';this.closest('.offline-tool').querySelector('#dict-btn').click()">photosynthesis</span></div>`;
-      }
-    };
-    dictBtn.addEventListener('click', search);
-    dictInput.addEventListener('keydown', e => { if (e.key === 'Enter') search(); });
-  }
-
-  // Notes autosave
-  const notepad = container.querySelector('#offline-notepad');
-  if (notepad) {
-    notepad.value = localStorage.getItem('dawamu_notes') || '';
-    notepad.addEventListener('input', () => {
-      localStorage.setItem('dawamu_notes', notepad.value);
-    });
-  }
-}
-
-/* ═══════════════════════════════════════════════════
-   PROGRESS BAR
-═══════════════════════════════════════════════════ */
-let _progTimer = null;
-function progress(root, tabId, on) {
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab) tab.loading = on;
-  if (tabId !== activeTabId) return;
-  const bar = root.querySelector('#prog');
-  if (!bar) return;
-  clearTimeout(_progTimer);
-  if (on) {
-    bar.style.width = '60%'; bar.style.opacity = '1';
-    _progTimer = setTimeout(() => { bar.style.width='100%'; setTimeout(()=>{ bar.style.opacity='0'; bar.style.width='0'; },200); }, 3000);
-  } else {
-    bar.style.width = '100%';
-    _progTimer = setTimeout(() => { bar.style.opacity='0'; setTimeout(()=>{ bar.style.width='0'; },150); }, 200);
-  }
-  renderTabStrip(root);
-}
-
-/* ═══════════════════════════════════════════════════
-   BLOCK PAGE
-═══════════════════════════════════════════════════ */
-function showBlock(root, tabId, blockedUrl, reason) {
-  progress(root, tabId, false);
-  const overlay = root.querySelector(`#sp-${tabId}`);
-  if (!overlay) return;
-  root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
-  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
-  const view = root.querySelector(`#wv-${tabId}`);
-  if (view) view.classList.add('hidden');
-
-  overlay.classList.remove('hidden');
-  overlay.innerHTML = `
-    <div class="max-w-lg w-full bg-[#292a2d] border border-rose-500/40 rounded-3xl p-8 text-center space-y-5 shadow-2xl mx-4">
-      <div class="w-14 h-14 bg-rose-500/20 text-rose-400 rounded-full flex items-center justify-center mx-auto text-3xl border border-rose-500/30">
-        <i class="fas fa-shield-alt"></i>
-      </div>
-      <h2 class="text-lg font-bold text-white">Access Restricted</h2>
-      <p class="text-slate-400 text-sm">${reason || 'Blocked by school administrator policy.'}</p>
-      <div class="bg-[#1a1b1e] p-3 rounded-2xl font-mono text-xs text-rose-300 text-left space-y-1">
-        <div><b class="text-slate-400">URL:</b> ${escapeHtml(blockedUrl)}</div>
-        <div><b class="text-slate-400">Filter:</b> Dawamu Network Safety Policy</div>
-      </div>
-      <div class="flex justify-center gap-3">
-        <button data-home class="bg-[#059669] hover:bg-[#10b981] text-white text-xs font-semibold px-5 py-2.5 rounded-xl cursor-pointer transition-all">Return to Browser Home</button>
-      </div>
-    </div>`;
-
-  root.querySelector(`#omnibox`).value = blockedUrl;
-  overlay.querySelector('[data-home]')?.addEventListener('click', () => showStartPage(root, tabId));
-}
-
-/* ═══════════════════════════════════════════════════
-   START PAGE (pure HTML, zero network cost)
-═══════════════════════════════════════════════════ */
-function showStartPage(root, tabId) {
-  const tab = tabs.find(t => t.id === tabId);
-  if (tab) { tab.url = null; tab.title = 'New Tab'; }
-  if (tabId === activeTabId) root.querySelector('#omnibox').value = '';
-  root.querySelector(`#ot-${tabId}`)?.classList.add('hidden');
-  root.querySelector(`#ext-banner-${tabId}`)?.classList.add('hidden');
-  const view = root.querySelector(`#wv-${tabId}`);
-  if (view) view.classList.add('hidden');
-  renderTabStrip(root);
-
-  const overlay = root.querySelector(`#sp-${tabId}`);
-  if (!overlay) return;
-  overlay.classList.remove('hidden');
-  overlay.innerHTML = startPageHTML(tabId);
-  wireStartPage(root, tabId, overlay);
-}
-
-function startPageHTML(tabId) {
-  const offlineNotice = !navigator.onLine
-    ? `<div class="flex items-center gap-2 bg-amber-950/80 border border-amber-600/50 text-amber-300 text-xs px-4 py-2 rounded-full mb-3 shadow-lg">
-        <i class="fas fa-plane"></i> Working in Offline Mode — Built-in educational tools are active!
-      </div>` : '';
-
-  return `
-  <div class="flex flex-col items-center justify-center min-h-full p-8 text-center space-y-4 overflow-y-auto max-w-3xl mx-auto">
-    <div class="flex flex-col items-center gap-2">
-      <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform">
-      <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-300 text-[10px] font-bold uppercase tracking-widest mt-1">
-        <i class="fas fa-shield-alt text-xs"></i> Dawamu Safe Web Environment
-      </div>
-    </div>
-
-    ${offlineNotice}
-
-    <!-- Modern Central Search Bar -->
-    <div class="w-full max-w-xl flex items-center bg-[#0d1627]/90 hover:bg-[#111e35] focus-within:bg-[#070d18] border border-white/15 hover:border-emerald-500/50 focus-within:border-emerald-500 focus-within:ring-4 focus-within:ring-emerald-500/10 rounded-2xl px-4 py-3 shadow-2xl transition-all">
-      <i class="fas fa-search text-emerald-400 text-sm mr-3 shrink-0"></i>
-      <input id="sp-input-${tabId}" type="text"
-             class="flex-1 bg-transparent outline-none text-white text-sm min-w-0 placeholder-slate-400 font-medium"
-             placeholder="Search Google, Wikipedia, or enter curriculum topic..."
-             autofocus>
-      <button id="sp-btn-${tabId}" class="bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs px-5 py-2 rounded-xl ml-2 shrink-0 shadow-md transition-all active:scale-95 cursor-pointer">Search</button>
-    </div>
-
-    <!-- Curriculum Fast-Access Chips -->
-    <div class="w-full max-w-xl flex items-center justify-center gap-1.5 flex-wrap pt-0.5">
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Photosynthesis">🌿 Photosynthesis</button>
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Cell_biology">🧬 Cell Biology</button>
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/History_of_Kenya">🇰🇪 Kenya History</button>
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://www.khanacademy.org/math/algebra">📐 Algebra</button>
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Electricity">⚡ Ohm's Law</button>
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://www.nasa.gov/mars">🚀 NASA Mars</button>
-      <button class="topic-chip px-2.5 py-1 rounded-full bg-white/5 hover:bg-emerald-900/60 border border-white/10 hover:border-emerald-500/50 text-[11px] text-slate-300 hover:text-white transition-all cursor-pointer" data-url="https://en.wikipedia.org/wiki/Computer_programming">💻 Coding</button>
-    </div>
-
-    <!-- Pinned Online Learning Shortcuts -->
-    <div class="w-full max-w-xl pt-1">
-      <div class="text-left text-[11px] text-slate-400 font-bold uppercase tracking-wider mb-2.5 flex items-center justify-between">
-        <span class="flex items-center gap-1.5"><i class="fas fa-star text-amber-400 text-xs"></i> Verified Academic Portals</span>
-        <span class="text-[10px] text-slate-500 font-normal">Fast Access</span>
-      </div>
-      <div class="grid grid-cols-4 gap-2.5">
-        ${[
-          { url:'https://www.google.com',      icon:'fab fa-google text-blue-400',          name:'Google', bg: 'from-blue-900/30 to-indigo-900/20' },
-          { url:'https://www.khanacademy.org', icon:'fas fa-leaf text-emerald-400',         name:'Khan Academy', bg: 'from-emerald-900/30 to-teal-900/20' },
-          { url:'https://www.wikipedia.org',   icon:'fab fa-wikipedia-w text-slate-200',    name:'Wikipedia', bg: 'from-slate-800/40 to-slate-900/20' },
-          { url:'https://www.nasa.gov',        icon:'fas fa-rocket text-rose-400',          name:'NASA', bg: 'from-rose-900/30 to-amber-900/20' },
-          { url:'https://search.brave.com',    icon:'fas fa-shield-alt text-amber-500',      name:'Brave', bg: 'from-amber-900/30 to-orange-900/20' },
-          { url:'https://www.mathsisfun.com',  icon:'fas fa-square-root-alt text-amber-400', name:'Math Is Fun', bg: 'from-amber-900/30 to-yellow-900/20' },
-          { url:'https://www.bing.com',        icon:'fab fa-microsoft text-cyan-400',        name:'Bing', bg: 'from-cyan-900/30 to-blue-900/20' },
-          { url:'https://www.duolingo.com',    icon:'fas fa-language text-green-400',       name:'Duolingo', bg: 'from-green-900/30 to-emerald-900/20' },
-        ].map(c => `
-          <button class="sp-card bg-gradient-to-br ${c.bg} hover:brightness-125 border border-white/10 hover:border-emerald-500/40 p-3 rounded-2xl flex flex-col items-center gap-1.5 transition-all hover:-translate-y-1 hover:shadow-xl group cursor-pointer" data-url="${c.url}">
-            <div class="w-10 h-10 rounded-xl bg-white/5 flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
-              <i class="${c.icon}"></i>
-            </div>
-            <span class="text-[11px] font-semibold text-slate-200 group-hover:text-white truncate w-full">${c.name}</span>
-          </button>`).join('')}
-      </div>
-    </div>
-
-    <!-- Offline Built-in Utilities -->
-    <div class="w-full max-w-xl pt-1">
-      <div class="text-left text-[11px] text-emerald-400 font-bold uppercase tracking-wider mb-2 flex items-center gap-1.5">
-        <i class="fas fa-laptop-code text-xs"></i> Built-in Offline Utilities
-      </div>
-      <div class="grid grid-cols-5 gap-2">
-        ${[
-          { url:'dawamu://dictionary',     icon:'fas fa-book text-sky-400',           name:'Dictionary' },
-          { url:'dawamu://periodic-table',  icon:'fas fa-atom text-purple-400',        name:'Elements' },
-          { url:'dawamu://math',            icon:'fas fa-calculator text-amber-400',   name:'Math Ref' },
-          { url:'dawamu://notes',           icon:'fas fa-sticky-note text-yellow-400', name:'Notes' },
-          { url:'dawamu://history',         icon:'fas fa-landmark text-rose-400',      name:'History' },
-        ].map(c => `
-          <button class="sp-card bg-slate-900/70 hover:bg-slate-800/90 border border-emerald-900/40 hover:border-emerald-500/50 p-2.5 rounded-xl flex flex-col items-center gap-1.5 transition-all hover:scale-105 cursor-pointer" data-url="${c.url}">
-            <i class="${c.icon} text-lg"></i>
-            <span class="text-[10px] font-semibold text-slate-300 text-center">${c.name}</span>
-          </button>`).join('')}
-      </div>
-    </div>
-  </div>`;
-}
-
-function wireStartPage(root, tabId, overlay) {
-  const input = overlay.querySelector(`#sp-input-${tabId}`);
-  const btn   = overlay.querySelector(`#sp-btn-${tabId}`);
-  const go = () => { const v = input?.value.trim(); if (v) navigate(root, tabId, v); };
-  btn?.addEventListener('click', go);
-  input?.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
-  overlay.querySelectorAll('.sp-card').forEach(c =>
-    c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
-  overlay.querySelectorAll('.topic-chip').forEach(c =>
-    c.addEventListener('click', () => navigate(root, tabId, c.dataset.url)));
-}
-
-/* ═══════════════════════════════════════════════════
-   CHROME TOOLBAR WIRING
-═══════════════════════════════════════════════════ */
-function wireChrome(root) {
-  const omni = root.querySelector('#omnibox');
-
-  root.querySelector('#engine-sel').addEventListener('change', e => { engine = e.target.value; });
-  omni.addEventListener('keydown', e => {
-    if (e.key === 'Enter') { navigate(root, activeTabId, omni.value); omni.blur(); }
-  });
-  omni.addEventListener('focus', () => omni.select());
-
-  root.querySelector('#btn-back').addEventListener('click', () => {
-    const tab = tabs.find(t => t.id === activeTabId);
-    const v = root.querySelector(`#wv-${activeTabId}`);
-    if (IS_ELECTRON && v?.canGoBack?.()) {
-      v.goBack();
-    } else if (tab && tab.history && tab.historyIdx > 0) {
-      tab.historyIdx--;
-      loadUrl(root, activeTabId, tab.history[tab.historyIdx], false);
-    } else if (v?.contentWindow) {
-      try { v.contentWindow.history.back(); } catch (_) {}
-    }
-  });
-
-  root.querySelector('#btn-forward').addEventListener('click', () => {
-    const tab = tabs.find(t => t.id === activeTabId);
-    const v = root.querySelector(`#wv-${activeTabId}`);
-    if (IS_ELECTRON && v?.canGoForward?.()) {
-      v.goForward();
-    } else if (tab && tab.history && tab.historyIdx < tab.history.length - 1) {
-      tab.historyIdx++;
-      loadUrl(root, activeTabId, tab.history[tab.historyIdx], false);
-    } else if (v?.contentWindow) {
-      try { v.contentWindow.history.forward(); } catch (_) {}
-    }
-  });
-
-  root.querySelector('#btn-reload').addEventListener('click', () => {
-    const tab = tabs.find(t => t.id === activeTabId);
-    const v   = root.querySelector(`#wv-${activeTabId}`);
-    if (tab?.loading) {
-      try { if (IS_ELECTRON) v?.stop(); } catch (_) {}
-      progress(root, activeTabId, false);
-    } else {
-      if (IS_ELECTRON) { try { v?.reload(); } catch (_) {} }
-      else if (v) v.src = v.src;
-      progress(root, activeTabId, true);
-    }
-  });
-
-  root.querySelector('#btn-home').addEventListener('click', () => showStartPage(root, activeTabId));
-  root.querySelector('#btn-new-tab').addEventListener('click', () => openTab(root, null));
-
-  root.querySelector('#bm-bar').addEventListener('click', e => {
-    const b = e.target.closest('.bm');
-    if (b) navigate(root, activeTabId, b.dataset.url);
-  });
-
-  // Downloads popover and live notifications
-  const dlBtn = root.querySelector('#btn-downloads');
-  const dlPopover = root.querySelector('#dl-popover');
-  const dlBadge = root.querySelector('#dl-badge');
-  const dlList = root.querySelector('#dl-list');
-  const downloadedItems = [...stateStore.getFolderFiles('downloads').filter(f => f.type !== 'folder')];
-  const savePageBtn = root.querySelector('#btn-save-page');
-  savePageBtn?.addEventListener('click', () => {
-    const tab = tabs.find(t => t.id === activeTabId);
-    const currentUrl = root.querySelector('#omnibox')?.value.trim() || tab?.url || 'dawamu://start';
-    const rawTitle = (tab?.title && tab.title !== 'New Tab') ? tab.title : (urlTitle(currentUrl) || 'Web_Research_Article');
-    const cleanFileName = rawTitle.replace(/[^a-zA-Z0-9 _-]/g, '').trim().replace(/\s+/g, '_') + '_WebClip.docx';
-    const toolEl = root.querySelector(`#ot-${activeTabId}`);
-    const bodyHtml = (toolEl && !toolEl.classList.contains('hidden'))
-      ? toolEl.innerHTML
-      : `<p><b>Source URL:</b> ${currentUrl}</p><p>Saved from Dawamu Safe Browser on ${new Date().toLocaleString()}.</p>`;
-    const savedDocHtml = `<h1>${rawTitle}</h1><p style="font-size:12px;color:#64748b;"><b>Saved from Dawamu Browser:</b> ${currentUrl}</p><hr>${bodyHtml}`;
-    const savedFile = stateStore.saveFileToVFS('downloads', {
-      name: cleanFileName,
-      type: 'doc',
-      icon: 'fa-file-word',
-      color: 'text-blue-400',
-      content: savedDocHtml
-    });
-    downloadedItems.unshift(savedFile || { name: cleanFileName, size: '24 KB' });
-    updateDownloadUI();
-    dawamuDialogs.toast(`Saved "${cleanFileName}" to This PC > Downloads`, 'success');
-  });
-
-  const updateDownloadUI = () => {
-    if (!dlList) return;
-    if (downloadedItems.length === 0) {
-      dlList.innerHTML = `<div class="text-slate-400 text-center py-4 text-[11px]">No recent downloads</div>`;
-      dlBadge?.classList.add('hidden');
-    } else {
-      dlBadge?.classList.remove('hidden');
-      dlList.innerHTML = downloadedItems.map(item => `
-        <div class="p-2 rounded-xl bg-white/5 border border-white/5 flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 truncate">
-            <i class="fas fa-file text-emerald-400 text-sm"></i>
-            <div class="truncate">
-              <div class="font-semibold text-white truncate text-[11px]">${item.name}</div>
-              <div class="text-[9px] text-slate-400">${item.size || 'Saved in This PC > Downloads'}</div>
-            </div>
-          </div>
-          <span class="text-[9px] bg-emerald-900/60 text-emerald-300 px-2 py-0.5 rounded-full shrink-0 font-semibold">This PC</span>
-        </div>
-      `).join('');
-    }
-  };
-
-  dlBtn?.addEventListener('click', (e) => {
-    e.stopPropagation();
-    dlPopover?.classList.toggle('hidden');
-  });
-
-  document.addEventListener('click', () => {
-    dlPopover?.classList.add('hidden');
-  });
-
-  if (window.electronAPI?.onDownloadComplete) {
-    window.electronAPI.onDownloadComplete((data) => {
-      downloadedItems.unshift(data);
-      updateDownloadUI();
-      const statusEl = root.querySelector('#status');
-      if (statusEl) {
-        statusEl.innerHTML = `<span class="text-emerald-400 font-bold"><i class="fas fa-check-circle mr-1"></i>Downloaded ${data.name} to This PC &gt; Downloads</span>`;
-        setTimeout(() => {
-          statusEl.textContent = 'Dawamu Safe Browser • Protected Session';
-        }, 5000);
-      }
-    });
-  }
-
-  renderTabStrip(root);
-}
-
-function urlTitle(url) {
-  try { return new URL(url).hostname.replace('www.', ''); }
-  catch (_) { return url; }
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   OFFLINE TOOL BUILDERS — Pure HTML pages rendered locally, zero network
-═══════════════════════════════════════════════════════════════════════════ */
 
 function toolHeader(icon, title, subtitle) {
   return `<div class="flex items-center gap-3 mb-6 pb-4 border-b border-slate-700/50">

@@ -105,10 +105,16 @@ try:
 
     # Login and open Word
     evaluate("document.querySelector('[data-quick-login][data-adm=\"1001\"]').click()")
-    time.sleep(0.5)
+    time.sleep(1.0)
 
     evaluate("document.querySelector('.desktop-icon[data-app-id=\"word\"]').click()")
-    time.sleep(0.5)
+    time.sleep(1.0)
+
+    for _ in range(20):
+        ready = evaluate("!!document.getElementById('word-paper') && !!document.getElementById('word-paper').querySelector('p')")
+        if ready:
+            break
+        time.sleep(0.3)
 
     # Test 1: Bold via ribbon button click
     res_bold = evaluate("""
