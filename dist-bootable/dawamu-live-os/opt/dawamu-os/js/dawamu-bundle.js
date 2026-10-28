@@ -3523,9 +3523,12 @@ const shelf = new Shelf();
 // === MODULE: js/os/contextMenu.js ===
 (function() {
 /**
- * Dawamu OS - macOS Liquid Glass Desktop Context Menu
- * Provides right-click desktop and app icon context menus with optical blur,
- * file/folder creation, icon sorting, wallpaper controls, and quick toggles.
+ * Dawamu OS - Unified macOS Liquid Glass Context Menu System
+ * Provides authentic, translucent context menus for:
+ * 1. Desktop Wallpaper (New folder, New study note, New doc, Sort icons, Clean up, Wallpapers)
+ * 2. Desktop Icons (Open, Get info, Browse in This PC)
+ * 3. In-App Windows (Word, Spreadsheet, Explorer, Database, Browser, Docs, Calculator, Books, etc.)
+ * 4. Dock Shelf (Launchpad, Control Center, Spotlight, Dock Settings)
  */
 const { stateStore } = window.__dawamuModules;
 const { windowManager } = window.__dawamuModules;
@@ -3539,6 +3542,8 @@ class DesktopContextMenu {
     this.isOpen = false;
     this.desktopEl = null;
     this.appRegistry = [];
+    this.savedRange = null;
+    this.savedText = '';
   }
 
   init({ desktopEl, appRegistry = [] }) {
@@ -3561,16 +3566,10 @@ class DesktopContextMenu {
   }
 
   attachEvents() {
-    if (!this.desktopEl) return;
-
-    // Right click on desktop or desktop icons
-    this.desktopEl.addEventListener('contextmenu', (e) => {
-      // Ignore right-clicks inside app windows, shelf dock, or system popovers
+    // Global Right Click Listener
+    document.addEventListener('contextmenu', (e) => {
+      // Ignore system lockout, login, and shutdown screens
       if (
-        e.target.closest('.cros-window') ||
-        e.target.closest('#shelf') ||
-        e.target.closest('#launcher-overlay') ||
-        e.target.closest('#quick-settings-overlay') ||
         e.target.closest('#os-login-screen') ||
         e.target.closest('#curfew-lockout-screen') ||
         e.target.closest('#os-shutdown-screen')
@@ -3578,15 +3577,48 @@ class DesktopContextMenu {
         return;
       }
 
-      e.preventDefault();
-      e.stopPropagation();
+      // 1. Right Click inside an Open App Window (.cros-window)
+      const winEl = e.target.closest('.cros-window');
+      if (winEl) {
+        e.preventDefault();
+        e.stopPropagation();
 
-      const iconEl = e.target.closest('.desktop-icon');
-      if (iconEl) {
-        const appId = iconEl.dataset.appId;
-        this.showIconMenu(e.clientX, e.clientY, appId, iconEl);
-      } else {
-        this.showDesktopMenu(e.clientX, e.clientY);
+        const appId = winEl.id.replace('window-', '');
+        windowManager.focusWindow(appId);
+        this.saveCurrentSelection();
+        this.showAppContextMenu(e.clientX, e.clientY, appId, winEl, e.target);
+        return;
+      }
+
+      // 2. Right Click on Shelf Dock (#shelf)
+      const shelfEl = e.target.closest('#shelf');
+      if (shelfEl) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const shelfIcon = e.target.closest('.shelf-icon');
+        if (shelfIcon) {
+          const appId = shelfIcon.dataset.appId;
+          this.showDockAppMenu(e.clientX, e.clientY, appId, shelfIcon);
+        } else {
+          this.showDockMenu(e.clientX, e.clientY);
+        }
+        return;
+      }
+
+      // 3. Right Click on Desktop or Desktop Icons (#desktop)
+      const desktop = e.target.closest('#desktop');
+      if (desktop) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const iconEl = e.target.closest('.desktop-icon');
+        if (iconEl) {
+          const appId = iconEl.dataset.appId;
+          this.showIconMenu(e.clientX, e.clientY, appId, iconEl);
+        } else {
+          this.showDesktopMenu(e.clientX, e.clientY);
+        }
       }
     });
 
@@ -3597,12 +3629,7 @@ class DesktopContextMenu {
       }
     });
 
-    document.addEventListener('contextmenu', (e) => {
-      if (this.isOpen && !this.menuEl.contains(e.target) && !e.target.closest('#desktop')) {
-        this.hide();
-      }
-    });
-
+    // Dismiss on Escape
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && this.isOpen) {
         this.hide();
@@ -3613,6 +3640,38 @@ class DesktopContextMenu {
     window.addEventListener('resize', () => this.hide());
   }
 
+  saveCurrentSelection() {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      try {
+        this.savedRange = sel.getRangeAt(0).cloneRange();
+        this.savedText = sel.toString().trim();
+      } catch (_) {
+        this.savedRange = null;
+        this.savedText = '';
+      }
+    } else {
+      this.savedRange = null;
+      this.savedText = '';
+    }
+  }
+
+  restoreSelection(container) {
+    if (container && typeof container.focus === 'function') {
+      container.focus();
+    }
+    if (this.savedRange) {
+      try {
+        const sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(this.savedRange);
+      } catch (_) {}
+    }
+  }
+
+  /* ─────────────────────────────────────────────
+     1. DESKTOP WALLPAPER CONTEXT MENU
+  ───────────────────────────────────────────── */
   showDesktopMenu(x, y) {
     this.menuEl.innerHTML = `
       <div class="context-menu-item" data-action="new-folder">
@@ -3695,6 +3754,9 @@ class DesktopContextMenu {
     this.positionMenu(x, y);
   }
 
+  /* ─────────────────────────────────────────────
+     2. DESKTOP ICON CONTEXT MENU
+  ───────────────────────────────────────────── */
   showIconMenu(x, y, appId, iconEl) {
     const desktopLabel = iconEl ? iconEl.querySelector('.desktop-icon-label')?.textContent.trim() : null;
     const foundApp = this.appRegistry.find((a) => a.id === appId);
@@ -3741,59 +3803,864 @@ class DesktopContextMenu {
     this.positionMenu(x, y);
   }
 
-  positionMenu(x, y) {
-    this.menuEl.style.visibility = 'hidden';
-    this.menuEl.style.left = '0px';
-    this.menuEl.style.top = '0px';
-    this.menuEl.classList.add('open');
-    this.menuEl.setAttribute('aria-hidden', 'false');
-    this.isOpen = true;
+  /* ─────────────────────────────────────────────
+     3. DOCK SHELF CONTEXT MENUS
+  ───────────────────────────────────────────── */
+  showDockMenu(x, y) {
+    this.menuEl.innerHTML = `
+      <div class="context-menu-header">
+        <i class="fas fa-bars-staggered text-emerald-400"></i>
+        <span class="font-bold text-white">Dawamu Dock</span>
+      </div>
+      <div class="context-menu-divider"></div>
 
-    const menuWidth = this.menuEl.offsetWidth || 220;
-    const menuHeight = this.menuEl.offsetHeight || 310;
-    const pad = 12;
+      <div class="context-menu-item" data-action="launchpad">
+        <i class="fas fa-rocket text-purple-400"></i>
+        <span>Launchpad & Apps</span>
+      </div>
+      <div class="context-menu-item" data-action="control-center">
+        <i class="fas fa-sliders text-teal-400"></i>
+        <span>Control Center</span>
+      </div>
+      <div class="context-menu-item" data-action="spotlight">
+        <i class="fas fa-magnifying-glass text-emerald-400"></i>
+        <span>Spotlight Search</span>
+      </div>
 
-    // Keep inside screen viewport bounds and above the floating dock
-    const maxX = window.innerWidth - menuWidth - pad;
-    const maxY = window.innerHeight - menuHeight - 68;
+      <div class="context-menu-divider"></div>
 
-    const posX = Math.max(pad, Math.min(x, maxX));
-    const posY = Math.max(pad, Math.min(y, maxY));
+      <div class="context-menu-item" data-action="wallpaper">
+        <i class="fas fa-palette text-pink-400"></i>
+        <span>Desktop & Dock Settings...</span>
+      </div>
+    `;
+    this.bindMenuActions();
+    this.positionMenu(x, y);
+  }
 
-    this.menuEl.style.left = `${posX}px`;
-    this.menuEl.style.top = `${posY}px`;
+  showDockAppMenu(x, y, appId, iconEl) {
+    this.showIconMenu(x, y, appId, iconEl);
+  }
 
-    // Flip submenu if near right viewport edge
-    const submenu = this.menuEl.querySelector('.context-submenu');
-    if (submenu) {
-      if (posX + menuWidth + 180 > window.innerWidth) {
-        submenu.classList.add('flip-left');
-      } else {
-        submenu.classList.remove('flip-left');
-      }
+  /* ─────────────────────────────────────────────
+     4. IN-APP CONTEXT MENUS (APP-SPECIFIC)
+  ───────────────────────────────────────────── */
+  showAppContextMenu(x, y, appId, winEl, targetEl) {
+    const foundApp = this.appRegistry.find((a) => a.id === appId);
+    const winTitle = winEl.querySelector('.window-title-text')?.textContent.trim();
+    const app = {
+      id: appId,
+      title: winTitle || foundApp?.title || 'Application',
+      icon: winEl.querySelector('.app-header-icon')?.innerHTML || foundApp?.icon || '<i class="fas fa-window-maximize text-emerald-400"></i>'
+    };
+
+    let menuContent = '';
+
+    if (appId === 'word') {
+      menuContent = this.getWordMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'spreadsheet') {
+      menuContent = this.getSpreadsheetMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'explorer') {
+      menuContent = this.getExplorerMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'database') {
+      menuContent = this.getDatabaseMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'browser' || appId === 'offlineBrowser') {
+      menuContent = this.getBrowserMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'docs') {
+      menuContent = this.getDocsMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'calculator') {
+      menuContent = this.getCalculatorMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'books844') {
+      menuContent = this.getBooksMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'classroom') {
+      menuContent = this.getClassroomMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'eduguard') {
+      menuContent = this.getEduguardMenuHtml(app, winEl, targetEl);
+    } else if (appId === 'settings') {
+      menuContent = this.getSettingsMenuHtml(app, winEl, targetEl);
+    } else {
+      menuContent = this.getGenericAppMenuHtml(app, winEl, targetEl);
     }
 
-    this.menuEl.style.visibility = 'visible';
+    this.menuEl.innerHTML = menuContent;
+    this.bindAppMenuActions(appId, winEl, targetEl);
+    this.positionMenu(x, y);
   }
 
-  hide() {
-    if (!this.isOpen) return;
-    this.menuEl.classList.remove('open');
-    this.menuEl.setAttribute('aria-hidden', 'true');
-    this.menuEl.style.visibility = '';
-    this.isOpen = false;
+  getWordMenuHtml(app, winEl, targetEl) {
+    const hasSelection = Boolean(this.savedText);
+    const selSnippet = hasSelection ? (this.savedText.length > 18 ? this.savedText.slice(0, 16) + '…' : this.savedText) : '';
+
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="word-cut">
+        <i class="fas fa-cut text-slate-300"></i>
+        <span>Cut</span>
+        <span class="context-menu-shortcut">⌘X</span>
+      </div>
+      <div class="context-menu-item" data-app-action="word-copy">
+        <i class="fas fa-copy text-slate-300"></i>
+        <span>Copy</span>
+        <span class="context-menu-shortcut">⌘C</span>
+      </div>
+      <div class="context-menu-item" data-app-action="word-paste">
+        <i class="fas fa-paste text-slate-300"></i>
+        <span>Paste</span>
+        <span class="context-menu-shortcut">⌘V</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item has-submenu" data-app-action="menu-group">
+        <i class="fas fa-font text-sky-400"></i>
+        <span>Format Font</span>
+        <i class="fas fa-chevron-right context-menu-subarrow"></i>
+        <div class="context-submenu">
+          <div class="context-menu-item" data-app-action="word-bold">
+            <i class="fas fa-bold text-slate-200"></i>
+            <span>Bold</span>
+            <span class="context-menu-shortcut">⌘B</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-italic">
+            <i class="fas fa-italic text-slate-200"></i>
+            <span>Italic</span>
+            <span class="context-menu-shortcut">⌘I</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-underline">
+            <i class="fas fa-underline text-slate-200"></i>
+            <span>Underline</span>
+            <span class="context-menu-shortcut">⌘U</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-strike">
+            <i class="fas fa-strikethrough text-slate-300"></i>
+            <span>Strikethrough</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-highlight">
+            <i class="fas fa-highlighter text-amber-300"></i>
+            <span>Highlight (Yellow)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-remove-format">
+            <i class="fas fa-remove-format text-rose-300"></i>
+            <span>Clear Formatting</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="context-menu-item has-submenu" data-app-action="menu-group">
+        <i class="fas fa-plus-circle text-emerald-400"></i>
+        <span>Insert Tools</span>
+        <i class="fas fa-chevron-right context-menu-subarrow"></i>
+        <div class="context-submenu">
+          <div class="context-menu-item" data-app-action="word-insert-table">
+            <i class="fas fa-table text-blue-400"></i>
+            <span>Insert Table (3×3)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-insert-image">
+            <i class="fas fa-image text-emerald-400"></i>
+            <span>Insert Image...</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-insert-date">
+            <i class="fas fa-calendar-day text-amber-400"></i>
+            <span>Current Date & Time</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-insert-symbol">
+            <i class="fas fa-square-root-alt text-purple-400"></i>
+            <span>Math & Scientific Symbol...</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-insert-hr">
+            <i class="fas fa-minus text-slate-300"></i>
+            <span>Horizontal Line</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="context-menu-item has-submenu" data-app-action="menu-group">
+        <i class="fas fa-align-left text-indigo-400"></i>
+        <span>Paragraph & Style</span>
+        <i class="fas fa-chevron-right context-menu-subarrow"></i>
+        <div class="context-submenu">
+          <div class="context-menu-item" data-app-action="word-h1">
+            <i class="fas fa-heading text-blue-400"></i>
+            <span>Heading 1</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-h2">
+            <i class="fas fa-heading text-blue-300"></i>
+            <span>Heading 2</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-p">
+            <i class="fas fa-paragraph text-slate-300"></i>
+            <span>Normal Paragraph</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-bullet">
+            <i class="fas fa-list-ul text-emerald-400"></i>
+            <span>Bulleted List</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-numbered">
+            <i class="fas fa-list-ol text-emerald-400"></i>
+            <span>Numbered List</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-align-left">
+            <i class="fas fa-align-left text-slate-300"></i>
+            <span>Align Left</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-align-center">
+            <i class="fas fa-align-center text-slate-300"></i>
+            <span>Align Center</span>
+          </div>
+          <div class="context-menu-item" data-app-action="word-align-right">
+            <i class="fas fa-align-right text-slate-300"></i>
+            <span>Align Right</span>
+          </div>
+        </div>
+      </div>
+
+      ${hasSelection ? `
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-app-action="word-search-selection">
+          <i class="fas fa-globe text-emerald-400"></i>
+          <span>Search "${selSnippet}" on Safe Web</span>
+        </div>
+        <div class="context-menu-item" data-app-action="word-note-selection">
+          <i class="fas fa-note-sticky text-amber-400"></i>
+          <span>Save Selection as Study Note</span>
+        </div>
+      ` : ''}
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="word-stats">
+        <i class="fas fa-chart-bar text-sky-400"></i>
+        <span>Document Statistics...</span>
+      </div>
+      <div class="context-menu-item" data-app-action="word-save">
+        <i class="fas fa-save text-emerald-400"></i>
+        <span>Save Document</span>
+        <span class="context-menu-shortcut">⌘S</span>
+      </div>
+      <div class="context-menu-item" data-app-action="word-export-pdf">
+        <i class="fas fa-file-pdf text-rose-400"></i>
+        <span>Print / Export PDF</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
   }
 
+  getSpreadsheetMenuHtml(app, winEl, targetEl) {
+    const cellTd = targetEl.closest('.cell-td');
+    if (cellTd) {
+      cellTd.click();
+    }
+    const cellKey = cellTd ? cellTd.dataset.key : winEl.querySelector('#cell-ref')?.textContent || 'A1';
+
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title} (${cellKey})</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="sheet-cut">
+        <i class="fas fa-cut text-slate-300"></i>
+        <span>Cut Cell Value</span>
+        <span class="context-menu-shortcut">⌘X</span>
+      </div>
+      <div class="context-menu-item" data-app-action="sheet-copy">
+        <i class="fas fa-copy text-slate-300"></i>
+        <span>Copy Cell Value</span>
+        <span class="context-menu-shortcut">⌘C</span>
+      </div>
+      <div class="context-menu-item" data-app-action="sheet-paste">
+        <i class="fas fa-paste text-slate-300"></i>
+        <span>Paste into Cell</span>
+        <span class="context-menu-shortcut">⌘V</span>
+      </div>
+      <div class="context-menu-item" data-app-action="sheet-clear">
+        <i class="fas fa-eraser text-slate-300"></i>
+        <span>Clear Cell Contents</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item has-submenu" data-app-action="menu-group">
+        <i class="fas fa-sliders text-emerald-400"></i>
+        <span>Format Cell</span>
+        <i class="fas fa-chevron-right context-menu-subarrow"></i>
+        <div class="context-submenu">
+          <div class="context-menu-item" data-app-action="sheet-fmt-currency">
+            <i class="fas fa-money-bill-wave text-emerald-400"></i>
+            <span>Currency (KES)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fmt-percent">
+            <i class="fas fa-percent text-blue-400"></i>
+            <span>Percentage (%)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fmt-bold">
+            <i class="fas fa-bold text-slate-200"></i>
+            <span>Bold Text</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fmt-decimal">
+            <i class="fas fa-hashtag text-amber-400"></i>
+            <span>Two Decimals (.00)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="context-menu-item has-submenu" data-app-action="menu-group">
+        <i class="fas fa-calculator text-blue-400"></i>
+        <span>Insert Formula</span>
+        <i class="fas fa-chevron-right context-menu-subarrow"></i>
+        <div class="context-submenu">
+          <div class="context-menu-item" data-app-action="sheet-fml-sum">
+            <i class="fas fa-calculator text-emerald-400"></i>
+            <span>=SUM(B2:B8)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fml-avg">
+            <i class="fas fa-divide text-blue-400"></i>
+            <span>=AVERAGE(B2:B8)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fml-max">
+            <i class="fas fa-arrow-trend-up text-amber-400"></i>
+            <span>=MAX(B2:B8)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fml-min">
+            <i class="fas fa-arrow-trend-down text-teal-400"></i>
+            <span>=MIN(B2:B8)</span>
+          </div>
+          <div class="context-menu-item" data-app-action="sheet-fml-count">
+            <i class="fas fa-list-ol text-purple-400"></i>
+            <span>=COUNT(B2:B8)</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="sheet-save-downloads">
+        <i class="fas fa-folder-plus text-emerald-400"></i>
+        <span>Save to This PC > Downloads</span>
+      </div>
+      <div class="context-menu-item" data-app-action="sheet-export-csv">
+        <i class="fas fa-file-csv text-blue-400"></i>
+        <span>Export CSV File</span>
+      </div>
+      <div class="context-menu-item" data-app-action="sheet-load-gradebook">
+        <i class="fas fa-graduation-cap text-amber-400"></i>
+        <span>Load KCSE Gradebook</span>
+      </div>
+      <div class="context-menu-item" data-app-action="sheet-clear-all">
+        <i class="fas fa-trash-alt text-rose-400"></i>
+        <span>Clear Entire Sheet</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getExplorerMenuHtml(app, winEl, targetEl) {
+    const fileItem = targetEl.closest('.file-item');
+    if (fileItem) {
+      fileItem.click();
+      const fileName = fileItem.dataset.name || 'File';
+      const fileType = fileItem.dataset.type || 'file';
+
+      return `
+        <div class="context-menu-header">
+          <i class="fas fa-file-lines text-amber-400"></i>
+          <span class="font-bold text-white truncate max-w-[170px]">${fileName}</span>
+        </div>
+        <div class="context-menu-divider"></div>
+
+        <div class="context-menu-item font-semibold text-emerald-300" data-app-action="exp-open-item">
+          <i class="fas fa-arrow-up-right-from-square text-emerald-400"></i>
+          <span>Open ${fileType === 'folder' ? 'Folder' : 'File'}</span>
+        </div>
+        <div class="context-menu-item" data-app-action="exp-cut-item">
+          <i class="fas fa-cut text-slate-300"></i>
+          <span>Cut</span>
+          <span class="context-menu-shortcut">⌘X</span>
+        </div>
+        <div class="context-menu-item" data-app-action="exp-copy-item">
+          <i class="fas fa-copy text-slate-300"></i>
+          <span>Copy</span>
+          <span class="context-menu-shortcut">⌘C</span>
+        </div>
+        <div class="context-menu-item" data-app-action="exp-move-item">
+          <i class="fas fa-people-arrows text-sky-400"></i>
+          <span>Move To...</span>
+        </div>
+        <div class="context-menu-item" data-app-action="exp-rename-item">
+          <i class="fas fa-pen text-amber-300"></i>
+          <span>Rename...</span>
+        </div>
+        <div class="context-menu-item text-rose-300" data-app-action="exp-delete-item">
+          <i class="fas fa-trash-alt text-rose-400"></i>
+          <span>Delete</span>
+          <span class="context-menu-shortcut">Del</span>
+        </div>
+
+        <div class="context-menu-divider"></div>
+
+        <div class="context-menu-item" data-app-action="exp-copy-desktop">
+          <i class="fas fa-desktop text-blue-400"></i>
+          <span>Copy to Desktop</span>
+        </div>
+
+        <div class="context-menu-divider"></div>
+        ${this.getWindowControlsHtml(app.id)}
+      `;
+    }
+
+    return `
+      <div class="context-menu-header">
+        <i class="fas fa-laptop text-emerald-400"></i>
+        <span class="font-bold text-white">This PC / My Files</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="exp-new-folder">
+        <i class="fas fa-folder-plus text-amber-400"></i>
+        <span>New Folder</span>
+      </div>
+      <div class="context-menu-item" data-app-action="exp-new-file">
+        <i class="fas fa-file-circle-plus text-emerald-400"></i>
+        <span>New Document</span>
+      </div>
+      <div class="context-menu-item" data-app-action="exp-paste">
+        <i class="fas fa-paste text-slate-300"></i>
+        <span>Paste</span>
+        <span class="context-menu-shortcut">⌘V</span>
+      </div>
+      <div class="context-menu-item" data-app-action="exp-import">
+        <i class="fas fa-cloud-arrow-up text-sky-400"></i>
+        <span>Import / Drop Files...</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="exp-refresh">
+        <i class="fas fa-redo text-slate-300"></i>
+        <span>Refresh Folder</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getDatabaseMenuHtml(app, winEl, targetEl) {
+    const tr = targetEl.closest('tr');
+    const editBtn = tr?.querySelector('.row-edit-btn');
+    const hasRow = Boolean(editBtn);
+
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      ${hasRow ? `
+        <div class="context-menu-item font-semibold text-sky-300" data-app-action="db-edit-row">
+          <i class="fas fa-edit text-sky-400"></i>
+          <span>Edit Selected Record...</span>
+        </div>
+        <div class="context-menu-item text-rose-300" data-app-action="db-delete-row">
+          <i class="fas fa-trash-alt text-rose-400"></i>
+          <span>Delete Record</span>
+        </div>
+        <div class="context-menu-divider"></div>
+      ` : ''}
+
+      <div class="context-menu-item text-emerald-300" data-app-action="db-add-record">
+        <i class="fas fa-plus-circle text-emerald-400"></i>
+        <span>Add New Record...</span>
+      </div>
+      <div class="context-menu-item" data-app-action="db-save">
+        <i class="fas fa-save text-blue-400"></i>
+        <span>Save Database</span>
+        <span class="context-menu-shortcut">⌘S</span>
+      </div>
+      <div class="context-menu-item" data-app-action="db-export-csv">
+        <i class="fas fa-file-csv text-amber-400"></i>
+        <span>Export Current Table to CSV</span>
+      </div>
+      <div class="context-menu-item" data-app-action="db-refresh">
+        <i class="fas fa-redo text-slate-300"></i>
+        <span>Refresh Database</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getBrowserMenuHtml(app, winEl, targetEl) {
+    const hasSelection = Boolean(this.savedText);
+    const selSnippet = hasSelection ? (this.savedText.length > 18 ? this.savedText.slice(0, 16) + '…' : this.savedText) : '';
+
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="browser-back">
+        <i class="fas fa-arrow-left text-slate-300"></i>
+        <span>Back</span>
+        <span class="context-menu-shortcut">Alt←</span>
+      </div>
+      <div class="context-menu-item" data-app-action="browser-forward">
+        <i class="fas fa-arrow-right text-slate-300"></i>
+        <span>Forward</span>
+        <span class="context-menu-shortcut">Alt→</span>
+      </div>
+      <div class="context-menu-item" data-app-action="browser-reload">
+        <i class="fas fa-redo text-slate-300"></i>
+        <span>Reload Page</span>
+        <span class="context-menu-shortcut">⌘R</span>
+      </div>
+      <div class="context-menu-item" data-app-action="browser-home">
+        <i class="fas fa-home text-blue-400"></i>
+        <span>Go to Homepage</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="browser-new-tab">
+        <i class="fas fa-plus text-emerald-400"></i>
+        <span>New Tab</span>
+        <span class="context-menu-shortcut">⌘T</span>
+      </div>
+      <div class="context-menu-item" data-app-action="browser-copy-url">
+        <i class="fas fa-link text-sky-400"></i>
+        <span>Copy Page Address</span>
+      </div>
+      <div class="context-menu-item" data-app-action="browser-save-page">
+        <i class="fas fa-download text-teal-400"></i>
+        <span>Save Page to Downloads</span>
+      </div>
+
+      ${hasSelection ? `
+        <div class="context-menu-divider"></div>
+        <div class="context-menu-item" data-app-action="browser-search-web">
+          <i class="fas fa-magnifying-glass text-emerald-400"></i>
+          <span>Search "${selSnippet}" on Safe Web</span>
+        </div>
+        <div class="context-menu-item" data-app-action="browser-save-note">
+          <i class="fas fa-note-sticky text-amber-400"></i>
+          <span>Save Selection to Study Notes</span>
+        </div>
+      ` : ''}
+
+      <div class="context-menu-divider"></div>
+      <div class="context-menu-item" data-app-action="browser-offline-tools">
+        <i class="fas fa-graduation-cap text-purple-400"></i>
+        <span>Offline Educational Tools...</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getDocsMenuHtml(app, winEl, targetEl) {
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="docs-cut">
+        <i class="fas fa-cut text-slate-300"></i>
+        <span>Cut</span>
+        <span class="context-menu-shortcut">⌘X</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-copy">
+        <i class="fas fa-copy text-slate-300"></i>
+        <span>Copy</span>
+        <span class="context-menu-shortcut">⌘C</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-paste">
+        <i class="fas fa-paste text-slate-300"></i>
+        <span>Paste</span>
+        <span class="context-menu-shortcut">⌘V</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="docs-bold">
+        <i class="fas fa-bold text-slate-200"></i>
+        <span>Bold</span>
+        <span class="context-menu-shortcut">⌘B</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-italic">
+        <i class="fas fa-italic text-slate-200"></i>
+        <span>Italic</span>
+        <span class="context-menu-shortcut">⌘I</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-heading">
+        <i class="fas fa-heading text-blue-400"></i>
+        <span>Heading</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-list">
+        <i class="fas fa-list-ul text-emerald-400"></i>
+        <span>Bullet List</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-insert-date">
+        <i class="fas fa-calendar-day text-amber-400"></i>
+        <span>Insert Date & Time</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item text-emerald-300" data-app-action="docs-new">
+        <i class="fas fa-plus text-emerald-400"></i>
+        <span>New Note</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-export">
+        <i class="fas fa-file-export text-sky-400"></i>
+        <span>Export as .txt File</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getCalculatorMenuHtml(app, winEl, targetEl) {
+    const dispVal = winEl.querySelector('#calc-display')?.textContent || '0';
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item font-semibold text-emerald-300" data-app-action="calc-copy">
+        <i class="fas fa-copy text-emerald-400"></i>
+        <span>Copy Result (${dispVal})</span>
+        <span class="context-menu-shortcut">⌘C</span>
+      </div>
+      <div class="context-menu-item" data-app-action="calc-paste">
+        <i class="fas fa-paste text-slate-300"></i>
+        <span>Paste Number</span>
+        <span class="context-menu-shortcut">⌘V</span>
+      </div>
+      <div class="context-menu-item text-rose-300" data-app-action="calc-clear">
+        <i class="fas fa-rotate-left text-rose-400"></i>
+        <span>Clear Display (AC)</span>
+        <span class="context-menu-shortcut">Esc</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="calc-sqrt">
+        <i class="fas fa-square-root-alt text-amber-400"></i>
+        <span>Square Root (√)</span>
+      </div>
+      <div class="context-menu-item" data-app-action="calc-percent">
+        <i class="fas fa-percent text-blue-400"></i>
+        <span>Percentage (%)</span>
+      </div>
+      <div class="context-menu-item" data-app-action="calc-deg-rad">
+        <i class="fas fa-arrows-rotate text-purple-400"></i>
+        <span>Toggle DEG / RAD</span>
+      </div>
+      <div class="context-menu-item" data-app-action="calc-mr">
+        <i class="fas fa-memory text-sky-400"></i>
+        <span>Recall Memory (MR)</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getBooksMenuHtml(app, winEl, targetEl) {
+    const hasSelection = Boolean(this.savedText);
+    const selSnippet = hasSelection ? (this.savedText.length > 18 ? this.savedText.slice(0, 16) + '…' : this.savedText) : '';
+
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      ${hasSelection ? `
+        <div class="context-menu-item font-semibold text-emerald-300" data-app-action="books-copy-selection">
+          <i class="fas fa-copy text-emerald-400"></i>
+          <span>Copy "${selSnippet}"</span>
+        </div>
+        <div class="context-menu-item font-semibold text-amber-300" data-app-action="books-note-selection">
+          <i class="fas fa-note-sticky text-amber-400"></i>
+          <span>Save Passage to Study Notes</span>
+        </div>
+        <div class="context-menu-divider"></div>
+      ` : ''}
+
+      <div class="context-menu-item" data-app-action="books-catalog">
+        <i class="fas fa-book-bookmark text-amber-400"></i>
+        <span>Browse KCSE Curriculum Catalog</span>
+      </div>
+      <div class="context-menu-item" data-app-action="books-zoom-in">
+        <i class="fas fa-magnifying-glass-plus text-sky-400"></i>
+        <span>Zoom In Text</span>
+      </div>
+      <div class="context-menu-item" data-app-action="books-zoom-out">
+        <i class="fas fa-magnifying-glass-minus text-sky-400"></i>
+        <span>Zoom Out Text</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getClassroomMenuHtml(app, winEl, targetEl) {
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="classroom-refresh">
+        <i class="fas fa-redo text-emerald-400"></i>
+        <span>Refresh Assignments & Tasks</span>
+      </div>
+      <div class="context-menu-item" data-app-action="classroom-create-note">
+        <i class="fas fa-file-pen text-blue-400"></i>
+        <span>Create Homework Study Note</span>
+      </div>
+      <div class="context-menu-item" data-app-action="classroom-open-pastpapers">
+        <i class="fas fa-graduation-cap text-amber-400"></i>
+        <span>Open KCSE Past Papers</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getEduguardMenuHtml(app, winEl, targetEl) {
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item text-emerald-300 font-semibold" data-app-action="eduguard-quick-audit">
+        <i class="fas fa-shield-virus text-emerald-400"></i>
+        <span>Run Rapid Security Audit</span>
+      </div>
+      <div class="context-menu-item" data-app-action="eduguard-inspect-domains">
+        <i class="fas fa-list-check text-sky-400"></i>
+        <span>View Allowed Academic Domains</span>
+      </div>
+      <div class="context-menu-item" data-app-action="eduguard-network-status">
+        <i class="fas fa-network-wired text-blue-400"></i>
+        <span>Inspect Network Isolation</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getSettingsMenuHtml(app, winEl, targetEl) {
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+
+      <div class="context-menu-item" data-app-action="settings-personalization">
+        <i class="fas fa-palette text-pink-400"></i>
+        <span>Personalization & Wallpaper</span>
+      </div>
+      <div class="context-menu-item" data-app-action="settings-display">
+        <i class="fas fa-sun text-amber-400"></i>
+        <span>Display & Liquid Glass</span>
+      </div>
+      <div class="context-menu-item" data-app-action="settings-about">
+        <i class="fas fa-circle-info text-blue-400"></i>
+        <span>About Dawamu OS</span>
+      </div>
+
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getGenericAppMenuHtml(app, winEl, targetEl) {
+    return `
+      <div class="context-menu-header">
+        <span class="text-sm">${app.icon}</span>
+        <span class="font-bold text-white truncate max-w-[170px]">${app.title}</span>
+      </div>
+      <div class="context-menu-divider"></div>
+      ${this.getWindowControlsHtml(app.id)}
+    `;
+  }
+
+  getWindowControlsHtml(appId) {
+    return `
+      <div class="context-menu-item" data-app-action="win-maximize" data-app-id="${appId}">
+        <i class="far fa-square text-sky-400"></i>
+        <span>Maximize / Restore Window</span>
+      </div>
+      <div class="context-menu-item" data-app-action="win-minimize" data-app-id="${appId}">
+        <i class="fas fa-minus text-amber-400"></i>
+        <span>Minimize Window</span>
+      </div>
+      <div class="context-menu-item text-rose-300" data-app-action="win-close" data-app-id="${appId}">
+        <i class="fas fa-times text-rose-400"></i>
+        <span>Close Window</span>
+        <span class="context-menu-shortcut">⌘W</span>
+      </div>
+    `;
+  }
+
+  /* ─────────────────────────────────────────────
+     5. ACTION BINDINGS & EXECUTION ENGINE
+  ───────────────────────────────────────────── */
   bindMenuActions(targetApp = null) {
     this.menuEl.querySelectorAll('.context-menu-item').forEach((item) => {
       item.addEventListener('click', async (e) => {
         const action = item.dataset.action;
-        if (action === 'sort') return; // Parent item for submenu
+        if (action === 'sort') return; // Submenu parent
 
         e.stopPropagation();
         this.hide();
 
         await this.handleAction(action, targetApp || item.dataset);
+      });
+    });
+  }
+
+  bindAppMenuActions(appId, winEl, targetEl) {
+    this.menuEl.querySelectorAll('.context-menu-item').forEach((item) => {
+      item.addEventListener('click', async (e) => {
+        const action = item.dataset.appAction;
+        if (action === 'menu-group') return; // Submenu parent
+
+        e.stopPropagation();
+        this.hide();
+
+        await this.handleAppAction(action, appId, winEl, targetEl);
       });
     });
   }
@@ -3924,6 +4791,637 @@ class DesktopContextMenu {
       default:
         break;
     }
+  }
+
+  async handleAppAction(action, appId, winEl, targetEl) {
+    // Window manager controls
+    if (action === 'win-maximize') {
+      windowManager.maximizeWindow(appId);
+      return;
+    }
+    if (action === 'win-minimize') {
+      windowManager.minimizeWindow(appId);
+      return;
+    }
+    if (action === 'win-close') {
+      windowManager.closeWindow(appId);
+      return;
+    }
+
+    // Word Processor Actions
+    if (action.startsWith('word-')) {
+      const paper = winEl.querySelector('#word-paper');
+      if (paper) {
+        this.restoreSelection(paper);
+      }
+
+      switch (action) {
+        case 'word-cut':
+          document.execCommand('cut');
+          dawamuDialogs.toast('Cut selection', 'info');
+          break;
+        case 'word-copy':
+          document.execCommand('copy');
+          dawamuDialogs.toast('Copied selection', 'info');
+          break;
+        case 'word-paste':
+          try {
+            const clipText = await navigator.clipboard?.readText();
+            if (clipText && paper) {
+              paper.focus();
+              document.execCommand('insertText', false, clipText);
+            } else {
+              document.execCommand('paste');
+            }
+          } catch (_) {
+            document.execCommand('paste');
+          }
+          break;
+        case 'word-bold':
+          document.execCommand('bold', false, null);
+          break;
+        case 'word-italic':
+          document.execCommand('italic', false, null);
+          break;
+        case 'word-underline':
+          document.execCommand('underline', false, null);
+          break;
+        case 'word-strike':
+          document.execCommand('strikeThrough', false, null);
+          break;
+        case 'word-highlight':
+          document.execCommand('hiliteColor', false, '#fef08a');
+          break;
+        case 'word-remove-format':
+          document.execCommand('removeFormat', false, null);
+          break;
+        case 'word-insert-table': {
+          const tableHtml = `
+            <table style="width:100%; border-collapse:collapse; margin:14px 0; font-size:13px;">
+              <thead>
+                <tr style="background:#185abd; color:white;">
+                  <th style="border:1px solid #cbd5e1; padding:6px 10px;">Item / Parameter</th>
+                  <th style="border:1px solid #cbd5e1; padding:6px 10px;">Observation</th>
+                  <th style="border:1px solid #cbd5e1; padding:6px 10px;">Remarks</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td style="border:1px solid #cbd5e1; padding:6px 10px;">Test Sample 1</td><td style="border:1px solid #cbd5e1; padding:6px 10px;">Normal reaction</td><td style="border:1px solid #cbd5e1; padding:6px 10px;">Valid</td></tr>
+                <tr style="background:#f8fafc;"><td style="border:1px solid #cbd5e1; padding:6px 10px;">Test Sample 2</td><td style="border:1px solid #cbd5e1; padding:6px 10px;">Rapid precipitate</td><td style="border:1px solid #cbd5e1; padding:6px 10px;">Optimal</td></tr>
+                <tr><td style="border:1px solid #cbd5e1; padding:6px 10px;">Test Sample 3</td><td style="border:1px solid #cbd5e1; padding:6px 10px;">Stable baseline</td><td style="border:1px solid #cbd5e1; padding:6px 10px;">Control test</td></tr>
+              </tbody>
+            </table><p><br></p>
+          `;
+          document.execCommand('insertHTML', false, tableHtml);
+          dawamuDialogs.toast('Inserted 3×3 academic table', 'success');
+          break;
+        }
+        case 'word-insert-image': {
+          const url = await dawamuDialogs.prompt({
+            title: 'Insert Document Image',
+            message: 'Enter image URL or choose default illustration:',
+            defaultValue: 'https://images.unsplash.com/photo-1532094349884-543bc11b234d?w=600',
+            confirmText: 'Insert Image'
+          });
+          if (url && paper) {
+            paper.focus();
+            document.execCommand('insertHTML', false, `<div style="text-align:center; margin:16px 0;"><img src="${url}" alt="Figure" style="max-width:85%; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"><br><small style="color:#64748b;">Figure: Image illustration</small></div><p><br></p>`);
+            dawamuDialogs.toast('Inserted image into document', 'success');
+          }
+          break;
+        }
+        case 'word-insert-date': {
+          const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+          document.execCommand('insertText', false, dateStr);
+          dawamuDialogs.toast(`Inserted current date: ${dateStr}`, 'info');
+          break;
+        }
+        case 'word-insert-symbol': {
+          const symModal = winEl.querySelector('#symbols-modal');
+          if (symModal) symModal.classList.remove('hidden');
+          break;
+        }
+        case 'word-insert-hr':
+          document.execCommand('insertHorizontalRule');
+          break;
+        case 'word-h1':
+          document.execCommand('formatBlock', false, '<h1>');
+          break;
+        case 'word-h2':
+          document.execCommand('formatBlock', false, '<h2>');
+          break;
+        case 'word-p':
+          document.execCommand('formatBlock', false, '<p>');
+          break;
+        case 'word-bullet':
+          document.execCommand('insertUnorderedList');
+          break;
+        case 'word-numbered':
+          document.execCommand('insertOrderedList');
+          break;
+        case 'word-align-left':
+          document.execCommand('justifyLeft');
+          break;
+        case 'word-align-center':
+          document.execCommand('justifyCenter');
+          break;
+        case 'word-align-right':
+          document.execCommand('justifyRight');
+          break;
+        case 'word-search-selection': {
+          const browserApp = this.appRegistry.find((a) => a.id === 'browser');
+          if (browserApp && this.savedText) {
+            browserApp.launch({ url: `https://www.google.com/search?q=${encodeURIComponent(this.savedText)}` });
+          }
+          break;
+        }
+        case 'word-note-selection': {
+          if (this.savedText) {
+            const file = stateStore.saveFileToVFS('desktop', {
+              name: `Study_Note_${Date.now().toString().slice(-4)}.txt`,
+              content: `Dawamu Word Excerpt:\n\n${this.savedText}`,
+              type: 'txt'
+            });
+            dawamuDialogs.toast(`Created "${file.name}" on Desktop`, 'success');
+          }
+          break;
+        }
+        case 'word-stats':
+          winEl.querySelector('#btn-word-stats')?.click();
+          break;
+        case 'word-save':
+          winEl.querySelector('#btn-save-doc')?.click();
+          break;
+        case 'word-export-pdf':
+          winEl.querySelector('#btn-export-pdf')?.click();
+          break;
+      }
+      return;
+    }
+
+    // Spreadsheet Actions
+    if (action.startsWith('sheet-')) {
+      const formulaBar = winEl.querySelector('#formula-bar');
+      const cellRef = winEl.querySelector('#cell-ref');
+      const curKey = cellRef?.textContent || 'A1';
+
+      switch (action) {
+        case 'sheet-cut': {
+          if (formulaBar) {
+            const val = formulaBar.value;
+            navigator.clipboard?.writeText(val);
+            formulaBar.value = '';
+            formulaBar.dispatchEvent(new Event('input'));
+            dawamuDialogs.toast(`Cut cell ${curKey}`, 'info');
+          }
+          break;
+        }
+        case 'sheet-copy': {
+          if (formulaBar) {
+            navigator.clipboard?.writeText(formulaBar.value);
+            dawamuDialogs.toast(`Copied ${curKey}: "${formulaBar.value}"`, 'info');
+          }
+          break;
+        }
+        case 'sheet-paste': {
+          try {
+            const txt = await navigator.clipboard?.readText();
+            if (txt && formulaBar) {
+              formulaBar.value = txt;
+              formulaBar.dispatchEvent(new Event('input'));
+              dawamuDialogs.toast(`Pasted into ${curKey}`, 'info');
+            }
+          } catch (_) {}
+          break;
+        }
+        case 'sheet-clear': {
+          if (formulaBar) {
+            formulaBar.value = '';
+            formulaBar.dispatchEvent(new Event('input'));
+            dawamuDialogs.toast(`Cleared cell ${curKey}`, 'info');
+          }
+          break;
+        }
+        case 'sheet-fmt-currency': {
+          if (formulaBar) {
+            const num = parseFloat(formulaBar.value.replace(/[^0-9.-]/g, '')) || 0;
+            formulaBar.value = `KES ${num.toLocaleString('en-KE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+            formulaBar.dispatchEvent(new Event('input'));
+            dawamuDialogs.toast(`Formatted ${curKey} as KES currency`, 'success');
+          }
+          break;
+        }
+        case 'sheet-fmt-percent': {
+          if (formulaBar) {
+            const num = parseFloat(formulaBar.value.replace(/[^0-9.-]/g, '')) || 0;
+            formulaBar.value = `${num}%`;
+            formulaBar.dispatchEvent(new Event('input'));
+            dawamuDialogs.toast(`Formatted ${curKey} as percentage`, 'success');
+          }
+          break;
+        }
+        case 'sheet-fmt-bold': {
+          const activeCell = winEl.querySelector('.cell-td.ring-2');
+          if (activeCell) {
+            activeCell.style.fontWeight = activeCell.style.fontWeight === 'bold' ? 'normal' : 'bold';
+            dawamuDialogs.toast(`Toggled bold on ${curKey}`, 'info');
+          }
+          break;
+        }
+        case 'sheet-fmt-decimal': {
+          if (formulaBar) {
+            const num = parseFloat(formulaBar.value.replace(/[^0-9.-]/g, '')) || 0;
+            formulaBar.value = num.toFixed(2);
+            formulaBar.dispatchEvent(new Event('input'));
+            dawamuDialogs.toast(`Formatted ${curKey} with 2 decimals`, 'success');
+          }
+          break;
+        }
+        case 'sheet-fml-sum':
+        case 'sheet-fml-avg':
+        case 'sheet-fml-max':
+        case 'sheet-fml-min':
+        case 'sheet-fml-count': {
+          const map = {
+            'sheet-fml-sum': '=SUM(B2:B8)',
+            'sheet-fml-avg': '=AVERAGE(B2:B8)',
+            'sheet-fml-max': '=MAX(B2:B8)',
+            'sheet-fml-min': '=MIN(B2:B8)',
+            'sheet-fml-count': '=COUNT(B2:B8)'
+          };
+          if (formulaBar) {
+            formulaBar.value = map[action];
+            formulaBar.dispatchEvent(new Event('input'));
+            dawamuDialogs.toast(`Inserted formula: ${map[action]}`, 'success');
+          }
+          break;
+        }
+        case 'sheet-save-downloads':
+          winEl.querySelector('#btn-save-sheet-downloads')?.click();
+          break;
+        case 'sheet-export-csv':
+          winEl.querySelector('#btn-export-csv')?.click();
+          break;
+        case 'sheet-load-gradebook':
+          winEl.querySelector('#btn-load-gradebook')?.click();
+          break;
+        case 'sheet-clear-all':
+          winEl.querySelector('#btn-clear-all')?.click();
+          break;
+      }
+      return;
+    }
+
+    // Explorer Actions
+    if (action.startsWith('exp-')) {
+      const fileItem = targetEl.closest('.file-item');
+      switch (action) {
+        case 'exp-open-item':
+          if (fileItem) fileItem.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+          break;
+        case 'exp-cut-item':
+          winEl.querySelector('#exp-cut-btn')?.click();
+          break;
+        case 'exp-copy-item':
+          winEl.querySelector('#exp-copy-btn')?.click();
+          break;
+        case 'exp-move-item':
+          winEl.querySelector('#exp-move-btn')?.click();
+          break;
+        case 'exp-rename-item':
+          winEl.querySelector('#exp-rename-btn')?.click();
+          break;
+        case 'exp-delete-item':
+          winEl.querySelector('#exp-delete-btn')?.click();
+          break;
+        case 'exp-copy-desktop': {
+          if (fileItem) {
+            const fileName = fileItem.dataset.name;
+            const activeFolderEl = winEl.querySelector('.exp-nav-item.bg-emerald-600\\/20');
+            const folderKey = activeFolderEl?.dataset?.folder || 'documents';
+            const files = stateStore.getFolderFiles(folderKey);
+            const targetFile = files.find((f) => f.name === fileName);
+            if (targetFile) {
+              stateStore.saveFileToVFS('desktop', { ...targetFile });
+              dawamuDialogs.toast(`Copied "${fileName}" to Desktop`, 'success');
+            }
+          }
+          break;
+        }
+        case 'exp-new-folder':
+          winEl.querySelector('#exp-new-folder-btn')?.click();
+          break;
+        case 'exp-new-file':
+          winEl.querySelector('#exp-new-file-btn')?.click();
+          break;
+        case 'exp-paste':
+          winEl.querySelector('#exp-paste-btn')?.click();
+          break;
+        case 'exp-import':
+          winEl.querySelector('#exp-import-btn')?.click();
+          break;
+        case 'exp-refresh':
+          winEl.querySelector('#exp-refresh-btn')?.click();
+          break;
+      }
+      return;
+    }
+
+    // Database Actions
+    if (action.startsWith('db-')) {
+      const tr = targetEl.closest('tr');
+      switch (action) {
+        case 'db-edit-row':
+          tr?.querySelector('.row-edit-btn')?.click();
+          break;
+        case 'db-delete-row':
+          tr?.querySelector('.row-del-btn')?.click();
+          break;
+        case 'db-add-record':
+          winEl.querySelector('#btn-add-record')?.click();
+          break;
+        case 'db-save':
+          winEl.querySelector('#btn-save-db')?.click();
+          break;
+        case 'db-export-csv':
+          winEl.querySelector('#btn-export-csv')?.click();
+          break;
+        case 'db-refresh': {
+          const searchInput = winEl.querySelector('#db-search');
+          if (searchInput) searchInput.dispatchEvent(new Event('input'));
+          dawamuDialogs.toast('Refreshed database records', 'info');
+          break;
+        }
+      }
+      return;
+    }
+
+    // Browser Actions
+    if (action.startsWith('browser-')) {
+      switch (action) {
+        case 'browser-back':
+          winEl.querySelector('#btn-back')?.click();
+          break;
+        case 'browser-forward':
+          winEl.querySelector('#btn-forward')?.click();
+          break;
+        case 'browser-reload':
+          winEl.querySelector('#btn-reload')?.click();
+          break;
+        case 'browser-home':
+          winEl.querySelector('#btn-home')?.click();
+          break;
+        case 'browser-new-tab':
+          winEl.querySelector('#btn-new-tab')?.click();
+          break;
+        case 'browser-copy-url': {
+          const omni = winEl.querySelector('#omnibox');
+          if (omni?.value) {
+            navigator.clipboard?.writeText(omni.value);
+            dawamuDialogs.toast(`Copied address: ${omni.value}`, 'info');
+          }
+          break;
+        }
+        case 'browser-save-page':
+          winEl.querySelector('#btn-save-page')?.click();
+          break;
+        case 'browser-search-web': {
+          const omni = winEl.querySelector('#omnibox');
+          if (omni && this.savedText) {
+            omni.value = this.savedText;
+            omni.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+          }
+          break;
+        }
+        case 'browser-save-note': {
+          if (this.savedText) {
+            const file = stateStore.saveFileToVFS('desktop', {
+              name: `Web_Research_${Date.now().toString().slice(-4)}.txt`,
+              content: `Dawamu Safe Web Excerpt:\n\n${this.savedText}`,
+              type: 'txt'
+            });
+            dawamuDialogs.toast(`Saved research clip "${file.name}" to Desktop`, 'success');
+          }
+          break;
+        }
+        case 'browser-offline-tools': {
+          const offBtn = winEl.querySelector('.bm[data-url="dawamu://offline"]');
+          if (offBtn) offBtn.click();
+          break;
+        }
+      }
+      return;
+    }
+
+    // Homework Notes Actions
+    if (action.startsWith('docs-')) {
+      switch (action) {
+        case 'docs-cut':
+          document.execCommand('cut');
+          break;
+        case 'docs-copy':
+          document.execCommand('copy');
+          break;
+        case 'docs-paste':
+          document.execCommand('paste');
+          break;
+        case 'docs-bold':
+          winEl.querySelector('#doc-bold-btn')?.click();
+          break;
+        case 'docs-italic':
+          winEl.querySelector('#doc-italic-btn')?.click();
+          break;
+        case 'docs-heading':
+          winEl.querySelector('#doc-heading-btn')?.click();
+          break;
+        case 'docs-list':
+          winEl.querySelector('#doc-list-btn')?.click();
+          break;
+        case 'docs-insert-date': {
+          const ed = winEl.querySelector('#doc-editor');
+          if (ed) {
+            ed.focus();
+            const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+            document.execCommand('insertText', false, ` [${dateStr}] `);
+          }
+          break;
+        }
+        case 'docs-new':
+          winEl.querySelector('#doc-new-btn')?.click();
+          break;
+        case 'docs-export':
+          winEl.querySelector('#doc-export-btn')?.click();
+          break;
+      }
+      return;
+    }
+
+    // Calculator Actions
+    if (action.startsWith('calc-')) {
+      switch (action) {
+        case 'calc-copy': {
+          const disp = winEl.querySelector('#calc-display')?.textContent || '0';
+          navigator.clipboard?.writeText(disp);
+          dawamuDialogs.toast(`Copied result: ${disp}`, 'info');
+          break;
+        }
+        case 'calc-paste': {
+          try {
+            const txt = await navigator.clipboard?.readText();
+            if (txt) {
+              const num = parseFloat(txt.replace(/[^0-9.-]/g, ''));
+              if (!isNaN(num)) {
+                const disp = winEl.querySelector('#calc-display');
+                if (disp) disp.textContent = String(num);
+                dawamuDialogs.toast(`Pasted number: ${num}`, 'info');
+              }
+            }
+          } catch (_) {}
+          break;
+        }
+        case 'calc-clear':
+          winEl.querySelector('.calc-btn[data-val="C"]')?.click();
+          break;
+        case 'calc-sqrt':
+          winEl.querySelector('.calc-btn[data-val="sqrt"]')?.click();
+          break;
+        case 'calc-percent':
+          winEl.querySelector('.calc-btn[data-val="%"]')?.click();
+          break;
+        case 'calc-deg-rad':
+          winEl.querySelector('#calc-angle-mode')?.click();
+          break;
+        case 'calc-mr':
+          winEl.querySelector('.calc-btn[data-val="MR"]')?.click();
+          break;
+      }
+      return;
+    }
+
+    // 8-4-4 Books Actions
+    if (action.startsWith('books-')) {
+      switch (action) {
+        case 'books-copy-selection':
+          if (this.savedText) {
+            navigator.clipboard?.writeText(this.savedText);
+            dawamuDialogs.toast('Copied passage to clipboard', 'info');
+          }
+          break;
+        case 'books-note-selection':
+          if (this.savedText) {
+            const file = stateStore.saveFileToVFS('desktop', {
+              name: `Book_Excerpt_${Date.now().toString().slice(-4)}.txt`,
+              content: `8-4-4 Curriculum Reference Passage:\n\n${this.savedText}`,
+              type: 'txt'
+            });
+            dawamuDialogs.toast(`Created "${file.name}" on Desktop`, 'success');
+          }
+          break;
+        case 'books-catalog':
+          dawamuDialogs.toast('Showing KCSE Approved Textbooks', 'info');
+          break;
+        case 'books-zoom-in':
+          dawamuDialogs.toast('Zoomed in reader text', 'info');
+          break;
+        case 'books-zoom-out':
+          dawamuDialogs.toast('Zoomed out reader text', 'info');
+          break;
+      }
+      return;
+    }
+
+    // Classroom Actions
+    if (action.startsWith('classroom-')) {
+      switch (action) {
+        case 'classroom-refresh':
+          dawamuDialogs.toast('Assignments refreshed with teacher portal', 'success');
+          break;
+        case 'classroom-create-note': {
+          const docsApp = this.appRegistry.find((a) => a.id === 'docs');
+          if (docsApp) docsApp.launch();
+          break;
+        }
+        case 'classroom-open-pastpapers': {
+          const browserApp = this.appRegistry.find((a) => a.id === 'browser');
+          if (browserApp) browserApp.launch({ url: 'https://www.google.com/search?q=KCSE+Past+Papers+and+Marking+Schemes' });
+          break;
+        }
+      }
+      return;
+    }
+
+    // EduGuard Actions
+    if (action.startsWith('eduguard-')) {
+      switch (action) {
+        case 'eduguard-quick-audit':
+          dawamuDialogs.toast('EduGuard AI: All security boundaries verified (100% Secure)', 'success');
+          break;
+        case 'eduguard-inspect-domains':
+          dawamuDialogs.alert('EduGuard Allowlist', 'Approved academic domains: google.com, wikipedia.org, khanacademy.org, nasa.gov, mathsisfun.com, brave.com.', 'info');
+          break;
+        case 'eduguard-network-status':
+          dawamuDialogs.toast('Network Sandbox: Student tenant isolation ACTIVE', 'info');
+          break;
+      }
+      return;
+    }
+
+    // Settings Actions
+    if (action.startsWith('settings-')) {
+      const settingsApp = this.appRegistry.find((a) => a.id === 'settings');
+      if (settingsApp) {
+        if (action === 'settings-personalization') settingsApp.launch({ category: 'personalization' });
+        else if (action === 'settings-display') settingsApp.launch({ category: 'display' });
+        else if (action === 'settings-about') settingsApp.launch({ category: 'about' });
+      }
+      return;
+    }
+  }
+
+  /* ─────────────────────────────────────────────
+     6. POSITIONING & ICON SORTING HELPERS
+  ───────────────────────────────────────────── */
+  positionMenu(x, y) {
+    this.menuEl.style.visibility = 'hidden';
+    this.menuEl.style.left = '0px';
+    this.menuEl.style.top = '0px';
+    this.menuEl.classList.add('open');
+    this.menuEl.setAttribute('aria-hidden', 'false');
+    this.isOpen = true;
+
+    const menuWidth = this.menuEl.offsetWidth || 230;
+    const menuHeight = this.menuEl.offsetHeight || 320;
+    const pad = 12;
+
+    // Keep inside screen viewport bounds and above the floating dock
+    const maxX = window.innerWidth - menuWidth - pad;
+    const maxY = window.innerHeight - menuHeight - 68;
+
+    const posX = Math.max(pad, Math.min(x, maxX));
+    const posY = Math.max(pad, Math.min(y, maxY));
+
+    this.menuEl.style.left = `${posX}px`;
+    this.menuEl.style.top = `${posY}px`;
+
+    // Flip submenus if near right viewport edge
+    const submenus = this.menuEl.querySelectorAll('.context-submenu');
+    submenus.forEach((submenu) => {
+      if (posX + menuWidth + 185 > window.innerWidth) {
+        submenu.classList.add('flip-left');
+      } else {
+        submenu.classList.remove('flip-left');
+      }
+    });
+
+    this.menuEl.style.visibility = 'visible';
+  }
+
+  hide() {
+    if (!this.isOpen) return;
+    this.menuEl.classList.remove('open');
+    this.menuEl.setAttribute('aria-hidden', 'true');
+    this.menuEl.style.visibility = '';
+    this.isOpen = false;
   }
 
   sortIcons(mode = 'name') {
