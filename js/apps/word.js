@@ -825,6 +825,7 @@ export function createWordApp(options = {}) {
     markDirty();
     updateRibbonActiveStates();
     updateDocumentMetrics();
+    paper.dispatchEvent(new Event('input', { bubbles: true }));
   }
 
   function applyFontSize(sizeStr) {
@@ -1642,6 +1643,11 @@ export function createWordApp(options = {}) {
     autoSaveIntervalMs: AUTO_SAVE_INTERVAL_MS,
     isDirty: () => isDirty,
     getTitle: () => titleInput.value.trim() || currentDocTitle,
+    executeFormat: (cmd, value = null) => executeFormat(cmd, value),
+    saveSelection: () => saveSelection(),
+    restoreSelection: () => restoreSelection(),
+    getSelectionRange: () => savedSelectionRange,
+    setSelectionRange: (r) => { savedSelectionRange = r; },
     saveNow: () => saveDocument(currentFolderKey, false),
     triggerAutoSaveNow: () => saveDocumentSilently(currentFolderKey),
     discardChanges: () => {

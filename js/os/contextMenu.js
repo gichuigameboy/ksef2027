@@ -38,6 +38,10 @@ class DesktopContextMenu {
       document.body.appendChild(existing);
     }
     this.menuEl = existing;
+    this.menuEl.addEventListener('mousedown', (e) => {
+      // Crucial: Prevent context menu interactions from stealing focus and collapsing selection in contenteditable
+      e.preventDefault();
+    });
 
     this.attachEvents();
   }
@@ -62,7 +66,8 @@ class DesktopContextMenu {
 
         const appId = winEl.id.replace('window-', '');
         windowManager.focusWindow(appId);
-        this.saveCurrentSelection();
+        const container = winEl.querySelector('#word-paper') || winEl.querySelector('#doc-editor');
+        this.saveCurrentSelection(e, container);
         this.showAppContextMenu(e.clientX, e.clientY, appId, winEl, e.target);
         return;
       }
@@ -117,16 +122,64 @@ class DesktopContextMenu {
     window.addEventListener('resize', () => this.hide());
   }
 
-  saveCurrentSelection() {
-    const sel = window.getSelection();
-    if (sel && sel.rangeCount > 0) {
-      try {
-        this.savedRange = sel.getRangeAt(0).cloneRange();
-        this.savedText = sel.toString().trim();
-      } catch (_) {
-        this.savedRange = null;
-        this.savedText = '';
+  saveCurrentSelection(e = null, container = null) {
+    this.lastClickX = e?.clientX ?? null;
+    this.lastClickY = e?.clientY ?? null;
+    this.lastTargetEl = e?.target ?? null;
+
+    // 1. Resolve point range from right-click coordinates if valid mouse coordinates provided
+    let pointRange = null;
+    if (e && typeof e.clientX === 'number' && typeof e.clientY === 'number' && (e.clientX > 0 || e.clientY > 0)) {
+      if (document.caretRangeFromPoint) {
+        pointRange = document.caretRangeFromPoint(e.clientX, e.clientY);
+      } else if (document.caretPositionFromPoint) {
+        const pos = document.caretPositionFromPoint(e.clientX, e.clientY);
+        if (pos) {
+          pointRange = document.createRange();
+          pointRange.setStart(pos.offsetNode, pos.offset);
+          pointRange.setEnd(pos.offsetNode, pos.offset);
+        }
       }
+    }
+
+    const sel = window.getSelection();
+
+    // 2. If user already had an active highlighted selection inside container:
+    if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+      const range = sel.getRangeAt(0);
+      if (!container || container.contains(range.commonAncestorContainer) || container === range.commonAncestorContainer) {
+        let isInsideSelection = true;
+        // If a physical click point inside the container was detected, check if it was on or outside the selection
+        if (pointRange && (!container || container.contains(pointRange.startContainer) || container === pointRange.startContainer)) {
+          try {
+            isInsideSelection = (range.comparePoint(pointRange.startContainer, pointRange.startOffset) === 0);
+          } catch (_) {
+            isInsideSelection = true;
+          }
+        }
+        if (isInsideSelection) {
+          this.savedRange = range.cloneRange();
+          this.savedText = sel.toString().trim();
+          return;
+        }
+      }
+    }
+
+    // 3. Right-click point range inside container
+    if (pointRange && (!container || container.contains(pointRange.startContainer) || container === pointRange.startContainer)) {
+      this.savedRange = pointRange.cloneRange();
+      this.savedText = this.savedRange.toString().trim();
+    } else if (sel && sel.rangeCount > 0 && (!container || container.contains(sel.getRangeAt(0).startContainer) || container === sel.getRangeAt(0).startContainer)) {
+      this.savedRange = sel.getRangeAt(0).cloneRange();
+      this.savedText = sel.toString().trim();
+    } else if (e?.target && container && container.contains(e.target)) {
+      const r = document.createRange();
+      r.selectNodeContents(e.target);
+      this.savedRange = r;
+      this.savedText = e.target.textContent.trim();
+    } else if (sel && sel.rangeCount > 0) {
+      this.savedRange = sel.getRangeAt(0).cloneRange();
+      this.savedText = sel.toString().trim();
     } else {
       this.savedRange = null;
       this.savedText = '';
@@ -135,7 +188,9 @@ class DesktopContextMenu {
 
   restoreSelection(container) {
     if (container && typeof container.focus === 'function') {
-      container.focus();
+      try {
+        container.focus();
+      } catch (_) {}
     }
     if (this.savedRange) {
       try {
@@ -144,6 +199,100 @@ class DesktopContextMenu {
         sel.addRange(this.savedRange);
       } catch (_) {}
     }
+  }
+
+  ensureFormattingSelection(container, targetEl, mode = 'word') {
+    this.restoreSelection(container);
+    const sel = window.getSelection();
+
+    // If an explicit non-collapsed selection was highlighted by user inside container, preserve it!
+    if (this.savedRange && !this.savedRange.collapsed) {
+      if (!container || container.contains(this.savedRange.commonAncestorContainer) || container === this.savedRange.commonAncestorContainer) {
+        return this.savedRange;
+      }
+    }
+
+    // Word Mode: for character/font formatting (bold, italic, underline, strike, highlight, clear format)
+    if (mode === 'word') {
+      let range = sel && sel.rangeCount > 0 ? sel.getRangeAt(0) : this.savedRange;
+      if ((!range || (container && !container.contains(range.startContainer))) && this.lastClickX != null && this.lastClickY != null && document.caretRangeFromPoint) {
+        range = document.caretRangeFromPoint(this.lastClickX, this.lastClickY);
+      }
+
+      if (range && range.startContainer) {
+        let node = range.startContainer;
+        let offset = range.startOffset;
+
+        if (node.nodeType === Node.ELEMENT_NODE && node.childNodes.length > 0) {
+          const childIdx = Math.min(offset, node.childNodes.length - 1);
+          node = node.childNodes[childIdx];
+          if (node.nodeType === Node.ELEMENT_NODE && node.firstChild) {
+            node = node.firstChild;
+          }
+        }
+
+        if (node && node.nodeType === Node.TEXT_NODE) {
+          const text = node.nodeValue || '';
+          let start = Math.min(Math.max(0, offset), text.length);
+          let end = start;
+
+          // Expand backwards to beginning of word
+          while (start > 0 && /\S/.test(text.charAt(start - 1))) {
+            start--;
+          }
+          // Expand forwards to end of word
+          while (end < text.length && /\S/.test(text.charAt(end))) {
+            end++;
+          }
+
+          // Strip leading & trailing punctuation so formatting applies cleanly to the word
+          while (start < end && /^[«"'(\[{"'`]/i.test(text.charAt(start))) {
+            start++;
+          }
+          while (end > start && /[»"')\]}"'`,.:;!?]/i.test(text.charAt(end - 1))) {
+            end--;
+          }
+
+          if (end > start) {
+            const wordRange = document.createRange();
+            wordRange.setStart(node, start);
+            wordRange.setEnd(node, end);
+            sel.removeAllRanges();
+            sel.addRange(wordRange);
+            this.savedRange = wordRange.cloneRange();
+            return wordRange;
+          }
+        }
+      }
+
+      // Fallback: leaf element under click
+      const el = targetEl || this.lastTargetEl;
+      if (el && container && container.contains(el) && el !== container) {
+        const r = document.createRange();
+        r.selectNodeContents(el);
+        sel.removeAllRanges();
+        sel.addRange(r);
+        this.savedRange = r.cloneRange();
+        return r;
+      }
+    }
+
+    // Block Mode: for paragraph styles, headings, lists, alignment
+    if (mode === 'block') {
+      const el = targetEl || this.lastTargetEl;
+      const block = el?.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote') ||
+                    (sel && sel.anchorNode ? (sel.anchorNode.nodeType === Node.ELEMENT_NODE ? sel.anchorNode : sel.anchorNode.parentElement)?.closest('p, h1, h2, h3, h4, h5, h6, li, blockquote') : null);
+      if (block && container && container.contains(block)) {
+        const blockRange = document.createRange();
+        blockRange.selectNodeContents(block);
+        sel.removeAllRanges();
+        sel.addRange(blockRange);
+        this.savedRange = blockRange.cloneRange();
+        return blockRange;
+      }
+    }
+
+    return null;
   }
 
   /* ─────────────────────────────────────────────
@@ -885,6 +1034,11 @@ class DesktopContextMenu {
         <span>Italic</span>
         <span class="context-menu-shortcut">⌘I</span>
       </div>
+      <div class="context-menu-item" data-app-action="docs-underline">
+        <i class="fas fa-underline text-slate-200"></i>
+        <span>Underline</span>
+        <span class="context-menu-shortcut">⌘U</span>
+      </div>
       <div class="context-menu-item" data-app-action="docs-heading">
         <i class="fas fa-heading text-blue-400"></i>
         <span>Heading</span>
@@ -892,6 +1046,10 @@ class DesktopContextMenu {
       <div class="context-menu-item" data-app-action="docs-list">
         <i class="fas fa-list-ul text-emerald-400"></i>
         <span>Bullet List</span>
+      </div>
+      <div class="context-menu-item" data-app-action="docs-clear-format">
+        <i class="fas fa-remove-format text-rose-300"></i>
+        <span>Clear Formatting</span>
       </div>
       <div class="context-menu-item" data-app-action="docs-insert-date">
         <i class="fas fa-calendar-day text-amber-400"></i>
@@ -1132,7 +1290,14 @@ class DesktopContextMenu {
     this.menuEl.querySelectorAll('.context-menu-item').forEach((item) => {
       item.addEventListener('click', async (e) => {
         const action = item.dataset.appAction;
-        if (action === 'menu-group') return; // Submenu parent
+        if (action === 'menu-group') {
+          // Toggle submenu-open class so click works cleanly on touchpads / touchscreens
+          e.stopPropagation();
+          const wasOpen = item.classList.contains('submenu-open');
+          this.menuEl.querySelectorAll('.has-submenu').forEach(sm => sm.classList.remove('submenu-open'));
+          if (!wasOpen) item.classList.add('submenu-open');
+          return;
+        }
 
         e.stopPropagation();
         this.hide();
@@ -1288,16 +1453,19 @@ class DesktopContextMenu {
     // Word Processor Actions
     if (action.startsWith('word-')) {
       const paper = winEl.querySelector('#word-paper');
-      if (paper) {
-        this.restoreSelection(paper);
-      }
+      const bodyEl = winEl.querySelector('#body-word');
+      const appRoot = bodyEl?.firstElementChild;
+      const controller = appRoot?.__dawamuAppController;
 
       switch (action) {
         case 'word-cut':
+          this.ensureFormattingSelection(paper, targetEl, 'word');
           document.execCommand('cut');
+          paper?.dispatchEvent(new Event('input', { bubbles: true }));
           dawamuDialogs.toast('Cut selection', 'info');
           break;
         case 'word-copy':
+          this.ensureFormattingSelection(paper, targetEl, 'word');
           document.execCommand('copy');
           dawamuDialogs.toast('Copied selection', 'info');
           break;
@@ -1305,34 +1473,92 @@ class DesktopContextMenu {
           try {
             const clipText = await navigator.clipboard?.readText();
             if (clipText && paper) {
-              paper.focus();
+              this.restoreSelection(paper);
               document.execCommand('insertText', false, clipText);
+              paper.dispatchEvent(new Event('input', { bubbles: true }));
             } else {
+              this.restoreSelection(paper);
               document.execCommand('paste');
             }
           } catch (_) {
+            this.restoreSelection(paper);
             document.execCommand('paste');
           }
           break;
-        case 'word-bold':
-          document.execCommand('bold', false, null);
+        case 'word-bold': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'word');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('bold');
+          } else {
+            document.execCommand('bold', false, null);
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Applied Bold', 'info');
           break;
-        case 'word-italic':
-          document.execCommand('italic', false, null);
+        }
+        case 'word-italic': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'word');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('italic');
+          } else {
+            document.execCommand('italic', false, null);
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Applied Italic', 'info');
           break;
-        case 'word-underline':
-          document.execCommand('underline', false, null);
+        }
+        case 'word-underline': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'word');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('underline');
+          } else {
+            document.execCommand('underline', false, null);
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Applied Underline', 'info');
           break;
-        case 'word-strike':
-          document.execCommand('strikeThrough', false, null);
+        }
+        case 'word-strike': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'word');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('strikeThrough');
+          } else {
+            document.execCommand('strikeThrough', false, null);
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Applied Strikethrough', 'info');
           break;
-        case 'word-highlight':
-          document.execCommand('hiliteColor', false, '#fef08a');
+        }
+        case 'word-highlight': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'word');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('hiliteColor', '#fef08a');
+          } else {
+            document.execCommand('hiliteColor', false, '#fef08a');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Highlighted in Yellow', 'info');
           break;
-        case 'word-remove-format':
-          document.execCommand('removeFormat', false, null);
+        }
+        case 'word-remove-format': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'word');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('removeFormat');
+          } else {
+            document.execCommand('removeFormat', false, null);
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Cleared Formatting', 'info');
           break;
+        }
         case 'word-insert-table': {
+          this.restoreSelection(paper);
           const tableHtml = `
             <table style="width:100%; border-collapse:collapse; margin:14px 0; font-size:13px;">
               <thead>
@@ -1350,10 +1576,12 @@ class DesktopContextMenu {
             </table><p><br></p>
           `;
           document.execCommand('insertHTML', false, tableHtml);
+          paper?.dispatchEvent(new Event('input', { bubbles: true }));
           dawamuDialogs.toast('Inserted 3×3 academic table', 'success');
           break;
         }
         case 'word-insert-image': {
+          this.restoreSelection(paper);
           const url = await dawamuDialogs.prompt({
             title: 'Insert Document Image',
             message: 'Enter image URL or choose default illustration:',
@@ -1363,13 +1591,16 @@ class DesktopContextMenu {
           if (url && paper) {
             paper.focus();
             document.execCommand('insertHTML', false, `<div style="text-align:center; margin:16px 0;"><img src="${url}" alt="Figure" style="max-width:85%; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1);"><br><small style="color:#64748b;">Figure: Image illustration</small></div><p><br></p>`);
+            paper.dispatchEvent(new Event('input', { bubbles: true }));
             dawamuDialogs.toast('Inserted image into document', 'success');
           }
           break;
         }
         case 'word-insert-date': {
+          this.restoreSelection(paper);
           const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
           document.execCommand('insertText', false, dateStr);
+          paper?.dispatchEvent(new Event('input', { bubbles: true }));
           dawamuDialogs.toast(`Inserted current date: ${dateStr}`, 'info');
           break;
         }
@@ -1379,32 +1610,103 @@ class DesktopContextMenu {
           break;
         }
         case 'word-insert-hr':
+          this.restoreSelection(paper);
           document.execCommand('insertHorizontalRule');
+          paper?.dispatchEvent(new Event('input', { bubbles: true }));
           break;
-        case 'word-h1':
-          document.execCommand('formatBlock', false, '<h1>');
+        case 'word-h1': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('formatBlock', '<h1>');
+          } else {
+            document.execCommand('formatBlock', false, '<h1>');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Formatted as Heading 1', 'info');
           break;
-        case 'word-h2':
-          document.execCommand('formatBlock', false, '<h2>');
+        }
+        case 'word-h2': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('formatBlock', '<h2>');
+          } else {
+            document.execCommand('formatBlock', false, '<h2>');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Formatted as Heading 2', 'info');
           break;
-        case 'word-p':
-          document.execCommand('formatBlock', false, '<p>');
+        }
+        case 'word-p': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('formatBlock', '<p>');
+          } else {
+            document.execCommand('formatBlock', false, '<p>');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Formatted as Normal Paragraph', 'info');
           break;
-        case 'word-bullet':
-          document.execCommand('insertUnorderedList');
+        }
+        case 'word-bullet': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('insertUnorderedList');
+          } else {
+            document.execCommand('insertUnorderedList');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Applied Bulleted List', 'info');
           break;
-        case 'word-numbered':
-          document.execCommand('insertOrderedList');
+        }
+        case 'word-numbered': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('insertOrderedList');
+          } else {
+            document.execCommand('insertOrderedList');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          dawamuDialogs.toast('Applied Numbered List', 'info');
           break;
-        case 'word-align-left':
-          document.execCommand('justifyLeft');
+        }
+        case 'word-align-left': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('justifyLeft');
+          } else {
+            document.execCommand('justifyLeft');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
           break;
-        case 'word-align-center':
-          document.execCommand('justifyCenter');
+        }
+        case 'word-align-center': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('justifyCenter');
+          } else {
+            document.execCommand('justifyCenter');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
           break;
-        case 'word-align-right':
-          document.execCommand('justifyRight');
+        }
+        case 'word-align-right': {
+          const rng = this.ensureFormattingSelection(paper, targetEl, 'block');
+          if (controller?.setSelectionRange && rng) controller.setSelectionRange(rng);
+          if (controller?.executeFormat) {
+            controller.executeFormat('justifyRight');
+          } else {
+            document.execCommand('justifyRight');
+            paper?.dispatchEvent(new Event('input', { bubbles: true }));
+          }
           break;
+        }
         case 'word-search-selection': {
           const browserApp = this.appRegistry.find((a) => a.id === 'browser');
           if (browserApp && this.savedText) {
@@ -1692,34 +1994,77 @@ class DesktopContextMenu {
 
     // Homework Notes Actions
     if (action.startsWith('docs-')) {
+      const editorEl = winEl.querySelector('#doc-editor');
+      if (editorEl) {
+        this.restoreSelection(editorEl);
+      }
       switch (action) {
         case 'docs-cut':
+          this.ensureFormattingSelection(editorEl, targetEl, 'word');
           document.execCommand('cut');
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
           break;
         case 'docs-copy':
+          this.ensureFormattingSelection(editorEl, targetEl, 'word');
           document.execCommand('copy');
+          dawamuDialogs.toast('Copied selection', 'info');
           break;
         case 'docs-paste':
-          document.execCommand('paste');
+          try {
+            const clipText = await navigator.clipboard?.readText();
+            if (clipText && editorEl) {
+              editorEl.focus();
+              document.execCommand('insertText', false, clipText);
+              editorEl.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+              document.execCommand('paste');
+            }
+          } catch (_) {
+            document.execCommand('paste');
+          }
           break;
         case 'docs-bold':
-          winEl.querySelector('#doc-bold-btn')?.click();
+          this.ensureFormattingSelection(editorEl, targetEl, 'word');
+          document.execCommand('bold', false, null);
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
+          dawamuDialogs.toast('Applied Bold', 'info');
           break;
         case 'docs-italic':
-          winEl.querySelector('#doc-italic-btn')?.click();
+          this.ensureFormattingSelection(editorEl, targetEl, 'word');
+          document.execCommand('italic', false, null);
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
+          dawamuDialogs.toast('Applied Italic', 'info');
+          break;
+        case 'docs-underline':
+          this.ensureFormattingSelection(editorEl, targetEl, 'word');
+          document.execCommand('underline', false, null);
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
+          dawamuDialogs.toast('Applied Underline', 'info');
+          break;
+        case 'docs-clear-format':
+          this.ensureFormattingSelection(editorEl, targetEl, 'word');
+          document.execCommand('removeFormat', false, null);
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
+          dawamuDialogs.toast('Cleared Formatting', 'info');
           break;
         case 'docs-heading':
-          winEl.querySelector('#doc-heading-btn')?.click();
+          this.ensureFormattingSelection(editorEl, targetEl, 'block');
+          document.execCommand('formatBlock', false, '<h2>');
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
+          dawamuDialogs.toast('Applied Heading', 'info');
           break;
         case 'docs-list':
-          winEl.querySelector('#doc-list-btn')?.click();
+          this.ensureFormattingSelection(editorEl, targetEl, 'block');
+          document.execCommand('insertUnorderedList');
+          editorEl?.dispatchEvent(new Event('input', { bubbles: true }));
+          dawamuDialogs.toast('Applied List', 'info');
           break;
         case 'docs-insert-date': {
-          const ed = winEl.querySelector('#doc-editor');
-          if (ed) {
-            ed.focus();
+          if (editorEl) {
+            this.restoreSelection(editorEl);
             const dateStr = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
             document.execCommand('insertText', false, ` [${dateStr}] `);
+            editorEl.dispatchEvent(new Event('input', { bubbles: true }));
           }
           break;
         }

@@ -7593,8 +7593,18 @@ input[type="text"], input[type="search"], textarea, select {
   z-index: 100001;
 }
 
-.context-menu-item.has-submenu:hover > .context-submenu {
+.context-menu-item.has-submenu:hover > .context-submenu,
+.context-menu-item.has-submenu.submenu-open > .context-submenu {
   display: flex;
+}
+
+.context-submenu::before {
+  content: '';
+  position: absolute;
+  top: -6px;
+  bottom: -6px;
+  left: -12px;
+  width: 14px;
 }
 
 .context-submenu.flip-left {
@@ -7602,5 +7612,11 @@ input[type="text"], input[type="search"], textarea, select {
   right: 100%;
   margin-left: 0;
   margin-right: 6px;
+}
+
+.context-submenu.flip-left::before {
+  left: auto;
+  right: -12px;
+  width: 14px;
 }
 .max-w-[170px] { max-width: 170px; }
