@@ -9,6 +9,7 @@ import { shelf } from './os/shelf.js';
 import { launcher } from './os/launcher.js';
 import { quickSettings } from './os/quickSettings.js';
 import { dawamuDialogs } from './os/dialogs.js';
+import { desktopContextMenu } from './os/contextMenu.js';
 
 import { createBrowserApp } from './apps/browser.js';
 import { createOfflineBrowserApp } from './apps/offlineBrowser.js';
@@ -791,6 +792,7 @@ function startDawamuOS() {
       const adminApp = appRegistry.find((a) => a.id === 'adminPanel');
       if (adminApp) adminApp.launch();
     });
+    desktopContextMenu.init({ desktopEl, appRegistry });
 
     // App Install Lock Close Listener
     document.getElementById('close-app-lock-modal')?.addEventListener('click', () => {

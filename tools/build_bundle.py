@@ -16,6 +16,7 @@ MODULES_IN_ORDER = [
     "js/os/launcher.js",
     "js/os/quickSettings.js",
     "js/os/shelf.js",
+    "js/os/contextMenu.js",
     "js/services/eduguardClient.js",
     "js/apps/offlineContent.js",
     "js/apps/books844.js",
