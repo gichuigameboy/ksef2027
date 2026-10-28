@@ -115,9 +115,16 @@ def main():
         chunks.append(transform_module(rel_path, src))
 
     out_path = os.path.join(ROOT, "js", "dawamu-bundle.js")
+    content = "\n".join(chunks)
     with open(out_path, "w", encoding="utf-8") as f:
-        f.write("\n".join(chunks))
+        f.write(content)
     print(f"Built {out_path} ({os.path.getsize(out_path)} bytes) from {len(MODULES_IN_ORDER)} modules.")
+
+    dist_out = os.path.join(ROOT, "dist-bootable", "dawamu-live-os", "opt", "dawamu-os", "js", "dawamu-bundle.js")
+    if os.path.exists(os.path.dirname(dist_out)):
+        with open(dist_out, "w", encoding="utf-8") as f:
+            f.write(content)
+        print(f"Synchronized bundle to {dist_out}")
 
 
 if __name__ == "__main__":

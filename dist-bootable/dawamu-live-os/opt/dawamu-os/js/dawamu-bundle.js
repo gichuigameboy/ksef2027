@@ -3140,7 +3140,7 @@ const { stateStore } = window.__dawamuModules;
 const { launcher } = window.__dawamuModules;
 const { quickSettings } = window.__dawamuModules;
 
-const PINNED_APP_IDS = ['explorer', 'browser', 'offlineBrowser', 'eduguard', 'word', 'spreadsheet', 'classroom'];
+const PINNED_APP_IDS = ['explorer', 'browser', 'eduguard', 'word', 'spreadsheet', 'classroom'];
 
 class Shelf {
   constructor() {
@@ -13424,7 +13424,7 @@ function createDocsApp(options = {}) {
     <div class="w-64 bg-[#040814] border-r border-white/10 p-3 flex flex-col gap-3 shrink-0">
       <div class="flex items-center justify-between">
         <h3 class="font-bold text-xs text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-          <i class="fas fa-book-open text-blue-400"></i> Homework Notes
+          <i class="fas fa-sticky-note text-amber-400"></i> Study Notes
         </h3>
         <button id="doc-new-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95">
           <i class="fas fa-plus text-[10px]"></i> New
@@ -13434,7 +13434,7 @@ function createDocsApp(options = {}) {
       <!-- Search Notes Filter -->
       <div class="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 flex items-center gap-2">
         <i class="fas fa-search text-slate-500 text-[10px]"></i>
-        <input id="notes-search-input" type="text" placeholder="Filter notes..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 w-full">
+        <input id="notes-search-input" type="text" placeholder="Search study notes..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 w-full">
       </div>
 
       <!-- Notes List -->
@@ -15599,8 +15599,8 @@ function createExplorerApp(options = {}) {
 
   const QUICK_ACCESS_KEYS = ['desktop', 'downloads', 'documents', 'books844', 'schoolwork', 'pictures'];
   const DRIVE_ITEMS = [
-    { name: 'Local Disk (C:)', size: '256 GB (182 GB free)', icon: 'fas fa-hdd text-slate-300', target: 'c_drive' },
-    { name: 'Dawamu Cloud Storage (D:)', size: '50 GB (44 GB free)', icon: 'fas fa-cloud text-emerald-400', target: 'cloud' }
+    { name: 'Student Workspace (VFS)', size: 'Encrypted Local Storage', icon: 'fas fa-hard-drive text-emerald-400', target: 'c_drive' },
+    { name: 'School Curriculum Drive', size: 'Form 1–4 Offline Bank', icon: 'fas fa-book text-amber-400', target: 'cloud' }
   ];
 
   async function loadRealDownloads() {
@@ -15879,7 +15879,7 @@ function createExplorerApp(options = {}) {
           ` : ''}
 
           <div>
-            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">This PC Drives</div>
+            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">Storage Drives</div>
             <div class="space-y-1">
               ${DRIVE_ITEMS.map(d => `
                 <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === d.target ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${d.target}" title="Drop files here to move or import into ${d.name}">
@@ -16453,6 +16453,7 @@ function createSettingsApp(options = {}) {
   root.className = 'flex flex-col h-full bg-[#181818] text-white font-sans select-none overflow-hidden';
 
   let currentCategory = options.category || 'personalization';
+  let isAdminUnlocked = Boolean(options.isAdminUnlocked);
   let cachedNetworkInfo = null;
   let isTestingLatency = false;
   let latencyResult = null;
@@ -16950,44 +16951,187 @@ function createSettingsApp(options = {}) {
           </div>
         `;
 
-      case 'security':
+      case 'security': {
+        const restrictions = stateStore.getState().restrictions || {};
+        if (!isAdminUnlocked) {
+          return `
+            <div class="max-w-2xl space-y-6">
+              <div>
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2.5">
+                  <i class="fas fa-shield-alt text-emerald-400 text-xl"></i>
+                  School District & Parental Policy
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Active educational restrictions, device guardrails, and curfew schedules.</p>
+              </div>
+
+              <div class="bg-[#242424] border border-white/5 rounded-2xl p-5 space-y-3 text-xs">
+                <div class="flex justify-between items-center py-2 border-b border-white/5">
+                  <div>
+                    <div class="font-bold text-white">Safe Web Browser Access</div>
+                    <div class="text-[10px] text-slate-400">Restricts unauthorized external web browsing</div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full ${restrictions.browserEnabled ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border-rose-500/30'} font-bold text-[10px] border">
+                    ${restrictions.browserEnabled ? 'Enabled' : 'Disabled'}
+                  </span>
+                </div>
+
+                <div class="flex justify-between items-center py-2 border-b border-white/5">
+                  <div>
+                    <div class="font-bold text-white">SafeSearch Enforcement</div>
+                    <div class="text-[10px] text-slate-400">Strict educational keyword & content filtering</div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full ${restrictions.safeSearch ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-amber-500/20 text-amber-300 border-amber-500/30'} font-bold text-[10px] border">
+                    ${restrictions.safeSearch ? 'Enforced' : 'Off'}
+                  </span>
+                </div>
+
+                <div class="flex justify-between items-center py-2 border-b border-white/5">
+                  <div>
+                    <div class="font-bold text-white">Study Focus Mode</div>
+                    <div class="text-[10px] text-slate-400">Locks non-study background tasks during class sessions</div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full ${restrictions.focusMode ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-300 border-slate-600/30'} font-bold text-[10px] border">
+                    ${restrictions.focusMode ? 'Active' : 'Inactive'}
+                  </span>
+                </div>
+
+                <div class="flex justify-between items-center py-2 border-b border-white/5">
+                  <div>
+                    <div class="font-bold text-white">App Store & External Installs</div>
+                    <div class="text-[10px] text-slate-400">Blocks unverified APKs and extensions</div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full ${restrictions.appInstallLock ? 'bg-rose-500/20 text-rose-300 border-rose-500/30' : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'} font-bold text-[10px] border">
+                    ${restrictions.appInstallLock ? 'Blocked' : 'Allowed'}
+                  </span>
+                </div>
+
+                <div class="flex justify-between items-center py-2">
+                  <div>
+                    <div class="font-bold text-white">Student Curfew Bedtime Schedule</div>
+                    <div class="text-[10px] text-slate-400">Lockout active between ${restrictions.curfewStart || '21:00'} and ${restrictions.curfewEnd || '07:00'}</div>
+                  </div>
+                  <span class="px-2.5 py-1 rounded-full ${restrictions.curfewEnabled ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : 'bg-slate-700/50 text-slate-300 border-slate-600/30'} font-bold text-[10px] border">
+                    ${restrictions.curfewEnabled ? 'Active' : 'Disabled'}
+                  </span>
+                </div>
+              </div>
+
+              <!-- Inline Security PIN Challenge to Unlock Full Controls -->
+              <div class="bg-gradient-to-r from-amber-950/40 to-slate-900 border border-amber-500/30 rounded-2xl p-6 text-center space-y-4 shadow-lg">
+                <div class="w-12 h-12 bg-amber-500/15 text-amber-400 rounded-2xl flex items-center justify-center text-xl mx-auto border border-amber-500/30">
+                  <i class="fas fa-lock"></i>
+                </div>
+                <div>
+                  <h3 class="text-sm font-bold text-white">Teacher & Parental Policy Control</h3>
+                  <p class="text-xs text-slate-400 max-w-sm mx-auto mt-1">Enter administrative PIN to modify educational whitelists, adjust curfew times, or toggle web restrictions.</p>
+                </div>
+                <div class="flex items-center justify-center gap-2 max-w-xs mx-auto">
+                  <input type="password" id="policy-pin-input" maxlength="6" placeholder="PIN"
+                    class="bg-slate-900 border border-slate-700 focus:border-amber-400 text-center tracking-[0.3em] font-mono text-sm py-2 px-3 rounded-xl text-white outline-none w-28">
+                  <button id="policy-unlock-btn" class="bg-amber-600 hover:bg-amber-500 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer shadow-md">
+                    Unlock Controls
+                  </button>
+                </div>
+                <div id="policy-pin-err" class="text-xs text-rose-400 min-h-[16px] hidden"></div>
+                <div class="text-[11px] text-slate-500">Evaluation Demo PIN: <code class="text-slate-400 font-mono">1234</code></div>
+              </div>
+            </div>
+          `;
+        }
+
+        // Unlocked View
         return `
           <div class="max-w-2xl space-y-6">
-            <div>
-              <h2 class="text-2xl font-bold text-white flex items-center gap-2.5">
-                <i class="fas fa-shield-alt text-emerald-400 text-xl"></i>
-                School District & Parental Policy
-              </h2>
-              <p class="text-xs text-slate-400 mt-1">Active educational restrictions, device guardrails, and curfew timings.</p>
+            <div class="flex items-center justify-between">
+              <div>
+                <h2 class="text-2xl font-bold text-white flex items-center gap-2.5">
+                  <i class="fas fa-shield-alt text-amber-400 text-xl"></i>
+                  Parental & District Policy (Unlocked)
+                </h2>
+                <p class="text-xs text-slate-400 mt-1">Live administration of educational guardrails and device policies.</p>
+              </div>
+              <button id="policy-relock-btn" class="px-3.5 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs text-slate-300 hover:text-white flex items-center gap-1.5 cursor-pointer transition-all">
+                <i class="fas fa-lock text-amber-400 text-xs"></i> Lock Policies
+              </button>
             </div>
 
-            <div class="bg-[#242424] border border-white/5 rounded-2xl p-5 space-y-3 text-xs">
-              <div class="flex justify-between items-center py-2 border-b border-white/5">
+            <!-- Restriction Switches Grid -->
+            <div class="grid grid-cols-2 gap-3.5">
+              <div class="bg-[#242424] p-4 rounded-2xl border border-white/5 flex items-center justify-between">
                 <div>
-                  <div class="font-bold text-white">App Store & External Installs</div>
-                  <div class="text-[10px] text-slate-400">Blocks unverified APKs and extensions</div>
+                  <h4 class="font-bold text-white text-xs">Web Browser Access</h4>
+                  <p class="text-[10px] text-slate-400">Allow or block web surfing.</p>
                 </div>
-                <span class="px-2.5 py-1 rounded-full bg-rose-500/20 text-rose-300 font-bold text-[10px] border border-rose-500/30">Enforced</span>
+                <input type="checkbox" id="set-toggle-browser" class="accent-emerald-500 w-4 h-4 cursor-pointer" ${restrictions.browserEnabled ? 'checked' : ''}>
               </div>
 
-              <div class="flex justify-between items-center py-2 border-b border-white/5">
+              <div class="bg-[#242424] p-4 rounded-2xl border border-white/5 flex items-center justify-between">
                 <div>
-                  <div class="font-bold text-white">Student Curfew Lockout Schedule</div>
-                  <div class="text-[10px] text-slate-400">Night curfew active from 9:00 PM to 7:00 AM</div>
+                  <h4 class="font-bold text-white text-xs">SafeSearch Filtering</h4>
+                  <p class="text-[10px] text-slate-400">Filter explicit search queries.</p>
                 </div>
-                <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">Active</span>
+                <input type="checkbox" id="set-toggle-safesearch" class="accent-emerald-500 w-4 h-4 cursor-pointer" ${restrictions.safeSearch ? 'checked' : ''}>
               </div>
 
-              <div class="flex justify-between items-center py-2">
+              <div class="bg-[#242424] p-4 rounded-2xl border border-white/5 flex items-center justify-between">
                 <div>
-                  <div class="font-bold text-white">Safe Browsing Whitelist Policy</div>
-                  <div class="text-[10px] text-slate-400">Restricts unsafe external navigation</div>
+                  <h4 class="font-bold text-white text-xs">Study Focus Mode</h4>
+                  <p class="text-[10px] text-slate-400">Lock non-educational apps.</p>
                 </div>
-                <span class="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold text-[10px] border border-emerald-500/30">Protected</span>
+                <input type="checkbox" id="set-toggle-focusmode" class="accent-emerald-500 w-4 h-4 cursor-pointer" ${restrictions.focusMode ? 'checked' : ''}>
+              </div>
+
+              <div class="bg-[#242424] p-4 rounded-2xl border border-white/5 flex items-center justify-between">
+                <div>
+                  <h4 class="font-bold text-white text-xs">Block External Installs</h4>
+                  <p class="text-[10px] text-slate-400">Prohibit downloading apps.</p>
+                </div>
+                <input type="checkbox" id="set-toggle-applock" class="accent-emerald-500 w-4 h-4 cursor-pointer" ${restrictions.appInstallLock ? 'checked' : ''}>
+              </div>
+            </div>
+
+            <!-- Curfew Schedule Configuration -->
+            <div class="bg-[#242424] p-5 rounded-2xl border border-white/5 space-y-4">
+              <div class="flex items-center justify-between border-b border-white/5 pb-3">
+                <div>
+                  <h4 class="font-bold text-white text-xs">Curfew Bedtime Lockdown</h4>
+                  <p class="text-[10px] text-slate-400">Locks the OS shell during student rest hours.</p>
+                </div>
+                <input type="checkbox" id="set-toggle-curfew" class="accent-emerald-500 w-4 h-4 cursor-pointer" ${restrictions.curfewEnabled ? 'checked' : ''}>
+              </div>
+
+              <div class="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <label class="block text-slate-400 text-[10px] mb-1">Lockdown Start Time</label>
+                  <input type="time" id="set-curfew-start" class="w-full bg-[#181818] border border-white/10 rounded-xl p-2.5 text-white font-mono outline-none focus:border-emerald-500" value="${restrictions.curfewStart || '21:00'}">
+                </div>
+                <div>
+                  <label class="block text-slate-400 text-[10px] mb-1">Unlock End Time</label>
+                  <input type="time" id="set-curfew-end" class="w-full bg-[#181818] border border-white/10 rounded-xl p-2.5 text-white font-mono outline-none focus:border-emerald-500" value="${restrictions.curfewEnd || '07:00'}">
+                </div>
+              </div>
+            </div>
+
+            <!-- Domain Blocklist Manager -->
+            <div class="bg-[#242424] p-5 rounded-2xl border border-white/5 space-y-3.5">
+              <h4 class="font-bold text-white text-xs">Restricted Domain Blocklist</h4>
+              <div class="flex gap-2">
+                <input type="text" id="set-new-domain" class="flex-1 bg-[#181818] border border-white/10 rounded-xl px-3 py-2 text-xs text-white outline-none focus:border-emerald-500 font-mono" placeholder="e.g. distracting-games.com">
+                <button id="set-add-domain-btn" class="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs px-4 py-2 rounded-xl transition-all cursor-pointer">Add</button>
+              </div>
+
+              <div class="flex flex-wrap gap-2 text-xs max-h-32 overflow-y-auto pt-1">
+                ${(restrictions.blockedDomains || []).map(d => `
+                  <span class="bg-rose-950/40 border border-rose-500/30 text-rose-300 px-3 py-1 rounded-full flex items-center gap-2 text-xs">
+                    ${d}
+                    <button class="set-del-domain-btn hover:text-white cursor-pointer" data-domain="${d}"><i class="fas fa-times text-[10px]"></i></button>
+                  </span>
+                `).join('')}
               </div>
             </div>
           </div>
         `;
+      }
 
       case 'about':
       default: {
@@ -17252,6 +17396,99 @@ function createSettingsApp(options = {}) {
       const sEl = root.querySelector('#set-storage-status');
       if (sEl) sEl.textContent = 'Virtual OS Storage Active';
     }
+
+    // Policy PIN Unlock Handler
+    const pinInput = root.querySelector('#policy-pin-input');
+    const unlockBtn = root.querySelector('#policy-unlock-btn');
+    const pinErr = root.querySelector('#policy-pin-err');
+
+    const handleUnlock = () => {
+      const pin = pinInput?.value?.trim() || '';
+      if (stateStore.verifyAdminPin(pin)) {
+        isAdminUnlocked = true;
+        render();
+        dawamuDialogs.toast('Administrator policy controls unlocked.', 'success');
+      } else {
+        if (pinErr) {
+          pinErr.textContent = 'Incorrect PIN. Please try again.';
+          pinErr.classList.remove('hidden');
+        }
+        if (pinInput) {
+          pinInput.value = '';
+          pinInput.focus();
+        }
+      }
+    };
+
+    unlockBtn?.addEventListener('click', handleUnlock);
+    pinInput?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') handleUnlock();
+    });
+
+    // Policy Re-lock
+    root.querySelector('#policy-relock-btn')?.addEventListener('click', () => {
+      isAdminUnlocked = false;
+      render();
+      dawamuDialogs.toast('Policy controls secured.', 'info');
+    });
+
+    // Unlocked Policy Toggles
+    root.querySelector('#set-toggle-browser')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ browserEnabled: e.target.checked });
+      dawamuDialogs.toast(`Browser access ${e.target.checked ? 'enabled' : 'disabled'}.`, 'info');
+    });
+
+    root.querySelector('#set-toggle-safesearch')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ safeSearch: e.target.checked });
+      dawamuDialogs.toast(`SafeSearch ${e.target.checked ? 'enforced' : 'disabled'}.`, 'info');
+    });
+
+    root.querySelector('#set-toggle-focusmode')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ focusMode: e.target.checked });
+      dawamuDialogs.toast(`Focus mode ${e.target.checked ? 'activated' : 'deactivated'}.`, 'info');
+    });
+
+    root.querySelector('#set-toggle-applock')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ appInstallLock: e.target.checked });
+      dawamuDialogs.toast(`App installs ${e.target.checked ? 'blocked' : 'allowed'}.`, 'info');
+    });
+
+    root.querySelector('#set-toggle-curfew')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ curfewEnabled: e.target.checked });
+      dawamuDialogs.toast(`Curfew lockdown ${e.target.checked ? 'activated' : 'disabled'}.`, 'info');
+    });
+
+    root.querySelector('#set-curfew-start')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ curfewStart: e.target.value });
+    });
+
+    root.querySelector('#set-curfew-end')?.addEventListener('change', (e) => {
+      stateStore.updateRestrictions({ curfewEnd: e.target.value });
+    });
+
+    // Blocked Domains Add & Delete
+    root.querySelector('#set-add-domain-btn')?.addEventListener('click', () => {
+      const dInput = root.querySelector('#set-new-domain');
+      const val = dInput?.value?.trim()?.toLowerCase();
+      if (!val) return;
+      const current = stateStore.getState().restrictions.blockedDomains || [];
+      if (!current.includes(val)) {
+        stateStore.updateRestrictions({ blockedDomains: [...current, val] });
+        render();
+        dawamuDialogs.toast(`Added ${val} to blocklist.`, 'success');
+      }
+    });
+
+    root.querySelectorAll('.set-del-domain-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const domain = btn.dataset.domain;
+        const current = stateStore.getState().restrictions.blockedDomains || [];
+        stateStore.updateRestrictions({ blockedDomains: current.filter(d => d !== domain) });
+        render();
+        dawamuDialogs.toast(`Removed ${domain} from blocklist.`, 'info');
+      });
+    });
+
   }
 
   // Apply the active user's personalization on startup
@@ -22791,7 +23028,7 @@ function startDawamuOS() {
     },
     {
       id: 'browser',
-      title: 'School Web Browser',
+      title: 'Web Browser (Safe Network)',
       icon: '<i class="fab fa-chrome text-blue-400"></i>',
       bgColor: 'bg-blue-600',
       keywords: ['web', 'internet', 'search', 'wikipedia', 'khan academy'],
@@ -22859,18 +23096,18 @@ function startDawamuOS() {
     },
     {
       id: 'docs',
-      title: 'Docs & Homework Notes',
-      icon: '<i class="fas fa-file-alt text-blue-300"></i>',
-      bgColor: 'bg-indigo-600',
-      keywords: ['docs', 'notes', 'homework', 'write', 'editor'],
+      title: 'Study Notes & Scratchpad',
+      icon: '<i class="fas fa-sticky-note text-amber-300"></i>',
+      bgColor: 'bg-amber-600',
+      keywords: ['notes', 'study notes', 'scratchpad', 'homework', 'revision', 'write', 'quick notes', 'docs'],
       launch: (opts = {}) => {
         if (opts && opts.fileName && windowManager.windows.has('docs')) {
           windowManager.closeWindow('docs', true);
         }
         windowManager.createWindow({
           id: 'docs',
-          title: opts.fileName ? `${opts.fileName} - Homework Notes` : 'Homework Notes & Rich Text Docs',
-          icon: '<i class="fas fa-file-alt text-blue-300"></i>',
+          title: opts.fileName ? `${opts.fileName} - Study Notes` : 'Study Notes & Scratchpad',
+          icon: '<i class="fas fa-sticky-note text-amber-300"></i>',
           content: () => createDocsApp(opts),
           width: 840,
           height: 560
@@ -22919,7 +23156,7 @@ function startDawamuOS() {
     },
     {
       id: 'database',
-      title: 'School Database',
+      title: 'Computer Studies Database (DBMS)',
       icon: '<i class="fas fa-database text-purple-400"></i>',
       bgColor: 'bg-purple-800',
       keywords: ['database', 'records', 'students', 'courses', 'library', 'sql', 'dbms'],
@@ -23007,15 +23244,15 @@ function startDawamuOS() {
     },
     {
       id: 'installer',
-      title: 'Install Dawamu OS to PC',
-      icon: '<i class="fas fa-download text-emerald-300"></i>',
+      title: 'System Diagnostics & Health',
+      icon: '<i class="fas fa-microchip text-emerald-300"></i>',
       bgColor: 'bg-emerald-800',
-      keywords: ['install', 'setup', 'disk', 'ssd', 'hdd', 'partition', 'bootable', 'drive', 'usb'],
+      keywords: ['diagnostics', 'health', 'system', 'integrity', 'check', 'verification', 'kiosk'],
       launch: () => {
         windowManager.createWindow({
           id: 'installer',
-          title: 'Dawamu OS Disk Installation Wizard',
-          icon: '<i class="fas fa-download text-emerald-300"></i>',
+          title: 'System Diagnostics & Environment Check',
+          icon: '<i class="fas fa-microchip text-emerald-300"></i>',
           content: () => createInstallerApp(),
           width: 820,
           height: 600
@@ -23165,9 +23402,11 @@ function startDawamuOS() {
     shelf.init(shelfEl, appRegistry);
     launcher.init(launcherEl, appRegistry);
     quickSettings.init(quickSettingsEl, () => {
-      // Open Admin Panel callback
-      const adminApp = appRegistry.find((a) => a.id === 'adminPanel');
-      if (adminApp) adminApp.launch();
+      // Open Parental & District Policy inside Settings
+      const settingsApp = appRegistry.find((a) => a.id === 'settings');
+      if (settingsApp) {
+        settingsApp.launch({ category: 'security' });
+      }
     });
     desktopContextMenu.init({ desktopEl, appRegistry });
 

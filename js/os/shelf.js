@@ -8,7 +8,7 @@ import { stateStore } from './state.js';
 import { launcher } from './launcher.js';
 import { quickSettings } from './quickSettings.js';
 
-const PINNED_APP_IDS = ['explorer', 'browser', 'offlineBrowser', 'eduguard', 'word', 'spreadsheet', 'classroom'];
+const PINNED_APP_IDS = ['explorer', 'browser', 'eduguard', 'word', 'spreadsheet', 'classroom'];
 
 class Shelf {
   constructor() {

@@ -414,7 +414,7 @@ function startDawamuOS() {
     },
     {
       id: 'browser',
-      title: 'School Web Browser',
+      title: 'Web Browser (Safe Network)',
       icon: '<i class="fab fa-chrome text-blue-400"></i>',
       bgColor: 'bg-blue-600',
       keywords: ['web', 'internet', 'search', 'wikipedia', 'khan academy'],
@@ -482,18 +482,18 @@ function startDawamuOS() {
     },
     {
       id: 'docs',
-      title: 'Docs & Homework Notes',
-      icon: '<i class="fas fa-file-alt text-blue-300"></i>',
-      bgColor: 'bg-indigo-600',
-      keywords: ['docs', 'notes', 'homework', 'write', 'editor'],
+      title: 'Study Notes & Scratchpad',
+      icon: '<i class="fas fa-sticky-note text-amber-300"></i>',
+      bgColor: 'bg-amber-600',
+      keywords: ['notes', 'study notes', 'scratchpad', 'homework', 'revision', 'write', 'quick notes', 'docs'],
       launch: (opts = {}) => {
         if (opts && opts.fileName && windowManager.windows.has('docs')) {
           windowManager.closeWindow('docs', true);
         }
         windowManager.createWindow({
           id: 'docs',
-          title: opts.fileName ? `${opts.fileName} - Homework Notes` : 'Homework Notes & Rich Text Docs',
-          icon: '<i class="fas fa-file-alt text-blue-300"></i>',
+          title: opts.fileName ? `${opts.fileName} - Study Notes` : 'Study Notes & Scratchpad',
+          icon: '<i class="fas fa-sticky-note text-amber-300"></i>',
           content: () => createDocsApp(opts),
           width: 840,
           height: 560
@@ -542,7 +542,7 @@ function startDawamuOS() {
     },
     {
       id: 'database',
-      title: 'School Database',
+      title: 'Computer Studies Database (DBMS)',
       icon: '<i class="fas fa-database text-purple-400"></i>',
       bgColor: 'bg-purple-800',
       keywords: ['database', 'records', 'students', 'courses', 'library', 'sql', 'dbms'],
@@ -630,15 +630,15 @@ function startDawamuOS() {
     },
     {
       id: 'installer',
-      title: 'Install Dawamu OS to PC',
-      icon: '<i class="fas fa-download text-emerald-300"></i>',
+      title: 'System Diagnostics & Health',
+      icon: '<i class="fas fa-microchip text-emerald-300"></i>',
       bgColor: 'bg-emerald-800',
-      keywords: ['install', 'setup', 'disk', 'ssd', 'hdd', 'partition', 'bootable', 'drive', 'usb'],
+      keywords: ['diagnostics', 'health', 'system', 'integrity', 'check', 'verification', 'kiosk'],
       launch: () => {
         windowManager.createWindow({
           id: 'installer',
-          title: 'Dawamu OS Disk Installation Wizard',
-          icon: '<i class="fas fa-download text-emerald-300"></i>',
+          title: 'System Diagnostics & Environment Check',
+          icon: '<i class="fas fa-microchip text-emerald-300"></i>',
           content: () => createInstallerApp(),
           width: 820,
           height: 600
@@ -788,9 +788,11 @@ function startDawamuOS() {
     shelf.init(shelfEl, appRegistry);
     launcher.init(launcherEl, appRegistry);
     quickSettings.init(quickSettingsEl, () => {
-      // Open Admin Panel callback
-      const adminApp = appRegistry.find((a) => a.id === 'adminPanel');
-      if (adminApp) adminApp.launch();
+      // Open Parental & District Policy inside Settings
+      const settingsApp = appRegistry.find((a) => a.id === 'settings');
+      if (settingsApp) {
+        settingsApp.launch({ category: 'security' });
+      }
     });
     desktopContextMenu.init({ desktopEl, appRegistry });
 

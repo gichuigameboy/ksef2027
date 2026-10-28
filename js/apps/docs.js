@@ -48,7 +48,7 @@ export function createDocsApp(options = {}) {
     <div class="w-64 bg-[#040814] border-r border-white/10 p-3 flex flex-col gap-3 shrink-0">
       <div class="flex items-center justify-between">
         <h3 class="font-bold text-xs text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-          <i class="fas fa-book-open text-blue-400"></i> Homework Notes
+          <i class="fas fa-sticky-note text-amber-400"></i> Study Notes
         </h3>
         <button id="doc-new-btn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-2.5 py-1 rounded-lg font-semibold flex items-center gap-1 cursor-pointer transition-all active:scale-95">
           <i class="fas fa-plus text-[10px]"></i> New
@@ -58,7 +58,7 @@ export function createDocsApp(options = {}) {
       <!-- Search Notes Filter -->
       <div class="bg-slate-900 border border-white/10 rounded-xl px-2.5 py-1 flex items-center gap-2">
         <i class="fas fa-search text-slate-500 text-[10px]"></i>
-        <input id="notes-search-input" type="text" placeholder="Filter notes..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 w-full">
+        <input id="notes-search-input" type="text" placeholder="Search study notes..." class="bg-transparent outline-none text-xs text-white placeholder-slate-500 w-full">
       </div>
 
       <!-- Notes List -->

@@ -29,8 +29,8 @@ export function createExplorerApp(options = {}) {
 
   const QUICK_ACCESS_KEYS = ['desktop', 'downloads', 'documents', 'books844', 'schoolwork', 'pictures'];
   const DRIVE_ITEMS = [
-    { name: 'Local Disk (C:)', size: '256 GB (182 GB free)', icon: 'fas fa-hdd text-slate-300', target: 'c_drive' },
-    { name: 'Dawamu Cloud Storage (D:)', size: '50 GB (44 GB free)', icon: 'fas fa-cloud text-emerald-400', target: 'cloud' }
+    { name: 'Student Workspace (VFS)', size: 'Encrypted Local Storage', icon: 'fas fa-hard-drive text-emerald-400', target: 'c_drive' },
+    { name: 'School Curriculum Drive', size: 'Form 1–4 Offline Bank', icon: 'fas fa-book text-amber-400', target: 'cloud' }
   ];
 
   async function loadRealDownloads() {
@@ -309,7 +309,7 @@ export function createExplorerApp(options = {}) {
           ` : ''}
 
           <div>
-            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">This PC Drives</div>
+            <div class="text-[10px] text-slate-500 uppercase font-bold tracking-wider px-2 mb-1.5">Storage Drives</div>
             <div class="space-y-1">
               ${DRIVE_ITEMS.map(d => `
                 <div class="exp-nav-item flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-pointer transition-all ${currentFolder === d.target ? 'bg-emerald-600/20 text-emerald-300 border border-emerald-500/30 font-semibold shadow-sm' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}" data-folder="${d.target}" title="Drop files here to move or import into ${d.name}">
