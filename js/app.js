@@ -818,7 +818,9 @@ function startDawamuOS() {
     });
   }
 
-  // Global Dawamu OS API for cross-app launches & file opening
+  // Global Dawamu OS references for developer tools, testing & cross-app launches
+  window.windowManager = windowManager;
+  window.stateStore = stateStore;
   window.dawamuOS = {
     state: stateStore,
     openApp: (appId, options = {}) => {

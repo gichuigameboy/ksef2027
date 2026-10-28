@@ -155,21 +155,39 @@ export function createDocsApp(options = {}) {
       .join('');
   };
 
-  const loadDoc = (docId) => {
+  const loadDoc = (docId, forceEmpty = false) => {
     const list = stateStore.getState().documents;
-    let doc = list.find((d) => d.id === docId);
-    if (!doc && list.length > 0) {
+    let doc = forceEmpty ? null : list.find((d) => d.id === docId);
+    if (!doc && list.length > 0 && !forceEmpty) {
       doc = list[0];
     }
 
     if (doc) {
       currentDocId = doc.id;
+      titleInput.disabled = false;
       titleInput.value = doc.title;
+      editorEl.setAttribute('contenteditable', 'true');
       editorEl.innerHTML = doc.content;
     } else {
       currentDocId = null;
+      titleInput.disabled = true;
       titleInput.value = '';
-      editorEl.innerHTML = '<p class="text-slate-500 italic">No notes created yet. Click "+ New" in the sidebar to begin.</p>';
+      editorEl.setAttribute('contenteditable', 'false');
+      editorEl.innerHTML = `
+        <div class="h-full flex flex-col items-center justify-center text-center p-8 select-none my-12">
+          <div class="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-3xl mb-4 shadow-inner">
+            <i class="fas fa-sticky-note"></i>
+          </div>
+          <h4 class="font-bold text-slate-200 text-sm mb-1.5">No Study Note Selected</h4>
+          <p class="text-xs text-slate-400 max-w-sm mb-5 leading-relaxed">Choose an existing note from the sidebar or click below to start a new homework or lesson summary note.</p>
+          <button id="doc-empty-new-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition-transform active:scale-95">
+            <i class="fas fa-plus text-[11px]"></i> Create First Note
+          </button>
+        </div>
+      `;
+      editorEl.querySelector('#doc-empty-new-btn')?.addEventListener('click', () => {
+        container.querySelector('#doc-new-btn')?.click();
+      });
     }
     updateMetrics();
     renderDocsList();
@@ -177,6 +195,9 @@ export function createDocsApp(options = {}) {
 
   let saveDebounceTimer;
   const triggerAutoSave = () => {
+    if (!currentDocId && !titleInput.value.trim() && editorEl.getAttribute('contenteditable') === 'false') {
+      return;
+    }
     saveStatusEl.innerHTML = `<i class="fas fa-spinner fa-spin text-amber-400"></i> Saving...`;
     updateMetrics();
     clearTimeout(saveDebounceTimer);
@@ -186,6 +207,8 @@ export function createDocsApp(options = {}) {
       if (!currentDocId) {
         const saved = stateStore.saveDocument(null, title, content);
         currentDocId = saved.id;
+        titleInput.disabled = false;
+        editorEl.setAttribute('contenteditable', 'true');
       } else {
         stateStore.saveDocument(currentDocId, title, content);
       }
@@ -281,6 +304,12 @@ export function createDocsApp(options = {}) {
       loadDoc(item.dataset.docId);
     }
   });
+
+  container.__dawamuAppController = {
+    loadDoc: (id, forceEmpty = false) => loadDoc(id, forceEmpty),
+    getTitle: () => titleInput.value || 'Study Notes',
+    isDirty: () => false
+  };
 
   // Initial load
   loadDoc(currentDocId);

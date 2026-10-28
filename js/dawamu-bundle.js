@@ -1795,7 +1795,87 @@ class WindowManager {
       document.addEventListener('fullscreenchange', () => {
         this.notify();
       });
+      this.setupGlobalKeyboardShortcuts();
     }
+  }
+
+  setupGlobalKeyboardShortcuts() {
+    if (typeof window === 'undefined' || this._keyListenerBound) return;
+    this._keyListenerBound = true;
+
+    window.addEventListener('keydown', (e) => {
+      // 1. Only process if there are open windows
+      if (!this.activeWindowId && this.windows.size === 0) return;
+
+      // 2. Safeguard: Ignore AltGr dead keys / AltGraph on international keyboards
+      if (e.getModifierState && e.getModifierState('AltGraph')) return;
+
+      // 3. Alt + W or Alt + F4: Close active focused window
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'w' || e.key === 'W' || e.key === 'F4')) {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          this.closeWindow(this.activeWindowId);
+        }
+        return;
+      }
+
+      // 4. Alt + M: Minimize active focused window
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          this.minimizeWindow(this.activeWindowId);
+        }
+        return;
+      }
+
+      // 5. Alt + Enter or Alt + Up: Maximize / Restore active window
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'Enter' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          const win = this.windows.get(this.activeWindowId);
+          if (win) {
+            if (e.key === 'ArrowUp' && !win.maximized) {
+              this.toggleMaximizeWindow(this.activeWindowId);
+            } else if (e.key === 'Enter') {
+              this.toggleMaximizeWindow(this.activeWindowId);
+            }
+          }
+        }
+        return;
+      }
+
+      // 6. Alt + Down: If maximized, restore; if normal, minimize
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          const win = this.windows.get(this.activeWindowId);
+          if (win) {
+            if (win.maximized) {
+              this.toggleMaximizeWindow(this.activeWindowId);
+            } else {
+              this.minimizeWindow(this.activeWindowId);
+            }
+          }
+        }
+        return;
+      }
+
+      // 7. Alt + ] or Alt + [ : Cycle between open non-minimized windows
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === ']' || e.key === '[')) {
+        e.preventDefault();
+        this.cycleWindows(e.key === '[' ? -1 : 1);
+        return;
+      }
+    });
+  }
+
+  cycleWindows(direction = 1) {
+    const openWins = Array.from(this.windows.values()).filter((w) => !w.minimized);
+    if (openWins.length <= 1) return;
+    openWins.sort((a, b) => b.zIndex - a.zIndex);
+    const curIdx = openWins.findIndex((w) => w.id === this.activeWindowId);
+    let nextIdx = (curIdx + direction + openWins.length) % openWins.length;
+    this.focusWindow(openWins[nextIdx].id);
   }
 
   hasFullscreenWindow() {
@@ -1930,9 +2010,9 @@ class WindowManager {
     winEl.innerHTML = `
       <div class="window-header" id="header-${id}">
         <div class="window-controls">
-          <button class="win-btn close-btn" title="Close" data-action="close"><i class="fas fa-times"></i></button>
-          <button class="win-btn minimize-btn" title="Minimize" data-action="minimize"><i class="fas fa-minus"></i></button>
-          <button class="win-btn maximize-btn" title="Maximize/Restore" data-action="maximize"><i class="far fa-square"></i></button>
+          <button class="win-btn close-btn" title="Close (Alt+W)" data-action="close"><i class="fas fa-times"></i></button>
+          <button class="win-btn minimize-btn" title="Minimize (Alt+M)" data-action="minimize"><i class="fas fa-minus"></i></button>
+          <button class="win-btn maximize-btn" title="Maximize/Restore (Alt+Enter)" data-action="maximize"><i class="far fa-square"></i></button>
         </div>
         <div class="window-title">
           <span class="app-header-icon">${icon}</span>
@@ -13531,21 +13611,39 @@ function createDocsApp(options = {}) {
       .join('');
   };
 
-  const loadDoc = (docId) => {
+  const loadDoc = (docId, forceEmpty = false) => {
     const list = stateStore.getState().documents;
-    let doc = list.find((d) => d.id === docId);
-    if (!doc && list.length > 0) {
+    let doc = forceEmpty ? null : list.find((d) => d.id === docId);
+    if (!doc && list.length > 0 && !forceEmpty) {
       doc = list[0];
     }
 
     if (doc) {
       currentDocId = doc.id;
+      titleInput.disabled = false;
       titleInput.value = doc.title;
+      editorEl.setAttribute('contenteditable', 'true');
       editorEl.innerHTML = doc.content;
     } else {
       currentDocId = null;
+      titleInput.disabled = true;
       titleInput.value = '';
-      editorEl.innerHTML = '<p class="text-slate-500 italic">No notes created yet. Click "+ New" in the sidebar to begin.</p>';
+      editorEl.setAttribute('contenteditable', 'false');
+      editorEl.innerHTML = `
+        <div class="h-full flex flex-col items-center justify-center text-center p-8 select-none my-12">
+          <div class="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-400 border border-amber-500/20 flex items-center justify-center text-3xl mb-4 shadow-inner">
+            <i class="fas fa-sticky-note"></i>
+          </div>
+          <h4 class="font-bold text-slate-200 text-sm mb-1.5">No Study Note Selected</h4>
+          <p class="text-xs text-slate-400 max-w-sm mb-5 leading-relaxed">Choose an existing note from the sidebar or click below to start a new homework or lesson summary note.</p>
+          <button id="doc-empty-new-btn" class="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center gap-2 cursor-pointer shadow-lg transition-transform active:scale-95">
+            <i class="fas fa-plus text-[11px]"></i> Create First Note
+          </button>
+        </div>
+      `;
+      editorEl.querySelector('#doc-empty-new-btn')?.addEventListener('click', () => {
+        container.querySelector('#doc-new-btn')?.click();
+      });
     }
     updateMetrics();
     renderDocsList();
@@ -13553,6 +13651,9 @@ function createDocsApp(options = {}) {
 
   let saveDebounceTimer;
   const triggerAutoSave = () => {
+    if (!currentDocId && !titleInput.value.trim() && editorEl.getAttribute('contenteditable') === 'false') {
+      return;
+    }
     saveStatusEl.innerHTML = `<i class="fas fa-spinner fa-spin text-amber-400"></i> Saving...`;
     updateMetrics();
     clearTimeout(saveDebounceTimer);
@@ -13562,6 +13663,8 @@ function createDocsApp(options = {}) {
       if (!currentDocId) {
         const saved = stateStore.saveDocument(null, title, content);
         currentDocId = saved.id;
+        titleInput.disabled = false;
+        editorEl.setAttribute('contenteditable', 'true');
       } else {
         stateStore.saveDocument(currentDocId, title, content);
       }
@@ -13657,6 +13760,12 @@ function createDocsApp(options = {}) {
       loadDoc(item.dataset.docId);
     }
   });
+
+  container.__dawamuAppController = {
+    loadDoc: (id, forceEmpty = false) => loadDoc(id, forceEmpty),
+    getTitle: () => titleInput.value || 'Study Notes',
+    isDirty: () => false
+  };
 
   // Initial load
   loadDoc(currentDocId);
@@ -15918,14 +16027,41 @@ function createExplorerApp(options = {}) {
                 <div class="text-[10px] text-slate-500 mt-1">${f.size || (f.type === 'folder' ? 'Folder' : 'Document')} ${f.date ? `• ${f.date}` : ''}</div>
               </div>
             `).join('')}
-            ${files.length === 0 ? `
-              <div class="col-span-4 text-center py-16 text-slate-500 text-xs">
-                <i class="fas fa-folder-open text-4xl mb-3 block text-slate-600"></i>
-                <div class="font-bold text-slate-400 text-sm">This folder is empty</div>
-                <div class="text-[11px] text-slate-400 mt-1.5 flex items-center justify-center gap-1.5">
-                  <i class="fas fa-cloud-arrow-up text-emerald-400"></i> Drag &amp; drop files from your computer here, or click "Import / Drop File" above.
+            ${files.length === 0 ? (
+              searchQuery.trim() ? `
+                <div class="col-span-4 text-center py-16 text-slate-400 text-xs select-none">
+                  <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-2xl mx-auto mb-3 text-slate-500 shadow-inner">
+                    <i class="fas fa-search"></i>
+                  </div>
+                  <div class="font-bold text-slate-200 text-sm">No files found</div>
+                  <div class="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+                    No files in ${currentMeta.name} matched "<span class="text-white font-medium">${searchQuery.trim().replace(/</g, '&lt;')}</span>".
+                  </div>
+                  <button id="exp-clear-search-btn" class="mt-3.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-slate-200 text-xs transition-all cursor-pointer font-medium active:scale-95">
+                    <i class="fas fa-times mr-1 text-[10px]"></i> Clear Search
+                  </button>
                 </div>
-              </div>` : ''}
+              ` : `
+                <div class="col-span-4 text-center py-16 text-slate-500 text-xs select-none">
+                  <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-2xl mx-auto mb-3 text-emerald-400 shadow-inner">
+                    <i class="fas fa-folder-open text-emerald-400"></i>
+                  </div>
+                  <div class="font-bold text-slate-200 text-sm">This folder is empty</div>
+                  <div class="text-[11px] text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                    Drag &amp; drop files from your computer here, or choose an action below to get started.
+                  </div>
+                  <div class="mt-4 flex items-center justify-center gap-2.5">
+                    <button id="exp-empty-new-file" class="px-3.5 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 text-xs font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5">
+                      <i class="fas fa-file-circle-plus text-emerald-400 text-[10px]"></i> New File
+                    </button>
+                    <label class="px-3.5 py-1.5 rounded-xl bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/30 text-sky-300 text-xs font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5">
+                      <i class="fas fa-cloud-arrow-up text-sky-400 text-[10px]"></i> Import / Drop File
+                      <input type="file" id="exp-empty-file-input" multiple class="hidden">
+                    </label>
+                  </div>
+                </div>
+              `
+            ) : ''}
           </div>
         </div>
       </div>
@@ -16127,6 +16263,23 @@ function createExplorerApp(options = {}) {
 
     // ── 6. Import / Drop File Picker Input ──
     root.querySelector('#exp-file-input')?.addEventListener('change', async (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        await handleExternalFilesDrop(e.target.files, currentFolder);
+        e.target.value = '';
+      }
+    });
+
+    // ── 6b. Empty State Quick Action Listeners ──
+    root.querySelector('#exp-clear-search-btn')?.addEventListener('click', () => {
+      searchQuery = '';
+      render();
+    });
+
+    root.querySelector('#exp-empty-new-file')?.addEventListener('click', () => {
+      root.querySelector('#exp-new-btn')?.click();
+    });
+
+    root.querySelector('#exp-empty-file-input')?.addEventListener('change', async (e) => {
       if (e.target.files && e.target.files.length > 0) {
         await handleExternalFilesDrop(e.target.files, currentFolder);
         e.target.value = '';
@@ -23432,7 +23585,9 @@ function startDawamuOS() {
     });
   }
 
-  // Global Dawamu OS API for cross-app launches & file opening
+  // Global Dawamu OS references for developer tools, testing & cross-app launches
+  window.windowManager = windowManager;
+  window.stateStore = stateStore;
   window.dawamuOS = {
     state: stateStore,
     openApp: (appId, options = {}) => {

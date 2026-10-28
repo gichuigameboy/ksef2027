@@ -26,7 +26,87 @@ class WindowManager {
       document.addEventListener('fullscreenchange', () => {
         this.notify();
       });
+      this.setupGlobalKeyboardShortcuts();
     }
+  }
+
+  setupGlobalKeyboardShortcuts() {
+    if (typeof window === 'undefined' || this._keyListenerBound) return;
+    this._keyListenerBound = true;
+
+    window.addEventListener('keydown', (e) => {
+      // 1. Only process if there are open windows
+      if (!this.activeWindowId && this.windows.size === 0) return;
+
+      // 2. Safeguard: Ignore AltGr dead keys / AltGraph on international keyboards
+      if (e.getModifierState && e.getModifierState('AltGraph')) return;
+
+      // 3. Alt + W or Alt + F4: Close active focused window
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'w' || e.key === 'W' || e.key === 'F4')) {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          this.closeWindow(this.activeWindowId);
+        }
+        return;
+      }
+
+      // 4. Alt + M: Minimize active focused window
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'm' || e.key === 'M')) {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          this.minimizeWindow(this.activeWindowId);
+        }
+        return;
+      }
+
+      // 5. Alt + Enter or Alt + Up: Maximize / Restore active window
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === 'Enter' || e.key === 'ArrowUp')) {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          const win = this.windows.get(this.activeWindowId);
+          if (win) {
+            if (e.key === 'ArrowUp' && !win.maximized) {
+              this.toggleMaximizeWindow(this.activeWindowId);
+            } else if (e.key === 'Enter') {
+              this.toggleMaximizeWindow(this.activeWindowId);
+            }
+          }
+        }
+        return;
+      }
+
+      // 6. Alt + Down: If maximized, restore; if normal, minimize
+      if (e.altKey && !e.ctrlKey && !e.metaKey && e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (this.activeWindowId) {
+          const win = this.windows.get(this.activeWindowId);
+          if (win) {
+            if (win.maximized) {
+              this.toggleMaximizeWindow(this.activeWindowId);
+            } else {
+              this.minimizeWindow(this.activeWindowId);
+            }
+          }
+        }
+        return;
+      }
+
+      // 7. Alt + ] or Alt + [ : Cycle between open non-minimized windows
+      if (e.altKey && !e.ctrlKey && !e.metaKey && (e.key === ']' || e.key === '[')) {
+        e.preventDefault();
+        this.cycleWindows(e.key === '[' ? -1 : 1);
+        return;
+      }
+    });
+  }
+
+  cycleWindows(direction = 1) {
+    const openWins = Array.from(this.windows.values()).filter((w) => !w.minimized);
+    if (openWins.length <= 1) return;
+    openWins.sort((a, b) => b.zIndex - a.zIndex);
+    const curIdx = openWins.findIndex((w) => w.id === this.activeWindowId);
+    let nextIdx = (curIdx + direction + openWins.length) % openWins.length;
+    this.focusWindow(openWins[nextIdx].id);
   }
 
   hasFullscreenWindow() {
@@ -161,9 +241,9 @@ class WindowManager {
     winEl.innerHTML = `
       <div class="window-header" id="header-${id}">
         <div class="window-controls">
-          <button class="win-btn close-btn" title="Close" data-action="close"><i class="fas fa-times"></i></button>
-          <button class="win-btn minimize-btn" title="Minimize" data-action="minimize"><i class="fas fa-minus"></i></button>
-          <button class="win-btn maximize-btn" title="Maximize/Restore" data-action="maximize"><i class="far fa-square"></i></button>
+          <button class="win-btn close-btn" title="Close (Alt+W)" data-action="close"><i class="fas fa-times"></i></button>
+          <button class="win-btn minimize-btn" title="Minimize (Alt+M)" data-action="minimize"><i class="fas fa-minus"></i></button>
+          <button class="win-btn maximize-btn" title="Maximize/Restore (Alt+Enter)" data-action="maximize"><i class="far fa-square"></i></button>
         </div>
         <div class="window-title">
           <span class="app-header-icon">${icon}</span>

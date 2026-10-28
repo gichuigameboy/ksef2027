@@ -348,14 +348,41 @@ export function createExplorerApp(options = {}) {
                 <div class="text-[10px] text-slate-500 mt-1">${f.size || (f.type === 'folder' ? 'Folder' : 'Document')} ${f.date ? `• ${f.date}` : ''}</div>
               </div>
             `).join('')}
-            ${files.length === 0 ? `
-              <div class="col-span-4 text-center py-16 text-slate-500 text-xs">
-                <i class="fas fa-folder-open text-4xl mb-3 block text-slate-600"></i>
-                <div class="font-bold text-slate-400 text-sm">This folder is empty</div>
-                <div class="text-[11px] text-slate-400 mt-1.5 flex items-center justify-center gap-1.5">
-                  <i class="fas fa-cloud-arrow-up text-emerald-400"></i> Drag &amp; drop files from your computer here, or click "Import / Drop File" above.
+            ${files.length === 0 ? (
+              searchQuery.trim() ? `
+                <div class="col-span-4 text-center py-16 text-slate-400 text-xs select-none">
+                  <div class="w-14 h-14 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-2xl mx-auto mb-3 text-slate-500 shadow-inner">
+                    <i class="fas fa-search"></i>
+                  </div>
+                  <div class="font-bold text-slate-200 text-sm">No files found</div>
+                  <div class="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
+                    No files in ${currentMeta.name} matched "<span class="text-white font-medium">${searchQuery.trim().replace(/</g, '&lt;')}</span>".
+                  </div>
+                  <button id="exp-clear-search-btn" class="mt-3.5 px-3.5 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 border border-white/10 text-slate-200 text-xs transition-all cursor-pointer font-medium active:scale-95">
+                    <i class="fas fa-times mr-1 text-[10px]"></i> Clear Search
+                  </button>
                 </div>
-              </div>` : ''}
+              ` : `
+                <div class="col-span-4 text-center py-16 text-slate-500 text-xs select-none">
+                  <div class="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-2xl mx-auto mb-3 text-emerald-400 shadow-inner">
+                    <i class="fas fa-folder-open text-emerald-400"></i>
+                  </div>
+                  <div class="font-bold text-slate-200 text-sm">This folder is empty</div>
+                  <div class="text-[11px] text-slate-400 mt-1 max-w-md mx-auto leading-relaxed">
+                    Drag &amp; drop files from your computer here, or choose an action below to get started.
+                  </div>
+                  <div class="mt-4 flex items-center justify-center gap-2.5">
+                    <button id="exp-empty-new-file" class="px-3.5 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 text-xs font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5">
+                      <i class="fas fa-file-circle-plus text-emerald-400 text-[10px]"></i> New File
+                    </button>
+                    <label class="px-3.5 py-1.5 rounded-xl bg-sky-600/25 hover:bg-sky-600/40 border border-sky-500/30 text-sky-300 text-xs font-semibold cursor-pointer transition-all active:scale-95 flex items-center gap-1.5">
+                      <i class="fas fa-cloud-arrow-up text-sky-400 text-[10px]"></i> Import / Drop File
+                      <input type="file" id="exp-empty-file-input" multiple class="hidden">
+                    </label>
+                  </div>
+                </div>
+              `
+            ) : ''}
           </div>
         </div>
       </div>
@@ -557,6 +584,23 @@ export function createExplorerApp(options = {}) {
 
     // ── 6. Import / Drop File Picker Input ──
     root.querySelector('#exp-file-input')?.addEventListener('change', async (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        await handleExternalFilesDrop(e.target.files, currentFolder);
+        e.target.value = '';
+      }
+    });
+
+    // ── 6b. Empty State Quick Action Listeners ──
+    root.querySelector('#exp-clear-search-btn')?.addEventListener('click', () => {
+      searchQuery = '';
+      render();
+    });
+
+    root.querySelector('#exp-empty-new-file')?.addEventListener('click', () => {
+      root.querySelector('#exp-new-btn')?.click();
+    });
+
+    root.querySelector('#exp-empty-file-input')?.addEventListener('change', async (e) => {
       if (e.target.files && e.target.files.length > 0) {
         await handleExternalFilesDrop(e.target.files, currentFolder);
         e.target.value = '';
