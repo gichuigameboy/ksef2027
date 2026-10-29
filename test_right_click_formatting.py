@@ -105,10 +105,17 @@ try:
 
     # 1. Login and open Word
     evaluate("document.querySelector('[data-quick-login][data-adm=\"1001\"]').click()")
-    time.sleep(0.5)
+    for _ in range(25):
+        if evaluate("!document.getElementById('os-login-screen') || document.getElementById('os-login-screen').classList.contains('hidden')"):
+            break
+        time.sleep(0.2)
 
     evaluate("document.querySelector('.desktop-icon[data-app-id=\"word\"]').click()")
-    time.sleep(0.5)
+    for _ in range(25):
+        if evaluate("!!document.getElementById('word-paper')"):
+            break
+        time.sleep(0.2)
+    time.sleep(0.3)
 
     # TEST 1: Right-click directly on word "salvation" (NO selection dragged) -> Click Bold
     t1 = evaluate("""
@@ -221,6 +228,7 @@ try:
         (() => {
             const paper = document.getElementById('word-paper');
             const p = paper.querySelectorAll('p')[2]; // "Kino's initial aspirations..."
+            p.scrollIntoView({ block: 'center' });
             
             // Drag-select "clean new clothing"
             const textNode = p.firstChild;
@@ -236,7 +244,8 @@ try:
             sel.addRange(r);
             paper.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
             
-            const rect = r.getBoundingClientRect();
+            const rects = r.getClientRects();
+            const rect = rects.length > 0 ? rects[0] : r.getBoundingClientRect();
             p.dispatchEvent(new MouseEvent('contextmenu', {
                 bubbles: true,
                 cancelable: true,

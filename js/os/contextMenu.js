@@ -152,7 +152,15 @@ class DesktopContextMenu {
         // If a physical click point inside the container was detected, check if it was on or outside the selection
         if (pointRange && (!container || container.contains(pointRange.startContainer) || container === pointRange.startContainer)) {
           try {
-            isInsideSelection = (range.comparePoint(pointRange.startContainer, pointRange.startOffset) === 0);
+            const rects = Array.from(range.getClientRects());
+            if (rects.length > 0 && typeof e.clientX === 'number' && typeof e.clientY === 'number') {
+              isInsideSelection = rects.some(r =>
+                e.clientX >= r.left - 4 && e.clientX <= r.right + 4 &&
+                e.clientY >= r.top - 4 && e.clientY <= r.bottom + 4
+              );
+            } else {
+              isInsideSelection = (range.comparePoint(pointRange.startContainer, pointRange.startOffset) === 0);
+            }
           } catch (_) {
             isInsideSelection = true;
           }
