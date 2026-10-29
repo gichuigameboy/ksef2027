@@ -12364,7 +12364,7 @@ function buildChrome() {
 
   return `
   <!-- Tab Strip -->
-  <div id="tab-strip" class="flex items-end bg-[#070c16] px-3 pt-2 gap-1.5 min-h-[42px] overflow-x-auto shrink-0 border-b border-white/5 select-none"></div>
+  <div id="tab-strip" class="tab-strip shrink-0 select-none"></div>
 
   <!-- Toolbar -->
   <div class="bg-[#0b1322] border-b border-white/10 px-3.5 py-2 flex items-center gap-2 shrink-0 relative backdrop-blur-xl z-30">
@@ -12376,19 +12376,19 @@ function buildChrome() {
     </div>
 
     <!-- Search Engine Selector -->
-    <div class="relative flex items-center">
-      <select id="engine-sel" class="bg-white/5 hover:bg-white/10 text-slate-200 text-xs border border-white/10 hover:border-emerald-500/40 rounded-xl px-2.5 py-1.5 outline-none cursor-pointer transition-all font-semibold appearance-none pr-6">
+    <div class="engine-box shrink-0">
+      <select id="engine-sel" class="engine-select">
         <option value="google" class="bg-[#0b1322]">Google</option>
         <option value="bing" class="bg-[#0b1322]">Bing</option>
         <option value="brave" class="bg-[#0b1322]">Brave</option>
       </select>
-      <i class="fas fa-chevron-down text-[9px] text-slate-400 absolute right-2 pointer-events-none"></i>
+      <i class="fas fa-chevron-down engine-chevron"></i>
     </div>
 
-    <!-- Omnibox URL / Search Bar -->
-    <div class="flex-1 flex items-center gap-2 bg-[#070e1c] hover:bg-[#091326] focus-within:bg-[#050a14] focus-within:border-emerald-500 focus-within:ring-2 focus-within:ring-emerald-500/20 border border-white/10 rounded-2xl px-3.5 py-1.5 transition-all shadow-inner relative">
-      <div class="flex items-center gap-1.5 text-emerald-400 text-xs shrink-0">
-        <i class="fas fa-lock text-[11px]"></i>
+    <!-- Omnibox URL / Search Bar Container -->
+    <div class="omnibox-wrapper">
+      <div class="flex items-center gap-1 text-emerald-400 text-xs shrink-0">
+        <i class="fas fa-lock text-[10px]"></i>
       </div>
       <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
              class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-400 min-w-0 font-medium"
@@ -12400,15 +12400,15 @@ function buildChrome() {
       </button>
 
       <div class="flex items-center gap-1 shrink-0">
-        <span class="text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
+        <span class="safe-badge text-[9px] bg-emerald-950/90 text-emerald-300 border border-emerald-600/50 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider flex items-center gap-1 shadow-sm">
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
           SAFE
         </span>
       </div>
-    </div>
 
-    <!-- URL Autocomplete Suggestions Dropdown -->
-    <div id="omnibox-dropdown" class="hidden absolute top-[50px] left-[165px] right-[130px] z-50 bg-[#091120]/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden py-1.5 select-none max-h-[300px] overflow-y-auto"></div>
+      <!-- URL Autocomplete Suggestions Dropdown directly anchored to Omnibox -->
+      <div id="omnibox-dropdown" class="hidden absolute top-full left-0 right-0 mt-1.5 z-50 bg-[#091120]/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl overflow-hidden py-1.5 select-none max-h-[300px] overflow-y-auto"></div>
+    </div>
 
     <!-- Save Page as Document Button -->
     <button id="btn-save-page" class="px-2.5 h-[30px] rounded-xl bg-emerald-600/20 hover:bg-emerald-600/40 border border-emerald-500/40 text-emerald-300 hover:text-white text-[11px] font-bold flex items-center gap-1.5 cursor-pointer transition-all shrink-0" title="Save Current Web Page to This PC > Downloads">
@@ -12426,8 +12426,6 @@ function buildChrome() {
     <button id="btn-browser-menu" class="nb" title="Customize and control Dawamu Browser">
       <i class="fas fa-ellipsis-v text-xs text-slate-300"></i>
     </button>
-
-    <button id="btn-new-tab" class="nb text-emerald-400 hover:text-white" title="New Tab"><i class="fas fa-plus text-xs"></i></button>
 
     <!-- Browser Menu Flyout Popover -->
     <div id="browser-menu-popover" class="hidden absolute top-12 right-12 w-64 bg-[#091120]/98 backdrop-blur-2xl border border-white/15 rounded-2xl shadow-2xl p-2 z-50 flex flex-col gap-1 text-xs select-none">
@@ -12529,28 +12527,90 @@ function buildChrome() {
 
   <style>
     .nb { width:30px; height:30px; border-radius:10px; display:flex; align-items:center; justify-content:center;
-          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.07); cursor:pointer; color:#94a3b8; transition:all .15s cubic-bezier(0.16, 1, 0.3, 1); }
-    .nb:hover { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.16); transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
+          background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.08); cursor:pointer; color:#94a3b8; transition:all .15s cubic-bezier(0.16, 1, 0.3, 1); flex-shrink:0; }
+    .nb:hover { background:rgba(255,255,255,.12); color:#fff; border-color:rgba(255,255,255,.18); transform:translateY(-1px); box-shadow:0 2px 8px rgba(0,0,0,0.3); }
     .nb:active { transform:scale(.92); }
-    .tab { display:flex; align-items:center; gap:8px; padding:7px 14px; border-radius:12px 12px 0 0;
-           min-width:130px; max-width:220px; cursor:pointer; background:#0f172a; color:#94a3b8; font-size:11px;
-           border:1px solid rgba(255,255,255,.06); border-bottom:none; transition:all .14s ease; position:relative; }
-    .tab:hover { background:#162238; color:#f1f5f9; }
-    .tab.active { background:#0b1322; color:#ffffff; border-color:rgba(255,255,255,.14); font-weight:600; box-shadow:inset 0 2px 0 #10b981; z-index:1; }
-    .tab-x { margin-left:auto; width:16px; height:16px; border-radius:50%; display:flex; align-items:center;
+    
+    .tab-strip { display: flex; align-items: flex-end; background: #070c16; padding: 6px 10px 0; gap: 6px; min-height: 38px; overflow-x: auto; border-bottom: 1px solid rgba(255,255,255,0.06); user-select: none; }
+    .tab { display:flex; align-items:center; gap:8px; padding:6px 12px; border-radius:10px 10px 0 0;
+           min-width:130px; max-width:220px; cursor:pointer; background:#0e1726; color:#94a3b8; font-size:11px;
+           border:1px solid rgba(255,255,255,.07); border-bottom:none; transition:all .14s ease; position:relative; }
+    .tab:hover { background:#142036; color:#f1f5f9; }
+    .tab.active { background:#0b1322; color:#ffffff; border-color:rgba(255,255,255,.16); font-weight:600; box-shadow:inset 0 2px 0 #10b981; z-index:1; }
+    .tab-x { margin-left:auto; width:18px; height:18px; border-radius:50%; display:flex; align-items:center;
               justify-content:center; font-size:9px; color:#94a3b8; background:transparent; border:none;
               cursor:pointer; opacity:0.6; transition:all .12s; }
     .tab:hover .tab-x, .tab.active .tab-x { opacity:1; }
     .tab-x:hover { background:rgba(239,68,68,.3); color:#fca5a5; transform:scale(1.1); }
-    .tab-wrap { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; position: relative; }
+    .tab-new-btn { width: 28px; height: 28px; border-radius: 8px; margin-bottom: 3px; }
+
+    .engine-box { position: relative; display: flex; align-items: center; }
+    .engine-select {
+      appearance: none; -webkit-appearance: none; -moz-appearance: none;
+      background: rgba(255,255,255,0.05); color: #e2e8f0; font-size: 11px; font-weight: 600;
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 10px;
+      padding: 6px 24px 6px 10px; outline: none; cursor: pointer; transition: all .15s ease;
+    }
+    .engine-select:hover { background: rgba(255,255,255,0.1); border-color: rgba(16,185,129,0.4); }
+    .engine-chevron { font-size: 8px; color: #94a3b8; position: absolute; right: 8px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+
+    .omnibox-wrapper {
+      position: relative; flex: 1 1 0%; min-width: 0;
+      display: flex; align-items: center; gap: 8px;
+      background: #070e1c; border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 16px; padding: 6px 12px; transition: all .15s ease;
+    }
+    .omnibox-wrapper:hover { background: #091326; border-color: rgba(255,255,255,0.16); }
+    .omnibox-wrapper:focus-within { background: #050a14; border-color: #10b981; box-shadow: 0 0 0 2px rgba(16,185,129,0.2); }
+
+    #omnibox-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; margin-top: 6px; z-index: 100;
+      background: rgba(9, 17, 32, 0.98); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255,255,255,0.16); border-radius: 16px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.6); max-height: 320px; overflow-y: auto; padding: 6px 0;
+    }
+    #omnibox-dropdown.hidden { display: none !important; }
+
+    .tab-wrap { flex: 1; display: flex; flex-direction: column; width: 100%; height: 100%; position: relative; overflow: hidden; }
     .tab-wrap.hidden { display: none !important; }
-    .start-overlay { position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center; overflow-y:auto; background: radial-gradient(circle at 50% 20%, #0d1e33 0%, #060a12 100%); }
-    .start-overlay.hidden { display:none !important; }
-    .offline-tool { position:absolute; inset:0; z-index:11; overflow-y:auto; background:#0b1322; }
-    .offline-tool.hidden { display:none !important; }
+
+    .start-overlay {
+      position: absolute; inset: 0; z-index: 10; display: block; overflow-y: auto; overflow-x: hidden;
+      background: radial-gradient(circle at 50% 15%, #0d1e33 0%, #060a12 100%);
+      padding: 24px 16px 48px;
+    }
+    .start-overlay.hidden { display: none !important; }
+
+    .offline-tool {
+      position: absolute; inset: 0; z-index: 11; overflow-y: auto; overflow-x: hidden;
+      background: #0b1322; padding: 24px 16px 48px;
+    }
+    .offline-tool.hidden { display: none !important; }
+
     .offline-article-body { color:#e2e8f0; line-height:1.7; }
     .offline-article-body a { color:#38bdf8; text-decoration:underline; }
     .suggest-item.selected { background: rgba(16, 185, 129, 0.22); border-left: 3px solid #10b981; }
+
+    /* Custom Scrollbars */
+    .start-overlay::-webkit-scrollbar,
+    .offline-tool::-webkit-scrollbar,
+    #omnibox-dropdown::-webkit-scrollbar,
+    #tab-strip::-webkit-scrollbar {
+      width: 6px; height: 6px;
+    }
+    .start-overlay::-webkit-scrollbar-track,
+    .offline-tool::-webkit-scrollbar-track,
+    #omnibox-dropdown::-webkit-scrollbar-track,
+    #tab-strip::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    .start-overlay::-webkit-scrollbar-thumb,
+    .offline-tool::-webkit-scrollbar-thumb,
+    #omnibox-dropdown::-webkit-scrollbar-thumb,
+    #tab-strip::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.16); border-radius: 9999px;
+    }
+    .start-overlay::-webkit-scrollbar-thumb:hover { background: rgba(16, 185, 129, 0.5); }
   </style>`;
 }
 
@@ -12583,13 +12643,15 @@ function buildTabDOM(root, tabId) {
     wv.id = `wv-${tabId}`;
     wv.setAttribute('partition', 'persist:school');
     wv.setAttribute('allowpopups', '');
-    wv.style.cssText = 'flex: 1 1 0%; width: 100%; height: 100%; border: none; display: flex;';
+    wv.className = 'hidden';
+    wv.style.cssText = 'flex: 1 1 0%; width: 100%; height: 100%; border: none;';
     wrap.appendChild(wv);
     wireWebview(root, tabId, wv);
   } else {
     const fr = document.createElement('iframe');
     fr.id = `wv-${tabId}`;
-    fr.style.cssText = 'flex: 1 1 0%; width: 100%; height: 100%; border: none; display: block;';
+    fr.className = 'hidden';
+    fr.style.cssText = 'flex: 1 1 0%; width: 100%; height: 100%; border: none;';
     fr.sandbox = 'allow-scripts allow-same-origin allow-forms allow-popups allow-modals';
     fr.allow = 'fullscreen';
     fr.addEventListener('load', () => progress(root, tabId, false));
@@ -12605,7 +12667,7 @@ function buildTabDOM(root, tabId) {
   // Start page overlay
   const overlay = document.createElement('div');
   overlay.id = `sp-${tabId}`;
-  overlay.className = 'start-overlay bg-[#202124]';
+  overlay.className = 'start-overlay';
   overlay.innerHTML = startPageHTML(tabId);
   wireStartPage(root, tabId, overlay);
   wrap.appendChild(overlay);
@@ -12716,11 +12778,11 @@ function renderTabStrip(root) {
   if (!strip) return;
   strip.innerHTML = tabs.map(tab => `
     <div class="tab ${tab.id === activeTabId ? 'active' : ''}" data-tid="${tab.id}">
-      <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : 'fas fa-globe text-slate-500'} text-[10px] shrink-0"></i>
-      <span class="truncate flex-1">${tab.title || 'New Tab'}</span>
-      <button class="tab-x" data-close="${tab.id}">✕</button>
+      <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : (tab.url?.startsWith('dawamu://') ? 'fas fa-graduation-cap text-emerald-400' : 'fas fa-globe text-slate-400')} text-[10px] shrink-0"></i>
+      <span class="truncate flex-1">${escapeHtml(tab.title || 'New Tab')}</span>
+      <button class="tab-x" data-close="${tab.id}" title="Close Tab"><i class="fas fa-times"></i></button>
     </div>`).join('') +
-    `<button id="strip-new" class="nb self-center ml-1 shrink-0" title="New Tab"><i class="fas fa-plus text-xs"></i></button>`;
+    `<button id="btn-new-tab" class="nb tab-new-btn self-center ml-1 shrink-0" title="New Tab (Ctrl+T)"><i class="fas fa-plus text-xs"></i></button>`;
 
   strip.querySelectorAll('.tab').forEach(el => {
     el.addEventListener('click', e => {
@@ -12734,7 +12796,7 @@ function renderTabStrip(root) {
       closeTab(root, parseInt(btn.dataset.close));
     });
   });
-  strip.querySelector('#strip-new')?.addEventListener('click', () => openTab(root, null));
+  strip.querySelector('#btn-new-tab')?.addEventListener('click', () => openTab(root, null));
 }
 
 /* ═══════════════════════════════════════════════════
@@ -13421,7 +13483,7 @@ function startPageHTML(tabId) {
       </div>` : '';
 
   return `
-  <div class="flex flex-col items-center justify-center min-h-full p-8 text-center space-y-4 overflow-y-auto max-w-3xl mx-auto">
+  <div class="flex flex-col items-center max-w-4xl mx-auto w-full space-y-6 text-center">
     <div class="flex flex-col items-center gap-2">
       <img src="assets/dawamu-logo.png" alt="Dawamu Logo" class="h-20 w-auto object-contain drop-shadow-xl hover:scale-105 transition-transform">
       <div class="flex items-center gap-2 bg-emerald-950/60 border border-emerald-500/30 px-3 py-1 rounded-full text-emerald-300 text-[10px] font-bold uppercase tracking-widest mt-1">
@@ -13716,7 +13778,10 @@ function wireChrome(root) {
   });
 
   root.querySelector('#btn-home').addEventListener('click', () => showStartPage(root, activeTabId));
-  root.querySelector('#btn-new-tab').addEventListener('click', () => openTab(root, null));
+  root.querySelector('#tab-strip')?.addEventListener('click', (e) => {
+    if (e.target.closest('#btn-new-tab')) openTab(root, null);
+  });
+  root.querySelector('#btn-new-tab')?.addEventListener('click', () => openTab(root, null));
 
   // ── Bookmarks Bar Click Handling ──
   root.querySelector('#bm-bar').addEventListener('click', e => {
