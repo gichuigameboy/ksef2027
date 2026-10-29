@@ -127,18 +127,89 @@ export function normalizeUrl(rawUrl) {
 }
 
 export function inferSiteIcon(url) {
-  if (!url) return 'fas fa-globe text-blue-400';
+  if (!url) return 'fas fa-globe text-slate-400';
   const u = url.toLowerCase();
+  
+  // Specific known websites & platforms
+  if (u.includes('youtube.com') || u.includes('youtu.be')) return 'fab fa-youtube text-red-500';
   if (u.includes('google.com')) return 'fab fa-google text-blue-400';
   if (u.includes('wikipedia.org')) return 'fab fa-wikipedia-w text-slate-200';
   if (u.includes('khanacademy.org')) return 'fas fa-leaf text-emerald-400';
   if (u.includes('nasa.gov')) return 'fas fa-rocket text-rose-400';
   if (u.includes('mathsisfun.com')) return 'fas fa-square-root-alt text-amber-400';
   if (u.includes('brave.com')) return 'fas fa-shield-alt text-amber-500';
-  if (u.includes('bing.com')) return 'fab fa-microsoft text-cyan-400';
+  if (u.includes('bing.com') || u.includes('microsoft.com')) return 'fab fa-microsoft text-cyan-400';
   if (u.includes('duolingo.com')) return 'fas fa-language text-green-400';
+  if (u.includes('github.com')) return 'fab fa-github text-slate-100';
+  if (u.includes('stackoverflow.com')) return 'fab fa-stack-overflow text-amber-500';
+  if (u.includes('twitter.com') || u.includes('x.com')) return 'fab fa-twitter text-sky-400';
+  if (u.includes('reddit.com')) return 'fab fa-reddit text-orange-500';
+  if (u.includes('facebook.com')) return 'fab fa-facebook text-blue-500';
+  if (u.includes('instagram.com')) return 'fab fa-instagram text-pink-400';
+  if (u.includes('linkedin.com')) return 'fab fa-linkedin text-blue-400';
+  if (u.includes('spotify.com')) return 'fab fa-spotify text-green-500';
+  if (u.includes('apple.com')) return 'fab fa-apple text-slate-200';
+  if (u.includes('amazon.com')) return 'fab fa-amazon text-amber-400';
+  if (u.includes('twitch.tv')) return 'fab fa-twitch text-purple-400';
+  if (u.includes('discord.com') || u.includes('discord.gg')) return 'fab fa-discord text-indigo-400';
+  if (u.includes('netflix.com')) return 'fas fa-film text-red-600';
+  if (u.includes('bbc.com') || u.includes('bbc.co.uk')) return 'fas fa-newspaper text-red-400';
+  if (u.includes('cnn.com')) return 'fas fa-newspaper text-rose-500';
+  if (u.includes('yahoo.com')) return 'fab fa-yahoo text-purple-400';
+  if (u.includes('whatsapp.com')) return 'fab fa-whatsapp text-green-500';
+  if (u.includes('telegram.org')) return 'fab fa-telegram text-sky-400';
+  if (u.includes('quora.com')) return 'fab fa-quora text-red-600';
+  if (u.includes('medium.com')) return 'fab fa-medium text-slate-200';
+  if (u.includes('dropbox.com')) return 'fab fa-dropbox text-blue-400';
+  if (u.includes('pinterest.com')) return 'fab fa-pinterest text-red-500';
+
+  // Dawamu internal pages & tools
+  if (u.startsWith('dawamu://bookmarks')) return 'fas fa-star text-amber-400';
+  if (u.startsWith('dawamu://browser-history') || u.startsWith('dawamu://history-manager')) return 'fas fa-history text-cyan-400';
+  if (u.startsWith('dawamu://math')) return 'fas fa-calculator text-amber-400';
+  if (u.startsWith('dawamu://dictionary')) return 'fas fa-book text-emerald-400';
+  if (u.startsWith('dawamu://periodic-table')) return 'fas fa-atom text-purple-400';
+  if (u.startsWith('dawamu://notes')) return 'fas fa-sticky-note text-yellow-400';
+  if (u.startsWith('dawamu://history')) return 'fas fa-landmark text-rose-400';
+  if (u.startsWith('dawamu://offline')) return 'fas fa-plane text-amber-400';
+  if (u.startsWith('dawamu://search')) return 'fas fa-search text-emerald-400';
   if (u.startsWith('dawamu://')) return 'fas fa-graduation-cap text-emerald-400';
+
   return 'fas fa-globe text-blue-400';
+}
+
+export function renderTabFaviconHTML(tab, sizeClass = 'text-[11px]') {
+  if (!tab) return `<i class="fas fa-globe text-slate-400 ${sizeClass} shrink-0"></i>`;
+  if (tab.loading) {
+    return `<i class="fas fa-circle-notch fa-spin text-blue-400 ${sizeClass} shrink-0"></i>`;
+  }
+  const url = tab.url;
+  if (!url || url === 'about:blank' || url === 'dawamu://newtab') {
+    return `<i class="fas fa-globe text-slate-400 ${sizeClass} shrink-0"></i>`;
+  }
+
+  // 1. If tab has dynamic favicon from page-favicon-updated event
+  if (tab.favicon) {
+    return `<img src="${escapeHtml(tab.favicon)}" class="w-3.5 h-3.5 rounded-sm object-contain shrink-0" onerror="this.onerror=null; this.replaceWith(Object.assign(document.createElement('i'), {className: '${inferSiteIcon(url)} ${sizeClass} shrink-0'}))" alt="" />`;
+  }
+
+  // 2. Check inferSiteIcon for known brands or Dawamu tools
+  const iconClass = inferSiteIcon(url);
+  if (iconClass && iconClass !== 'fas fa-globe text-blue-400' && iconClass !== 'fas fa-globe text-slate-400') {
+    return `<i class="${iconClass} ${sizeClass} shrink-0"></i>`;
+  }
+
+  // 3. For any other web domain, load live favicon via Google's favicon service with graceful fallback
+  if (url.startsWith('http://') || url.startsWith('https://')) {
+    try {
+      const parsed = new URL(url);
+      const domain = parsed.hostname;
+      const faviconUrl = `https://www.google.com/s2/favicons?domain=${encodeURIComponent(domain)}&sz=32`;
+      return `<img src="${faviconUrl}" class="w-3.5 h-3.5 rounded-sm object-contain shrink-0" onerror="this.onerror=null; this.replaceWith(Object.assign(document.createElement('i'), {className: 'fas fa-globe text-blue-400 ${sizeClass} shrink-0'}))" alt="" />`;
+    } catch (_) {}
+  }
+
+  return `<i class="${iconClass || 'fas fa-globe text-slate-400'} ${sizeClass} shrink-0"></i>`;
 }
 
 export function isPageBookmarked(url) {
@@ -546,8 +617,8 @@ function buildChrome() {
 
     <!-- Omnibox URL / Search Bar Container -->
     <div class="omnibox-wrapper">
-      <div class="flex items-center gap-1 text-emerald-400 text-xs shrink-0">
-        <i class="fas fa-lock text-[10px]"></i>
+      <div id="omnibox-site-indicator" class="flex items-center gap-1.5 text-xs shrink-0 select-none">
+        <span id="omnibox-site-icon" class="flex items-center justify-center shrink-0"><i class="fas fa-lock text-[10px] text-emerald-400"></i></span>
       </div>
       <input id="omnibox" type="text" autocomplete="off" spellcheck="false"
              class="flex-1 bg-transparent outline-none text-xs text-white placeholder-slate-400 min-w-0 font-medium"
@@ -880,6 +951,17 @@ function wireWebview(root, tabId, wv) {
     renderTabStrip(root);
   });
 
+  wv.addEventListener('page-favicon-updated', e => {
+    if (e.favicons && e.favicons.length > 0) {
+      const tab = tabs.find(t => t.id === tabId);
+      if (tab) {
+        tab.favicon = e.favicons[0];
+        renderTabStrip(root);
+        if (tabId === activeTabId) updateNavControls(root, tabId);
+      }
+    }
+  });
+
   wv.addEventListener('update-target-url', e => {
     if (tabId === activeTabId) {
       root.querySelector('#status').textContent = e.url || 'Dawamu Safe Browser';
@@ -937,7 +1019,7 @@ function renderTabStrip(root) {
   if (!strip) return;
   strip.innerHTML = tabs.map(tab => `
     <div class="tab ${tab.id === activeTabId ? 'active' : ''}" data-tid="${tab.id}">
-      <i class="${tab.loading ? 'fas fa-circle-notch fa-spin text-blue-400' : (tab.url?.startsWith('dawamu://') ? 'fas fa-graduation-cap text-emerald-400' : 'fas fa-globe text-slate-400')} text-[10px] shrink-0"></i>
+      ${renderTabFaviconHTML(tab, 'text-[11px]')}
       <span class="truncate flex-1">${escapeHtml(tab.title || 'New Tab')}</span>
       <button class="tab-x" data-close="${tab.id}" title="Close Tab"><i class="fas fa-times"></i></button>
     </div>`).join('') +
@@ -1036,7 +1118,7 @@ function loadUrl(root, tabId, url, pushHistory = true) {
         banner.innerHTML = `
           <div class="flex items-center justify-between text-xs py-1.5 px-3 bg-slate-900/95 border-b border-emerald-500/30 text-slate-300">
             <span class="flex items-center gap-2 truncate">
-              <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span class="w-4 h-4 flex items-center justify-center shrink-0">${renderTabFaviconHTML({ url }, 'text-xs')}</span>
               <span class="text-white font-semibold">${parsed.hostname}</span>
               <span class="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-700/40 px-2 py-0.5 rounded-full font-mono">Safe Web Active</span>
             </span>
@@ -1152,6 +1234,20 @@ function updateNavControls(root, tabId) {
     } else {
       starIcon.className = 'far fa-star text-slate-400 hover:text-amber-400 text-xs';
       starIcon.parentElement.title = 'Bookmark this tab';
+    }
+  }
+
+  const siteIconEl = root.querySelector('#omnibox-site-icon');
+  if (siteIconEl) {
+    if (!tab || !tab.url || tab.url === 'about:blank' || tab.url === 'dawamu://newtab') {
+      siteIconEl.innerHTML = `<i class="fas fa-lock text-[10px] text-emerald-400"></i>`;
+    } else {
+      const iconHtml = renderTabFaviconHTML(tab, 'text-xs');
+      const isSecure = tab.url.startsWith('https://') || tab.url.startsWith('dawamu://');
+      const lockHtml = isSecure
+        ? `<i class="fas fa-lock text-[10px] text-emerald-400" title="Secure Encrypted Connection"></i>`
+        : `<i class="fas fa-unlock text-[10px] text-amber-400" title="Not Secure"></i>`;
+      siteIconEl.innerHTML = `<span class="flex items-center gap-1.5">${iconHtml} ${lockHtml}</span>`;
     }
   }
 }
@@ -1422,7 +1518,7 @@ function wireOfflineToolEvents(root, tabId, container, toolUrl) {
         <div class="bm-mgr-item p-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/5 hover:border-emerald-500/30 transition-all flex items-center justify-between gap-3 group" data-id="${b.id}">
           <div class="flex items-center gap-3 truncate cursor-pointer bm-mgr-open-link flex-1 min-w-0" data-url="${b.url}">
             <div class="w-8 h-8 rounded-xl bg-white/5 flex items-center justify-center shrink-0">
-              <i class="${b.icon || 'fas fa-globe text-blue-400'} text-sm"></i>
+              ${renderTabFaviconHTML({ url: b.url }, 'text-sm')}
             </div>
             <div class="truncate">
               <div class="text-xs font-semibold text-white group-hover:text-emerald-300 transition-colors truncate">${escapeHtml(b.title)}</div>
@@ -2282,7 +2378,7 @@ function renderHistoryGroupsHtml(groups) {
                 <div class="flex items-center gap-3 truncate cursor-pointer hist-item-link flex-1 min-w-0" data-url="${h.url}">
                   <span class="text-[10px] text-slate-500 font-mono shrink-0 w-14">${timeStr}</span>
                   <div class="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center shrink-0">
-                    <i class="fas fa-globe text-cyan-400 text-xs"></i>
+                    ${renderTabFaviconHTML({ url: h.url }, 'text-xs')}
                   </div>
                   <div class="truncate">
                     <div class="text-xs font-semibold text-white group-hover:text-cyan-300 transition-colors truncate">${escapeHtml(h.title)}</div>
