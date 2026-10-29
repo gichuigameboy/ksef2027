@@ -6,6 +6,8 @@ from datetime import datetime
 class UserRole(str, Enum):
     STUDENT = "student"
     TEACHER = "teacher"
+    IT_ADMIN = "it_admin"
+    SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
 
 class UserProfile(BaseModel):

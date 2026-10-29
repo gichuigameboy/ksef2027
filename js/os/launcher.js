@@ -117,11 +117,17 @@ class Launcher {
 
   filterApps(searchQuery = '') {
     let list = this.apps;
+    const currentUser = stateStore.getCurrentStudent() || { role: 'student' };
+    const isStudent = (currentUser.role || 'student').toLowerCase() === 'student';
+    if (isStudent) {
+      list = list.filter((a) => a.id !== 'registry');
+    }
+
     if (this.activeCategory === 'study') {
       const studyIds = ['eduguard', 'books844', 'docs', 'classroom', 'offlineBrowser', 'focusTimer'];
       list = list.filter((a) => studyIds.includes(a.id));
     } else if (this.activeCategory === 'office') {
-      const officeIds = ['word', 'spreadsheet', 'database', 'calculator', 'explorer', 'browser', 'settings', 'adminPanel'];
+      const officeIds = ['word', 'spreadsheet', 'database', 'calculator', 'explorer', 'browser', 'settings', 'adminPanel', 'registry'];
       list = list.filter((a) => officeIds.includes(a.id));
     }
 

@@ -1,0 +1,13 @@
+[
+  {
+    "id": "audit_3ed8a7dc9bac",
+    "timestamp": "2026-10-29T10:49:30.305942Z",
+    "actor_id": "system",
+    "actor_role": "system",
+    "action": "SYSTEM_INIT",
+    "target_id": "ALL",
+    "target_name": "Baseline Student Accounts",
+    "details": "Initialized 20 baseline DawamuOS student records with active accounts.",
+    "outcome": "SUCCESS"
+  }
+]

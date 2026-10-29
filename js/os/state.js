@@ -480,6 +480,10 @@ class OSState {
     return () => this.listeners.delete(listener);
   }
 
+  getCurrentStudent() {
+    return this.currentStudent || (this.getState ? this.getState().currentUser : null);
+  }
+
   notify() {
     this.savePolicyState();
     this.saveStudentState();

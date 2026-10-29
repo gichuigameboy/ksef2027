@@ -18,6 +18,8 @@ import { createClassroomApp } from './apps/classroom.js';
 import { createCalculatorApp } from './apps/calculator.js';
 import { createFocusTimerApp } from './apps/focusTimer.js';
 import { createAdminPanelApp } from './apps/adminPanel.js';
+import { createRegistryApp } from './apps/registry.js';
+import { studentRegistryService } from './services/studentRegistryService.js';
 import { createInstallerApp } from './apps/installer.js';
 import { createExplorerApp } from './apps/explorer.js';
 import { createSettingsApp } from './apps/settings.js';
@@ -231,7 +233,7 @@ function startDawamuOS() {
   });
 
   /* ─── LOGIN GATE & AUTHENTICATION FLOW (INSTANT 0ms LOGIN) ─── */
-  function performLogin(adm, pass) {
+  async function performLogin(adm, pass) {
     enterOSFullscreen();
     const cleanAdm = (adm || '').trim();
     const cleanPass = (pass || '').trim();
@@ -242,17 +244,67 @@ function startDawamuOS() {
     const isTeacher = lowerAdm === 'teacher' || lowerAdm.includes('teacher') || lowerAdm.includes('proctor');
     const isAdmin = lowerAdm === 'admin' || lowerAdm === 'root' || lowerAdm.includes('administrator');
 
+    // 1. Authoritative check in studentRegistryService
+    const regStudent = (!isTeacher && !isAdmin) ? studentRegistryService.getStudent(effectiveAdm) : null;
+    if (regStudent) {
+      if (regStudent.account_status === 'suspended') {
+        studentRegistryService.logEvent(
+          regStudent.admission_number,
+          'student',
+          'LOGIN_BLOCKED_SUSPENDED',
+          regStudent.admission_number,
+          regStudent.full_name,
+          `Login blocked: account is suspended. Reason: ${regStudent.suspension_reason || 'Policy check.'}`,
+          'FAILED'
+        );
+        if (loginErr) {
+          loginErr.innerHTML = `<i class="fas fa-ban mr-1"></i> <span>Account Suspended: ${regStudent.suspension_reason || 'This account has been disabled by the IT Administrator.'}</span>`;
+          loginErr.classList.remove('hidden');
+        }
+        return false;
+      }
+      if (regStudent.account_status === 'pending_activation') {
+        studentRegistryService.logEvent(
+          regStudent.admission_number,
+          'student',
+          'LOGIN_BLOCKED_PENDING',
+          regStudent.admission_number,
+          regStudent.full_name,
+          `Login blocked: account pending activation.`,
+          'FAILED'
+        );
+        if (loginErr) {
+          loginErr.innerHTML = `<i class="fas fa-clock mr-1"></i> <span>Account Pending Activation: Click 'First-Time Student Setup' below.</span>`;
+          loginErr.classList.remove('hidden');
+        }
+        return false;
+      }
+
+      // Password verification for student with custom established password
+      if (regStudent.password_hash && regStudent.password_salt) {
+        try {
+          await studentRegistryService.authenticate(regStudent.admission_number, effectivePass);
+        } catch (authErr) {
+          if (loginErr) {
+            loginErr.innerHTML = `<i class="fas fa-exclamation-circle mr-1"></i> <span>${authErr.message}</span>`;
+            loginErr.classList.remove('hidden');
+          }
+          return false;
+        }
+      }
+    }
+
     let studentKey = Object.keys(STUDENT_DB).find(k => k === effectiveAdm || k.toLowerCase() === lowerAdm);
     if (!studentKey && !isTeacher && !isAdmin) {
       studentKey = Object.keys(STUDENT_DB).find(k => STUDENT_DB[k].name.toLowerCase().includes(lowerAdm));
     }
     const student = studentKey ? STUDENT_DB[studentKey] : null;
 
-    let token = `token_student_${studentKey || effectiveAdm}`;
+    let token = `token_student_${regStudent ? regStudent.admission_number : (studentKey || effectiveAdm)}`;
     if (isTeacher) {
       token = 'token_teacher_1';
     } else if (isAdmin) {
-      token = 'token_admin_1';
+      token = 'token_it_admin_1';
     }
 
     let userProfile = null;
@@ -261,8 +313,8 @@ function startDawamuOS() {
         admNo: 'ADMIN',
         name: 'School System Administrator',
         grade: 'Admin',
-        role: 'admin',
-        token: 'token_admin_1',
+        role: 'it_admin',
+        token: 'token_it_admin_1',
         backendConnected: false,
         isOfflineDemo: true
       };
@@ -273,6 +325,16 @@ function startDawamuOS() {
         grade: 'Staff',
         role: 'teacher',
         token: 'token_teacher_1',
+        backendConnected: false,
+        isOfflineDemo: true
+      };
+    } else if (regStudent) {
+      userProfile = {
+        admNo: regStudent.admission_number,
+        name: regStudent.full_name,
+        grade: regStudent.grade_class,
+        role: 'student',
+        token: `token_student_${regStudent.admission_number}`,
         backendConnected: false,
         isOfflineDemo: true
       };
@@ -358,6 +420,94 @@ function startDawamuOS() {
     });
   }
 
+  // First-time Student Setup / Activation Modal Handlers
+  const actModal = document.getElementById('modal-student-activation');
+  const openActBtn = document.getElementById('btn-open-activation-modal');
+  const closeActBtn = document.getElementById('btn-close-activation-modal');
+  const cancelActBtn = document.getElementById('btn-cancel-activation');
+  const actForm = document.getElementById('form-student-activation');
+  const actAdm = document.getElementById('act-adm');
+  const actCode = document.getElementById('act-code');
+  const actPass = document.getElementById('act-pass');
+  const actPassConfirm = document.getElementById('act-pass-confirm');
+  const actErr = document.getElementById('act-error-msg');
+  const actSuccess = document.getElementById('act-success-msg');
+
+  const openActivation = () => {
+    if (actModal) {
+      actModal.style.display = 'flex';
+      actModal.classList.remove('hidden');
+      actErr?.classList.add('hidden');
+      actSuccess?.classList.add('hidden');
+      actAdm?.focus();
+    }
+  };
+
+  const closeActivation = () => {
+    if (actModal) {
+      actModal.style.display = 'none';
+      actModal.classList.add('hidden');
+    }
+  };
+
+  openActBtn?.addEventListener('click', openActivation);
+  closeActBtn?.addEventListener('click', closeActivation);
+  cancelActBtn?.addEventListener('click', closeActivation);
+
+  actForm?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const adm = actAdm ? actAdm.value.trim().toUpperCase() : '';
+    const code = actCode ? actCode.value.trim().toUpperCase() : '';
+    const pass = actPass ? actPass.value : '';
+    const passConfirm = actPassConfirm ? actPassConfirm.value : '';
+
+    if (actErr) actErr.classList.add('hidden');
+    if (actSuccess) actSuccess.classList.add('hidden');
+
+    if (!adm || !code || !pass) {
+      if (actErr) {
+        actErr.textContent = 'Please fill out all fields.';
+        actErr.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (pass.length < 6) {
+      if (actErr) {
+        actErr.textContent = 'Password must be at least 6 characters.';
+        actErr.classList.remove('hidden');
+      }
+      return;
+    }
+
+    if (pass !== passConfirm) {
+      if (actErr) {
+        actErr.textContent = 'Passwords do not match.';
+        actErr.classList.remove('hidden');
+      }
+      return;
+    }
+
+    try {
+      const activated = await studentRegistryService.activateAccount(adm, code, pass);
+      if (actSuccess) {
+        actSuccess.textContent = `Account activated for ${activated.full_name}! Signing you in...`;
+        actSuccess.classList.remove('hidden');
+      }
+      setTimeout(() => {
+        closeActivation();
+        if (loginAdm) loginAdm.value = adm;
+        if (loginPass) loginPass.value = pass;
+        performLogin(adm, pass);
+      }, 1000);
+    } catch (err) {
+      if (actErr) {
+        actErr.textContent = err.message;
+        actErr.classList.remove('hidden');
+      }
+    }
+  });
+
   // Quick Demo Account Click Handlers (Direct + Delegated)
   const triggerQuickLogin = (btn) => {
     if (!btn) return;
@@ -390,6 +540,13 @@ function startDawamuOS() {
     if (!desktopInitialized) {
       windowManager.init(desktopEl);
       desktopInitialized = true;
+    }
+
+    // Toggle IT Administrator-specific icons based on active user role
+    const registryIconEl = document.querySelector('.desktop-icon[data-app-id="registry"]');
+    if (registryIconEl) {
+      const isPrivileged = currentStudent && (currentStudent.role === 'it_admin' || currentStudent.role === 'admin' || currentStudent.role === 'super_admin');
+      registryIconEl.style.display = isPrivileged ? '' : 'none';
     }
 
   // App Registry Definition
@@ -659,6 +816,29 @@ function startDawamuOS() {
           content: () => createSettingsApp(options),
           width: 860,
           height: 580
+        });
+      }
+    },
+    {
+      id: 'registry',
+      title: 'Student Registry & IT Admin',
+      icon: '<i class="fas fa-users-gear text-purple-400"></i>',
+      bgColor: 'bg-purple-800',
+      keywords: ['registry', 'students', 'it admin', 'provisioning', 'accounts', 'directory', 'admission', 'csv', 'audit'],
+      launch: () => {
+        const u = currentStudent || stateStore.getCurrentStudent();
+        const privileged = u && (u.role === 'it_admin' || u.role === 'admin' || u.role === 'super_admin');
+        if (!privileged) {
+          dawamuDialogs.toast('Access Denied: Student Registry requires IT Administrator authorization.', 'error');
+          return;
+        }
+        windowManager.createWindow({
+          id: 'registry',
+          title: 'Student Registry & IT Administration',
+          icon: '<i class="fas fa-users-gear text-purple-400"></i>',
+          content: () => createRegistryApp(),
+          width: 1040,
+          height: 660
         });
       }
     },

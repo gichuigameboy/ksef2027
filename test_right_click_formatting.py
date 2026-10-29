@@ -100,6 +100,8 @@ try:
         while True:
             data = json.loads(ws_recv(sock))
             if data.get("id") == msg_id:
+                if "exceptionDetails" in data.get("result", {}):
+                    print("JS EXCEPTION:", data["result"]["exceptionDetails"])
                 res = data["result"].get("result", {})
                 return res.get("value")
 

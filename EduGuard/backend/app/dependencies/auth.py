@@ -40,6 +40,14 @@ _IN_MEMORY_USERS: Dict[str, UserProfile] = {
         school_id="school_alpha",
         enrolled_class_ids=[]
     ),
+    "it_admin_1": UserProfile(
+        id="it_admin_1",
+        email="itadmin@dawamu.ac.ke",
+        display_name="Dawamu IT Administrator",
+        role=UserRole.IT_ADMIN,
+        school_id="school_alpha",
+        enrolled_class_ids=[]
+    ),
 }
 
 async def get_current_user(
@@ -109,11 +117,21 @@ async def get_current_user(
             )
 
         if uid not in _IN_MEMORY_USERS:
+            assigned_role = UserRole.STUDENT
+            if "it_admin" in uid.lower():
+                assigned_role = UserRole.IT_ADMIN
+            elif "super_admin" in uid.lower():
+                assigned_role = UserRole.SUPER_ADMIN
+            elif "admin" in uid.lower():
+                assigned_role = UserRole.ADMIN
+            elif "teacher" in uid.lower():
+                assigned_role = UserRole.TEACHER
+
             _IN_MEMORY_USERS[uid] = UserProfile(
                 id=uid,
                 email=f"{uid}@eduguard.edu",
                 display_name=f"User {uid.title()}",
-                role=UserRole.STUDENT
+                role=assigned_role
             )
 
         return _IN_MEMORY_USERS[uid]

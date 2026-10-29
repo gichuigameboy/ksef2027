@@ -121,10 +121,10 @@ try:
     time.sleep(0.5)
 
     # 1. Login with demo user
+    evaluate("document.querySelector('[data-quick-login][data-adm=\"1001\"]').click()")
+    time.sleep(0.6)
     step1 = evaluate("""
         (() => {
-            const btn = document.querySelector('[data-quick-login][data-adm="1001"]');
-            if (btn) btn.click();
             return {
                 booted: Boolean(window.__DAWAMU_OS_BOOTED__),
                 contextMenuExists: Boolean(document.getElementById('desktop-context-menu'))
